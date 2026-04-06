@@ -25,7 +25,7 @@ const summaryModel = genAI.getGenerativeModel({
   },
 })
 
-const VALID_CATEGORIES: Category[] = ['recipe', 'english', 'learning', 'news', 'selfdev', 'travel']
+const VALID_CATEGORIES: Category[] = ['recipe', 'english', 'learning', 'news', 'selfdev', 'travel', 'story']
 
 function extractJSON(text: string): unknown {
   // 마크다운 코드블록 제거 후 JSON 추출
@@ -43,6 +43,7 @@ export async function classifyCategory(transcript: string): Promise<{ category: 
 - "news": news, current events, reviews, analysis, information
 - "selfdev": self-improvement, motivation, psychology, meditation
 - "travel": travel vlogs, place introductions, tourism, local food tours
+- "story": drama, movies, storytelling, gossip, narrative content focusing on a sequence of events.
 
 Transcript:
 ${transcript.slice(0, 2000)}
@@ -82,6 +83,10 @@ const SUMMARY_PROMPTS: Record<Category, string> = {
   travel: `다음 여행 영상 자막을 분석해서 가이드 JSON을 만드세요.
 
 {"destination":"여행지","places":[{"name":"장소","desc":"설명","price":"가격","tip":"팁","timestamp":"MM:SS"}],"route":"동선","practical_info":["정보"],"warnings":["주의"]}`,
+
+  story: `다음 스토리/드라마/가십 영상 자막을 분석해서 스토리 전개를 알 수 있는 타임라인 중심 JSON을 만드세요.
+
+{"title":"스토리/드라마 제목 또는 주제","genre":"장르(코미디/드라마/미스터리/썰 등)","characters":[{"name":"등장인물(가명/호칭 등)","desc":"특징이나 역할"}],"timeline":[{"timestamp":"MM:SS","event":"이 시간대에 벌어진 주요 사건"}],"conclusion":"결말 또는 요약"}`,
 }
 
 export async function generateSummary(category: Category, transcript: string): Promise<SummaryData> {

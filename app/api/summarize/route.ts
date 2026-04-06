@@ -18,7 +18,7 @@ async function getVideoInfo(videoId: string) {
 
 export async function POST(req: NextRequest) {
   try {
-    const { url } = await req.json()
+    const { url, category: userCategory } = await req.json()
 
     if (!url) {
       return NextResponse.json({ error: 'URL이 필요합니다.' }, { status: 400 })
@@ -54,8 +54,12 @@ export async function POST(req: NextRequest) {
       pinnedComment ? `[상위 댓글]\n${pinnedComment}` : '',
     ].filter(Boolean).join('\n\n')
 
-    // Classify category
-    const { category } = await classifyCategory(fullContext)
+    // Classify category if not provided
+    let category = userCategory
+    if (!category) {
+      const classified = await classifyCategory(fullContext)
+      category = classified.category
+    }
 
     // Generate summary
     const summary = await generateSummary(category, fullContext)

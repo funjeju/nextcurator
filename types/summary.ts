@@ -1,4 +1,4 @@
-export type Category = 'recipe' | 'english' | 'learning' | 'news' | 'selfdev' | 'travel'
+export type Category = 'recipe' | 'english' | 'learning' | 'news' | 'selfdev' | 'travel' | 'story'
 
 export interface RecipeSummary {
   dish_name: string
@@ -49,7 +49,15 @@ export interface TravelSummary {
   warnings: string[]
 }
 
-export type SummaryData = RecipeSummary | EnglishSummary | LearningSummary | NewsSummary | SelfDevSummary | TravelSummary
+export interface StorySummary {
+  title: string
+  genre: string
+  characters: { name: string; desc: string }[]
+  timeline: { timestamp: string; event: string }[]
+  conclusion: string
+}
+
+export type SummaryData = RecipeSummary | EnglishSummary | LearningSummary | NewsSummary | SelfDevSummary | TravelSummary | StorySummary
 
 export interface SummarizeResponse {
   sessionId: string

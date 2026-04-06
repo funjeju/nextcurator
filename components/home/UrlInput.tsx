@@ -4,19 +4,24 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import LoadingSteps from './LoadingSteps'
+import RecentHistory from './RecentHistory'
 
 const CATEGORIES = [
-  { icon: '🍳', label: '요리', color: 'hover:border-orange-500/50 hover:bg-orange-500/10 hover:text-orange-300' },
-  { icon: '🔤', label: '영어', color: 'hover:border-blue-500/50 hover:bg-blue-500/10 hover:text-blue-300' },
-  { icon: '📐', label: '학습', color: 'hover:border-violet-500/50 hover:bg-violet-500/10 hover:text-violet-300' },
-  { icon: '🗞️', label: '뉴스', color: 'hover:border-zinc-400/50 hover:bg-zinc-500/10 hover:text-zinc-200' },
-  { icon: '💪', label: '자기계발', color: 'hover:border-emerald-500/50 hover:bg-emerald-500/10 hover:text-emerald-300' },
-  { icon: '🧳', label: '여행', color: 'hover:border-cyan-500/50 hover:bg-cyan-500/10 hover:text-cyan-300' },
+  { id: 'auto', icon: '✨', label: '자동 분류' },
+  { id: 'recipe', icon: '🍳', label: '요리' },
+  { id: 'english', icon: '🔤', label: '영어' },
+  { id: 'learning', icon: '📐', label: '학습' },
+  { id: 'news', icon: '🗞️', label: '뉴스' },
+  { id: 'selfdev', icon: '💪', label: '자기계발' },
+  { id: 'travel', icon: '🧳', label: '여행' },
+  { id: 'story', icon: '🍿', label: '스토리' },
 ]
 
 export default function UrlInput() {
   const [url, setUrl] = useState('')
+  const [selectedCategory, setSelectedCategory] = useState<string>('auto')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [step, setStep] = useState(0)
@@ -33,7 +38,10 @@ export default function UrlInput() {
       const res = await fetch('/api/summarize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url }),
+        body: JSON.stringify({ 
+          url, 
+          category: selectedCategory === 'auto' ? undefined : selectedCategory 
+        }),
       })
       setStep(3)
 
@@ -46,7 +54,30 @@ export default function UrlInput() {
       const data = await res.json()
       setStep(5)
 
+      // Save to sessionStorage for result page
       sessionStorage.setItem(`summary_${data.sessionId}`, JSON.stringify(data))
+
+      // Save history to localStorage
+      try {
+        const historyJson = localStorage.getItem('nextcurator_history')
+        const history = historyJson ? JSON.parse(historyJson) : []
+        const newHistoryItem = {
+          sessionId: data.sessionId,
+          videoId: data.videoId,
+          title: data.title,
+          thumbnail: data.thumbnail,
+          category: data.category,
+          date: new Date().toISOString()
+        }
+        // Check for duplicates
+        const filteredHistory = history.filter((item: any) => item.sessionId !== data.sessionId)
+        filteredHistory.unshift(newHistoryItem)
+        localStorage.setItem('nextcurator_history', JSON.stringify(filteredHistory))
+      } catch (e) {
+        console.error('Failed to save to localStorage:', e)
+      }
+
+      // Navigate
       router.push(`/result/${data.sessionId}`)
     } catch (err) {
       setError(err instanceof Error ? err.message : '오류가 발생했습니다.')
@@ -60,47 +91,71 @@ export default function UrlInput() {
   }
 
   return (
-    <div className="flex flex-col items-center gap-8 w-full max-w-2xl">
+    <div className="flex flex-col items-start gap-8 w-full max-w-2xl bg-[#32302e]/80 backdrop-blur-3xl p-8 md:p-10 rounded-[32px] border border-white/5 shadow-2xl">
+      
+      {/* Recent History Component */}
+      <RecentHistory />
+      
+      {/* Category selection */}
+      <div className="flex flex-col items-start gap-4 w-full">
+        <p className="text-[#75716e] text-sm font-medium">분석 모드 선택</p>
+        <div className="flex flex-wrap gap-2.5">
+          {CATEGORIES.map((cat) => {
+            const isSelected = selectedCategory === cat.id;
+            return (
+              <Badge
+                key={cat.id}
+                variant="outline"
+                onClick={() => setSelectedCategory(cat.id)}
+                className={`flex items-center gap-2 px-5 py-2.5 rounded-[16px] text-sm font-medium cursor-pointer transition-all duration-300 group ${
+                  isSelected 
+                    ? 'border-transparent bg-white text-black shadow-[0_0_20px_rgba(255,255,255,0.2)]' 
+                    : 'border-transparent bg-[#23211f] text-[#a4a09c] hover:bg-[#3d3a38] hover:text-white'
+                }`}
+              >
+                <span className={`text-base transition-transform ${isSelected ? 'scale-110' : 'group-hover:scale-110'}`}>
+                  {cat.icon}
+                </span>
+                <span className="tracking-wide">{cat.label}</span>
+              </Badge>
+            )
+          })}
+        </div>
+      </div>
+
       {/* Input area */}
-      <div className="flex flex-col gap-3 w-full">
-        <div className="relative">
+      <div className="flex flex-col gap-4 w-full mt-2">
+        <label className="text-[#e8e6e3] text-[15px] font-semibold tracking-wide flex items-center gap-2">
+          영상 주소 입력 <span className="text-orange-400">⚡</span>
+        </label>
+        
+        <div className="relative group flex flex-col md:flex-row gap-3">
           <Input
             placeholder="https://youtube.com/watch?v=..."
             value={url}
             onChange={(e) => setUrl(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
-            className="h-14 text-base pl-5 pr-4 bg-zinc-900/80 border-zinc-700 text-zinc-100 placeholder:text-zinc-600 rounded-xl focus-visible:ring-blue-500 focus-visible:border-blue-500 transition-all"
+            className="flex-1 h-[60px] text-base pl-6 pr-4 bg-[#23211f] border-none text-white placeholder:text-[#75716e] rounded-[20px] focus-visible:ring-1 focus-visible:ring-orange-500/50 shadow-inner transition-all duration-300"
           />
+          <Button
+            variant="default"
+            onClick={handleSubmit}
+            disabled={!url.trim()}
+            className="h-[60px] md:w-[160px] text-base font-bold tracking-wide rounded-[20px] transition-all duration-300
+                       bg-white text-black hover:bg-[#e2e2e2] hover:scale-[1.02] active:scale-[0.98]
+                       disabled:bg-white/10 disabled:text-white/30 disabled:cursor-not-allowed disabled:transform-none"
+          >
+            Start Now
+          </Button>
         </div>
+        
         {error && (
-          <div className="flex items-center gap-2 bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-2">
-            <span className="text-red-400 text-sm">⚠️ {error}</span>
+          <div className="flex items-center gap-2 bg-[#2a1d1c] border border-red-500/20 rounded-2xl px-5 py-4 mt-2">
+            <span className="text-red-400 text-sm font-medium">⚠️ {error}</span>
           </div>
         )}
-        <Button
-          onClick={handleSubmit}
-          disabled={!url.trim()}
-          className="h-14 text-base font-semibold rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-30 transition-all shadow-lg shadow-blue-900/30"
-        >
-          AI 요약 시작하기 →
-        </Button>
       </div>
 
-      {/* Category chips */}
-      <div className="flex flex-col items-center gap-3 w-full">
-        <p className="text-zinc-600 text-xs uppercase tracking-widest">지원 카테고리</p>
-        <div className="flex flex-wrap justify-center gap-2">
-          {CATEGORIES.map((cat) => (
-            <div
-              key={cat.label}
-              className={`flex items-center gap-1.5 px-4 py-2 rounded-full border border-zinc-800 bg-zinc-900/50 text-zinc-500 text-sm cursor-default transition-all duration-200 ${cat.color}`}
-            >
-              <span>{cat.icon}</span>
-              <span>{cat.label}</span>
-            </div>
-          ))}
-        </div>
-      </div>
     </div>
   )
 }
