@@ -62,31 +62,31 @@ Respond with JSON: {"category": "news", "confidence": 0.95}`)
 const SUMMARY_PROMPTS: Record<Category, string> = {
   recipe: `다음 요리 영상 자막을 분석해서 레시피 JSON을 만드세요.
 
-{"dish_name":"요리명","difficulty":"초보","total_time":"시간","servings":"인분","ingredients":[{"name":"재료","amount":"분량"}],"steps":[{"step":1,"desc":"설명","timestamp":"MM:SS"}],"key_tips":["팁"]}`,
+{"square_meta":{"tags":["키워드1","키워드2","키워드3","키워드4","키워드5"],"topic_cluster":"대주제","vibe":"분위기"},"dish_name":"요리명","difficulty":"초보","total_time":"시간","servings":"인분","ingredients":[{"name":"재료","amount":"분량"}],"steps":[{"step":1,"desc":"설명","timestamp":"MM:SS"}],"key_tips":["팁"]}`,
 
   english: `다음 영어학습 영상 자막을 분석해서 학습카드 JSON을 만드세요.
 
-{"song_or_title":"제목","artist":"아티스트","expressions":[{"text":"표현","meaning":"의미","note":"설명","timestamp":"MM:SS"}],"vocabulary":[{"word":"단어","meaning":"뜻","pronunciation":"발음"}],"patterns":["패턴"],"cultural_context":"맥락"}`,
+{"square_meta":{"tags":["키워드1","키워드2","키워드3","키워드4","키워드5"],"topic_cluster":"대주제","vibe":"분위기"},"song_or_title":"제목","artist":"아티스트","expressions":[{"text":"표현","meaning":"의미","note":"설명","timestamp":"MM:SS"}],"vocabulary":[{"word":"단어","meaning":"뜻","pronunciation":"발음"}],"patterns":["패턴"],"cultural_context":"맥락"}`,
 
   learning: `다음 학습 영상 자막을 분석해서 학습정리 JSON을 만드세요.
 
-{"subject":"주제","concepts":[{"name":"개념","desc":"설명","timestamp":"MM:SS"}],"key_points":[{"point":"포인트","timestamp":"MM:SS"}],"examples":[{"desc":"예시","timestamp":"MM:SS"}]}`,
+{"square_meta":{"tags":["키워드1","키워드2","키워드3","키워드4","키워드5"],"topic_cluster":"대주제","vibe":"분위기"},"subject":"주제","concepts":[{"name":"개념","desc":"설명","timestamp":"MM:SS"}],"key_points":[{"point":"포인트","timestamp":"MM:SS"}],"examples":[{"desc":"예시","timestamp":"MM:SS"}]}`,
 
   news: `다음 뉴스 영상 자막을 분석해서 브리핑 JSON을 만드세요.
 
-{"headline":"제목","three_line_summary":"요약","five_w":{"who":"누가","when":"언제","where":"어디서","what":"무엇","how":"어떻게","why":"왜"},"background":{"desc":"배경","timestamp":"MM:SS"},"implications":[{"point":"시사점","timestamp":"MM:SS"}]}`,
+{"square_meta":{"tags":["키워드1","키워드2","키워드3","키워드4","키워드5"],"topic_cluster":"대주제","vibe":"분위기"},"headline":"제목","three_line_summary":"요약","five_w":{"who":"누가","when":"언제","where":"어디서","what":"무엇","how":"어떻게","why":"왜"},"background":{"desc":"배경","timestamp":"MM:SS"},"implications":[{"point":"시사점","timestamp":"MM:SS"}]}`,
 
   selfdev: `다음 자기계발 영상 자막을 분석해서 인사이트 JSON을 만드세요.
 
-{"core_message":{"text":"메시지","timestamp":"MM:SS"},"insights":[{"point":"인사이트","timestamp":"MM:SS"}],"checklist":["항목"],"quotes":[{"text":"인용","timestamp":"MM:SS"}]}`,
+{"square_meta":{"tags":["키워드1","키워드2","키워드3","키워드4","키워드5"],"topic_cluster":"대주제","vibe":"분위기"},"core_message":{"text":"메시지","timestamp":"MM:SS"},"insights":[{"point":"인사이트","timestamp":"MM:SS"}],"checklist":["항목"],"quotes":[{"text":"인용","timestamp":"MM:SS"}]}`,
 
   travel: `다음 여행 영상 자막을 분석해서 가이드 JSON을 만드세요.
 
-{"destination":"여행지","places":[{"name":"장소","desc":"설명","price":"가격","tip":"팁","timestamp":"MM:SS"}],"route":"동선","practical_info":["정보"],"warnings":["주의"]}`,
+{"square_meta":{"tags":["키워드1","키워드2","키워드3","키워드4","키워드5"],"topic_cluster":"대주제","vibe":"분위기"},"destination":"여행지","places":[{"name":"장소","desc":"설명","price":"가격","tip":"팁","timestamp":"MM:SS"}],"route":"동선","practical_info":["정보"],"warnings":["주의"]}`,
 
   story: `다음 스토리/드라마/가십 영상 자막을 분석해서 스토리 전개를 알 수 있는 타임라인 중심 JSON을 만드세요.
 
-{"title":"스토리/드라마 제목 또는 주제","genre":"장르(코미디/드라마/미스터리/썰 등)","characters":[{"name":"등장인물(가명/호칭 등)","desc":"특징이나 역할"}],"timeline":[{"timestamp":"MM:SS","event":"이 시간대에 벌어진 주요 사건"}],"conclusion":"결말 또는 요약"}`,
+{"square_meta":{"tags":["키워드1","키워드2","키워드3","키워드4","키워드5"],"topic_cluster":"대주제","vibe":"분위기"},"title":"스토리/드라마 제목 또는 주제","genre":"장르(코미디/드라마/미스터리/썰 등)","characters":[{"name":"등장인물(가명/호칭 등)","desc":"특징이나 역할"}],"timeline":[{"timestamp":"MM:SS","event":"이 시간대에 벌어진 주요 사건"}],"conclusion":"결말 또는 요약"}`,
 }
 
 export async function generateSummary(category: Category, transcript: string): Promise<SummaryData> {
@@ -98,4 +98,29 @@ ${transcript.slice(0, 8000)}`)
 
   const text = result.response.text().trim()
   return extractJSON(text) as SummaryData
+}
+
+export async function classifyFolder(videoTitle: string, tags: string[], existingFolders: string[]): Promise<{ suggestedFolder: string, isNew: boolean }> {
+  const result = await classifyModel.generateContent(`You are a smart YouTube library organizer.
+The user wants to save a summarized video.
+Title: "${videoTitle}"
+Tags: [${tags.join(', ')}]
+
+The user already has the following folders:
+[${existingFolders.join(', ')}]
+
+Task: Determine the best folder for this video.
+If an existing folder perfectly fits or generally encompasses this topic, select it.
+If none of the existing folders fit, suggest a concise new folder name (1-2 words).
+
+Respond in JSON ONLY:
+{"suggestedFolder": "exact existing folder name OR new folder name", "isNew": true OR false}
+`)
+
+  const text = result.response.text().trim()
+  try {
+    return extractJSON(text) as { suggestedFolder: string, isNew: boolean }
+  } catch (e) {
+    return { suggestedFolder: existingFolders[0] || '기타', isNew: existingFolders.length === 0 }
+  }
 }

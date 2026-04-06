@@ -1,19 +1,40 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { extractVideoId, getTranscript, getVideoMeta } from '@/lib/transcript'
 import { classifyCategory, generateSummary } from '@/lib/claude'
-import { db } from '@/lib/firebase'
-import { collection, doc, setDoc, Timestamp } from 'firebase/firestore'
 import { randomUUID } from 'crypto'
 
 async function getVideoInfo(videoId: string) {
-  const res = await fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`)
-  if (!res.ok) throw new Error('VIDEO_NOT_FOUND')
-  const data = await res.json()
-  return {
-    title: data.title as string,
-    channel: data.author_name as string,
-    thumbnail: `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`,
+  try {
+    const res = await fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`)
+    if (res.ok) {
+      const data = await res.json()
+      return {
+        title: data.title as string,
+        channel: data.author_name as string,
+        thumbnail: `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`,
+      }
+    }
+  } catch (e) {
+    // Fall back to API
   }
+
+  // Fallback to YouTube Data API for Shorts or embedded-disabled videos
+  const apiKey = process.env.YOUTUBE_API_KEY;
+  if (apiKey) {
+    const apiRes = await fetch(`https://www.googleapis.com/youtube/v3/videos?id=${videoId}&part=snippet&key=${apiKey}`);
+    if (apiRes.ok) {
+      const data = await apiRes.json();
+      if (data.items && data.items.length > 0) {
+        return {
+          title: data.items[0].snippet.title,
+          channel: data.items[0].snippet.channelTitle,
+          thumbnail: `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`,
+        }
+      }
+    }
+  }
+  
+  throw new Error('VIDEO_NOT_FOUND')
 }
 
 export async function POST(req: NextRequest) {
@@ -29,10 +50,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: '올바른 YouTube URL을 입력해주세요.' }, { status: 400 })
     }
 
-    // Get video metadata
     const videoInfo = await getVideoInfo(videoId)
 
-    // Get transcript
     let transcript: string
     try {
       transcript = await getTranscript(videoId)
@@ -42,26 +61,22 @@ export async function POST(req: NextRequest) {
       }, { status: 422 })
     }
 
-    // Get video description + pinned comments (병렬 처리)
     const [{ description, pinnedComment }] = await Promise.all([
       getVideoMeta(videoId),
     ])
 
-    // 자막 + 영상설명 + 댓글을 합쳐서 AI에 전달
     const fullContext = [
       `[자막]\n${transcript}`,
       description ? `[영상 설명]\n${description}` : '',
       pinnedComment ? `[상위 댓글]\n${pinnedComment}` : '',
     ].filter(Boolean).join('\n\n')
 
-    // Classify category if not provided
     let category = userCategory
     if (!category) {
       const classified = await classifyCategory(fullContext)
       category = classified.category
     }
 
-    // Generate summary
     const summary = await generateSummary(category, fullContext)
 
     const sessionId = randomUUID()
@@ -74,20 +89,8 @@ export async function POST(req: NextRequest) {
       duration: 0,
       category,
       summary,
+      transcript,
     }
-
-    // Save to Firestore (fire and forget — never block the response)
-    setDoc(doc(collection(db, 'summaries'), sessionId), {
-      videoId,
-      url,
-      title: videoInfo.title,
-      channel: videoInfo.channel,
-      thumbnail: videoInfo.thumbnail,
-      category,
-      summary,
-      createdAt: Timestamp.now(),
-      userId: null,
-    }).catch(() => {})
 
     return NextResponse.json(result)
   } catch (error) {

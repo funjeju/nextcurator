@@ -1,6 +1,4 @@
-import { initializeApp, getApps } from 'firebase/app'
-import { getFirestore } from 'firebase/firestore'
-import { getAuth } from 'firebase/auth'
+import { initializeApp, getApps, getApp } from 'firebase/app';
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -12,12 +10,8 @@ const firebaseConfig = {
   measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID
 };
 
-const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0]
-export const db = getFirestore(app)
-export const auth = getAuth(app)
+const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
 
-// 디버그용 (확인 후 삭제)
-import { getApp } from 'firebase/app'
 const currentApp = getApp()
 console.log("🔥 Firebase Project ID:", currentApp.options.projectId)
 console.log("🔥 Firebase Auth Domain:", currentApp.options.authDomain)

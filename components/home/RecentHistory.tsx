@@ -32,7 +32,14 @@ export default function RecentHistory() {
     try {
       const historyJson = localStorage.getItem('nextcurator_history')
       if (historyJson) {
-        setHistory(JSON.parse(historyJson))
+        const allHistory: HistoryItem[] = JSON.parse(historyJson)
+        // Only show items that still have their summary in sessionStorage
+        const aliveHistory = allHistory.filter(item =>
+          sessionStorage.getItem(`summary_${item.sessionId}`) !== null
+        )
+        // Sync back — remove dead items from localStorage
+        localStorage.setItem('nextcurator_history', JSON.stringify(aliveHistory))
+        setHistory(aliveHistory)
       }
     } catch (e) {
       console.error(e)

@@ -1,6 +1,13 @@
 export type Category = 'recipe' | 'english' | 'learning' | 'news' | 'selfdev' | 'travel' | 'story'
 
+export interface SquareMeta {
+  tags: string[]
+  topic_cluster: string
+  vibe: string
+}
+
 export interface RecipeSummary {
+  square_meta: SquareMeta
   dish_name: string
   difficulty: '초보' | '중급' | '고급'
   total_time: string
@@ -11,6 +18,7 @@ export interface RecipeSummary {
 }
 
 export interface EnglishSummary {
+  square_meta: SquareMeta
   song_or_title: string
   artist?: string
   expressions: { text: string; meaning: string; note: string; timestamp: string }[]
@@ -20,6 +28,7 @@ export interface EnglishSummary {
 }
 
 export interface LearningSummary {
+  square_meta: SquareMeta
   subject: string
   concepts: { name: string; desc: string; timestamp: string }[]
   key_points: { point: string; timestamp: string }[]
@@ -27,6 +36,7 @@ export interface LearningSummary {
 }
 
 export interface NewsSummary {
+  square_meta: SquareMeta
   headline: string
   three_line_summary: string
   five_w: { who: string; when: string; where: string; what: string; how: string; why: string }
@@ -35,6 +45,7 @@ export interface NewsSummary {
 }
 
 export interface SelfDevSummary {
+  square_meta: SquareMeta
   core_message: { text: string; timestamp: string }
   insights: { point: string; timestamp: string }[]
   checklist: string[]
@@ -42,6 +53,7 @@ export interface SelfDevSummary {
 }
 
 export interface TravelSummary {
+  square_meta: SquareMeta
   destination: string
   places: { name: string; desc: string; price?: string; tip?: string; timestamp: string }[]
   route: string
@@ -50,6 +62,7 @@ export interface TravelSummary {
 }
 
 export interface StorySummary {
+  square_meta: SquareMeta
   title: string
   genre: string
   characters: { name: string; desc: string }[]
@@ -68,4 +81,5 @@ export interface SummarizeResponse {
   duration: number
   category: Category
   summary: SummaryData
+  transcript?: string
 }
