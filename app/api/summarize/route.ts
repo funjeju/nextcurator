@@ -52,24 +52,29 @@ export async function POST(req: NextRequest) {
 
     const videoInfo = await getVideoInfo(videoId)
 
-    let transcript: string
+    let transcript: string = ''
     try {
       transcript = await getTranscript(videoId)
     } catch {
-      return NextResponse.json({
-        error: '자막을 추출할 수 없는 영상입니다. 자막이 있는 영상을 시도해주세요.'
-      }, { status: 422 })
+      console.log('자막 추출 실패: 영상 설명 및 댓글 요약으로 대체합니다. (Video ID:', videoId, ')')
     }
 
     const [{ description, pinnedComment }] = await Promise.all([
       getVideoMeta(videoId),
     ])
 
-    const fullContext = [
-      `[자막]\n${transcript}`,
-      description ? `[영상 설명]\n${description}` : '',
-      pinnedComment ? `[상위 댓글]\n${pinnedComment}` : '',
-    ].filter(Boolean).join('\n\n')
+    const contextParts = []
+    if (transcript) contextParts.push(`[자막]\n${transcript}`)
+    if (description) contextParts.push(`[영상 설명]\n${description}`)
+    if (pinnedComment) contextParts.push(`[상위 댓글]\n${pinnedComment}`)
+    
+    const fullContext = contextParts.join('\n\n')
+
+    if (!fullContext.trim()) {
+      return NextResponse.json({
+        error: '자막, 영상 설명, 댓글 중 어떠한 텍스트 데이터도 수집할 수 없어 요약이 불가능합니다.'
+      }, { status: 422 })
+    }
 
     let category = userCategory
     if (!category) {

@@ -52,14 +52,35 @@ export function formatTimestamp(seconds: number): string {
 }
 
 export async function getTranscript(videoId: string): Promise<string> {
+  const langCodes = ['ko', 'en', 'ja', 'zh', 'es', 'fr', 'de']
+
+  // 공식 자막 + 자동 자막 모두 순차적으로 시도
+  for (const lang of langCodes) {
+    try {
+      const entries: TranscriptEntry[] = await YoutubeTranscript.fetchTranscript(videoId, { lang })
+      if (entries && entries.length > 0) {
+        return entries
+          .map(e => `[${formatTimestamp(e.offset / 1000)}] ${e.text}`)
+          .join('\n')
+      }
+    } catch {
+      // 해당 언어 코드 실패 시 다음 언어 시도
+    }
+  }
+
+  // 마지막으로 언어 코드 없이 시도 (자동 자막 포함 모든 자막)
   try {
     const entries: TranscriptEntry[] = await YoutubeTranscript.fetchTranscript(videoId)
-    return entries
-      .map(e => `[${formatTimestamp(e.offset / 1000)}] ${e.text}`)
-      .join('\n')
+    if (entries && entries.length > 0) {
+      return entries
+        .map(e => `[${formatTimestamp(e.offset / 1000)}] ${e.text}`)
+        .join('\n')
+    }
   } catch {
-    throw new Error('TRANSCRIPT_UNAVAILABLE')
+    // 전부 실패
   }
+
+  throw new Error('TRANSCRIPT_UNAVAILABLE')
 }
 
 export interface VideoMeta {
