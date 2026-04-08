@@ -14,16 +14,15 @@ async function getVideoInfo(videoId: string) {
         thumbnail: `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`,
       }
     }
-  } catch (e) {
+  } catch {
     // Fall back to API
   }
 
-  // Fallback to YouTube Data API for Shorts or embedded-disabled videos
-  const apiKey = process.env.YOUTUBE_API_KEY;
+  const apiKey = process.env.YOUTUBE_API_KEY
   if (apiKey) {
-    const apiRes = await fetch(`https://www.googleapis.com/youtube/v3/videos?id=${videoId}&part=snippet&key=${apiKey}`);
+    const apiRes = await fetch(`https://www.googleapis.com/youtube/v3/videos?id=${videoId}&part=snippet&key=${apiKey}`)
     if (apiRes.ok) {
-      const data = await apiRes.json();
+      const data = await apiRes.json()
       if (data.items && data.items.length > 0) {
         return {
           title: data.items[0].snippet.title,
@@ -33,8 +32,21 @@ async function getVideoInfo(videoId: string) {
       }
     }
   }
-  
+
   throw new Error('VIDEO_NOT_FOUND')
+}
+
+// 결과를 Firestore에 저장 - 마이페이지/스퀘어에서 클릭 시 불러오기 위해
+async function saveResultToFirestore(sessionId: string, result: object) {
+  try {
+    const { db } = await import('@/lib/firebase')
+    const { doc, setDoc } = await import('firebase/firestore')
+    await setDoc(doc(db, 'summaries', sessionId), result)
+    console.log('[Summarize] ✅ Saved to Firestore summaries:', sessionId)
+  } catch (e) {
+    console.warn('[Summarize] ⚠️ Failed to save to Firestore:', e)
+    // 저장 실패해도 클라이언트 응답은 정상 반환
+  }
 }
 
 export async function POST(req: NextRequest) {
@@ -67,7 +79,7 @@ export async function POST(req: NextRequest) {
     if (transcript) contextParts.push(`[자막]\n${transcript}`)
     if (description) contextParts.push(`[영상 설명]\n${description}`)
     if (pinnedComment) contextParts.push(`[상위 댓글]\n${pinnedComment}`)
-    
+
     const fullContext = contextParts.join('\n\n')
 
     if (!fullContext.trim()) {
@@ -96,6 +108,10 @@ export async function POST(req: NextRequest) {
       summary,
       transcript,
     }
+
+    // Firestore에 백그라운드 저장 (마이페이지/스퀘어 클릭 시 불러오기 위해)
+    // 저장 실패해도 클라이언트 응답에는 영향 없음
+    saveResultToFirestore(sessionId, result).catch(() => {})
 
     return NextResponse.json(result)
   } catch (error) {
