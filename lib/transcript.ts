@@ -80,7 +80,49 @@ async function getTranscriptViaCloudflare(videoId: string): Promise<string> {
 }
 
 // ─────────────────────────────────────────────
-// [2단계] SocialKit API (CF Worker 실패 시 폴백)
+// [2단계] Supadata API (CF Worker 실패 시 폴백)
+// - 자동생성 자막 포함 폭넓은 커버리지
+// ─────────────────────────────────────────────
+async function getTranscriptViaSupadata(videoId: string): Promise<string> {
+  const apiKey = process.env.SUPADATA_API_KEY
+  if (!apiKey) throw new Error('SUPADATA_NOT_CONFIGURED')
+
+  const res = await fetch(
+    `https://api.supadata.ai/v1/youtube/transcript?videoId=${videoId}&text=false`,
+    {
+      headers: { 'x-api-key': apiKey },
+      signal: AbortSignal.timeout(30000),
+    }
+  )
+
+  if (!res.ok) {
+    const errText = await res.text().catch(() => '')
+    throw new Error(`SUPADATA_${res.status}: ${errText.slice(0, 100)}`)
+  }
+
+  const data = await res.json() as {
+    content?: Array<{ text: string; offset: number; duration: number; lang: string }>
+    lang?: string
+    availableLangs?: string[]
+  }
+
+  if (!data.content || data.content.length === 0) {
+    throw new Error('SUPADATA_EMPTY_RESPONSE')
+  }
+
+  return data.content
+    .map(s => {
+      const ms = s.offset
+      const mm = String(Math.floor(ms / 60000)).padStart(2, '0')
+      const ss = String(Math.floor((ms % 60000) / 1000)).padStart(2, '0')
+      return `[${mm}:${ss}] ${s.text.replace(/\n/g, ' ').trim()}`
+    })
+    .filter(line => line.length > 8)
+    .join('\n')
+}
+
+// ─────────────────────────────────────────────
+// [3단계] SocialKit API (최종 폴백)
 // - 자막 있는 영상: 자막 직접 추출
 // - 자막 없는 영상: 오디오 다운로드 후 STT 변환
 // - YouTube IP 차단 자체 우회 처리
@@ -187,6 +229,13 @@ export async function getTranscript(videoId: string): Promise<TranscriptResult> 
     strategies.push({
       name: 'Cloudflare Worker',
       fn: () => getTranscriptViaCloudflare(videoId),
+    })
+  }
+
+  if (process.env.SUPADATA_API_KEY) {
+    strategies.push({
+      name: 'Supadata',
+      fn: () => getTranscriptViaSupadata(videoId),
     })
   }
 

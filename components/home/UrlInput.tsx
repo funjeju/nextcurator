@@ -91,69 +91,69 @@ export default function UrlInput() {
   }
 
   return (
-    <div className="flex flex-col items-start gap-8 w-full max-w-2xl bg-[#32302e]/80 backdrop-blur-3xl p-8 md:p-10 rounded-[32px] border border-white/5 shadow-2xl">
-      
+    <div className="flex flex-col items-start gap-6 w-full max-w-2xl bg-[#32302e]/80 backdrop-blur-3xl px-4 py-6 md:p-10 rounded-[32px] border border-white/5 shadow-2xl">
+
       {/* Recent History Component */}
       <RecentHistory />
-      
-      {/* Category selection */}
-      <div className="flex flex-col items-start gap-4 w-full">
-        <p className="text-[#75716e] text-sm font-medium">분석 모드 선택</p>
-        <div className="flex flex-wrap gap-2.5">
-          {CATEGORIES.map((cat) => {
-            const isSelected = selectedCategory === cat.id;
-            return (
-              <Badge
-                key={cat.id}
-                variant="outline"
-                onClick={() => setSelectedCategory(cat.id)}
-                className={`flex items-center gap-2 px-5 py-2.5 rounded-[16px] text-sm font-medium cursor-pointer transition-all duration-300 group ${
-                  isSelected 
-                    ? 'border-transparent bg-white text-black shadow-[0_0_20px_rgba(255,255,255,0.2)]' 
-                    : 'border-transparent bg-[#23211f] text-[#a4a09c] hover:bg-[#3d3a38] hover:text-white'
-                }`}
-              >
-                <span className={`text-base transition-transform ${isSelected ? 'scale-110' : 'group-hover:scale-110'}`}>
-                  {cat.icon}
-                </span>
-                <span className="tracking-wide">{cat.label}</span>
-              </Badge>
-            )
-          })}
-        </div>
-      </div>
 
       {/* Input area */}
-      <div className="flex flex-col gap-4 w-full mt-2">
+      <div className="flex flex-col gap-4 w-full">
         <label className="text-[#e8e6e3] text-[15px] font-semibold tracking-wide flex items-center gap-2">
           영상 주소 입력 <span className="text-orange-400">⚡</span>
         </label>
-        
+
         <div className="relative group flex flex-col md:flex-row gap-3">
           <Input
             placeholder="https://youtube.com/watch?v=..."
             value={url}
             onChange={(e) => setUrl(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
-            className="flex-1 h-[60px] text-base pl-6 pr-4 bg-[#23211f] border-none text-white placeholder:text-[#75716e] rounded-[20px] focus-visible:ring-1 focus-visible:ring-orange-500/50 shadow-inner transition-all duration-300"
+            className="flex-1 h-[56px] text-base pl-5 pr-4 bg-[#23211f] border-none text-white placeholder:text-[#75716e] rounded-[20px] focus-visible:ring-1 focus-visible:ring-orange-500/50 shadow-inner transition-all duration-300"
           />
           <Button
             variant="default"
             onClick={handleSubmit}
             disabled={!url.trim()}
-            className="h-[60px] md:w-[160px] text-base font-bold tracking-wide rounded-[20px] transition-all duration-300
+            className="h-[56px] md:w-[140px] text-base font-bold tracking-wide rounded-[20px] transition-all duration-300
                        bg-white text-black hover:bg-[#e2e2e2] hover:scale-[1.02] active:scale-[0.98]
                        disabled:bg-white/10 disabled:text-white/30 disabled:cursor-not-allowed disabled:transform-none"
           >
             Start Now
           </Button>
         </div>
-        
+
         {error && (
-          <div className="flex items-center gap-2 bg-[#2a1d1c] border border-red-500/20 rounded-2xl px-5 py-4 mt-2">
+          <div className="flex items-center gap-2 bg-[#2a1d1c] border border-red-500/20 rounded-2xl px-5 py-4">
             <span className="text-red-400 text-sm font-medium">⚠️ {error}</span>
           </div>
         )}
+      </div>
+
+      {/* Category selection - URL 입력 아래 */}
+      <div className="flex flex-col items-start gap-3 w-full">
+        <p className="text-[#75716e] text-sm font-medium">분석 모드 선택</p>
+        <div className="grid grid-cols-3 md:flex md:flex-wrap gap-2 w-full">
+          {CATEGORIES.map((cat) => {
+            const isSelected = selectedCategory === cat.id
+            return (
+              <Badge
+                key={cat.id}
+                variant="outline"
+                onClick={() => setSelectedCategory(cat.id)}
+                className={`flex items-center justify-center gap-1.5 px-2 py-2 md:px-5 md:py-2.5 rounded-[14px] text-xs md:text-sm font-medium cursor-pointer transition-all duration-300 group ${
+                  isSelected
+                    ? 'border-transparent bg-white text-black shadow-[0_0_20px_rgba(255,255,255,0.2)]'
+                    : 'border-transparent bg-[#23211f] text-[#a4a09c] hover:bg-[#3d3a38] hover:text-white'
+                }`}
+              >
+                <span className={`text-sm transition-transform ${isSelected ? 'scale-110' : 'group-hover:scale-110'}`}>
+                  {cat.icon}
+                </span>
+                <span className="tracking-wide truncate">{cat.label}</span>
+              </Badge>
+            )
+          })}
+        </div>
       </div>
 
     </div>

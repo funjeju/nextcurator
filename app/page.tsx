@@ -12,13 +12,13 @@ export default function Home() {
         <div className="absolute bottom-0 left-10 w-[600px] h-[600px] bg-amber-600/10 rounded-full blur-[120px]" />
       </div>
 
-      <div className="flex flex-col items-center gap-10 w-full max-w-3xl relative z-10">
-        {/* Logo & Title */}
-        <div className="text-center flex flex-col gap-3">
-          <h1 className="text-5xl md:text-[3.5rem] font-bold tracking-tight text-white mb-2">
+      <div className="flex flex-col items-center gap-6 w-full max-w-3xl relative z-10">
+        {/* Title: 모바일에서는 헤더 로고가 있으므로 숨김 */}
+        <div className="text-center flex flex-col gap-2">
+          <h1 className="hidden md:block text-[3.5rem] font-bold tracking-tight text-white">
             🎬 Next Curator
           </h1>
-          <p className="text-[#a4a09c] text-lg font-medium tracking-wide">
+          <p className="text-[#a4a09c] text-base md:text-lg font-medium tracking-wide">
             가장 스마트한 유튜브 저장소
           </p>
         </div>

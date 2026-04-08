@@ -1,11 +1,12 @@
 /**
- * Cloudflare Worker: YouTube Transcript Proxy (v5)
+ * Cloudflare Worker: YouTube Transcript Proxy (v6)
  *
  * 전략:
  * 1. 직접 YouTube watch 페이지 스크래핑 (성공 시 가장 빠름)
- * 2. SocialKit API 폴백 (YouTube가 cloud IP 차단 시)
+ * 2. Supadata API (자동생성 자막 포함 넓은 커버리지)
+ * 3. SocialKit API (STT 변환 지원)
  *
- * SocialKit API 키는 CF Worker 환경변수/시크릿으로 관리
+ * API 키는 CF Worker 시크릿으로 관리
  * Vercel에는 CLOUDFLARE_WORKER_URL 하나만 설정하면 됨
  */
 
@@ -40,7 +41,20 @@ export default {
       errors.push(`watch: ${e.message}`)
     }
 
-    // 전략 2: SocialKit API (YouTube IP 차단 우회 전문 서비스)
+    // 전략 2: Supadata API (자동생성 자막 포함 넓은 커버리지)
+    const supadataKey = env.SUPADATA_API_KEY
+    if (supadataKey) {
+      try {
+        const transcript = await fetchViaSupadata(videoId, supadataKey)
+        return json({ transcript })
+      } catch (e) {
+        errors.push(`supadata: ${e.message}`)
+      }
+    } else {
+      errors.push('supadata: SUPADATA_API_KEY not configured in worker env')
+    }
+
+    // 전략 3: SocialKit API (STT 변환 지원)
     const socialkitKey = env.SOCIALKIT_API_KEY
     if (socialkitKey) {
       try {
@@ -112,7 +126,41 @@ async function fetchViaWatchPage(videoId) {
 }
 
 // ─────────────────────────────────────────────
-// 전략 2: SocialKit API
+// 전략 2: Supadata API
+// ─────────────────────────────────────────────
+async function fetchViaSupadata(videoId, apiKey) {
+  const res = await fetch(
+    `https://api.supadata.ai/v1/youtube/transcript?videoId=${videoId}&text=false`,
+    {
+      headers: { 'x-api-key': apiKey },
+      signal: AbortSignal.timeout(30000),
+    }
+  )
+
+  if (!res.ok) {
+    const errText = await res.text().catch(() => '')
+    throw new Error(`HTTP_${res.status}: ${errText.slice(0, 100)}`)
+  }
+
+  const data = await res.json()
+
+  if (!data.content || data.content.length === 0) {
+    throw new Error('EMPTY_RESPONSE')
+  }
+
+  return data.content
+    .map(s => {
+      const ms = s.offset
+      const mm = String(Math.floor(ms / 60000)).padStart(2, '0')
+      const ss = String(Math.floor((ms % 60000) / 1000)).padStart(2, '0')
+      return `[${mm}:${ss}] ${s.text.replace(/\n/g, ' ').trim()}`
+    })
+    .filter(line => line.length > 8)
+    .join('\n')
+}
+
+// ─────────────────────────────────────────────
+// 전략 3: SocialKit API
 // ─────────────────────────────────────────────
 async function fetchViaSocialKit(videoId, apiKey) {
   const videoUrl = `https://www.youtube.com/watch?v=${videoId}`

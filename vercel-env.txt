@@ -1,0 +1,8 @@
+CLOUDFLARE_WORKER_URL
+https://nextcurator-transcript.nextcurator.workers.dev
+
+SOCIALKIT_API_KEY
+iEluWelc24Ke4q
+
+SUPADATA_API_KEY
+sd_c2f73c3b063859f7159b089be55bf267

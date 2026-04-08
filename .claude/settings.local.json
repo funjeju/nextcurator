@@ -34,7 +34,19 @@
       "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); deps={**d.get\\('dependencies',{}\\), **d.get\\('devDependencies',{}\\)}; [print\\(k,v\\) for k in ['html2canvas','dom-to-image','@vercel/og','satori'] if k in deps]\")",
       "Bash(npx tsc:*)",
       "Bash(npx firebase:*)",
-      "Bash(npx firebase-tools:*)"
+      "Bash(npx firebase-tools:*)",
+      "Bash(curl -s \"https://nextcurator-transcript.nextcurator.workers.dev?videoId=jRuOhuE61xk\")",
+      "Bash(curl -s 'https://www.youtube.com/watch?v=jRuOhuE61xk' -H 'User-Agent: Mozilla/5.0 \\(Windows NT 10.0; Win64; x64\\) AppleWebKit/537.36' -H 'Accept-Language: ko-KR,ko;q=0.9,en;q=0.8' -H 'Cookie: SOCS=CAI; CONSENT=YES+42')",
+      "Bash(grep -o '\"captionTracks\":\\\\[.\\\\{0,300\\\\}')",
+      "Bash(curl -s 'https://api.socialkit.dev/youtube/transcript?url=https://www.youtube.com/watch?v=jRuOhuE61xk' -H 'x-access-key: iEluWelc24Ke4q')",
+      "Bash(node -e ':*)",
+      "Bash(curl -s \"https://www.youtube.com/api/timedtext?v=jRuOhuE61xk&lang=ko&fmt=json3\")",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('events:', len\\(d.get\\('events',[]\\)\\), 'sample:', str\\(d.get\\('events',[][:1]\\)[:100]\\)\\)\")",
+      "Bash(curl -s \"https://www.youtube.com/api/timedtext?v=jRuOhuE61xk&lang=en&fmt=json3\")",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('en events:', len\\(d.get\\('events',[]\\)\\)\\)\")",
+      "Bash(curl -s 'https://www.youtube.com/watch?v=jRuOhuE61xk' -H 'User-Agent: Mozilla/5.0 \\(Windows NT 10.0; Win64; x64\\) AppleWebKit/537.36' -H 'Cookie: SOCS=CAI; CONSENT=YES+42')",
+      "WebFetch(domain:supadata.ai)",
+      "WebFetch(domain:docs.supadata.ai)"
     ]
   }
 }
