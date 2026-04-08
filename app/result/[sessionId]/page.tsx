@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Badge } from '@/components/ui/badge'
@@ -8,12 +8,16 @@ import { Button } from '@/components/ui/button'
 import YoutubePlayer from '@/components/player/YoutubePlayer'
 import SummaryShell from '@/components/summary/SummaryShell'
 import SaveModal from '@/components/summary/SaveModal'
+import CommentSection from '@/components/comments/CommentSection'
+import SummaryPdfTemplate from '@/components/pdf/SummaryPdfTemplate'
 import Header from '@/components/common/Header'
 import { SummarizeResponse } from '@/types/summary'
 import { useAuth } from '@/providers/AuthProvider'
 import { getSavedSummaryBySessionId, updateSummaryVisibility } from '@/lib/db'
 import { getLocalUserId } from '@/lib/user'
+import { getCommentsBySession } from '@/lib/comments'
 import type { SavedSummary } from '@/lib/db'
+import type { Comment } from '@/lib/comments'
 
 const CATEGORY_INFO: Record<string, { label: string; icon: string; color: string }> = {
   recipe:  { label: '요리',    icon: '🍳', color: 'text-orange-400 border-orange-400' },
@@ -54,6 +58,42 @@ export default function ResultPage() {
   const [reanalyzing, setReanalyzing] = useState(false)
   const [reanalyzeCategory, setReanalyzeCategory] = useState('')
 
+  // 댓글
+  const [comments, setComments] = useState<Comment[]>([])
+  const [commentCount, setCommentCount] = useState(0)
+  const [focusSegment, setFocusSegment] = useState<{ id: string; label: string } | null>(null)
+  const commentSectionRef = useRef<HTMLDivElement>(null)
+
+  // PDF
+  const [downloading, setDownloading] = useState(false)
+  const pdfRef = useRef<HTMLDivElement>(null)
+
+  const handleDownloadPdf = async () => {
+    if (!pdfRef.current || !data) return
+    setDownloading(true)
+    try {
+      const { downloadPdf } = await import('@/lib/downloadPdf')
+      const safeName = data.title.replace(/[^\w\s가-힣]/g, '').trim().slice(0, 40) || 'summary'
+      await downloadPdf(pdfRef.current, `${safeName}.pdf`)
+    } catch (e) {
+      console.error('PDF 생성 실패:', e)
+      alert('PDF 다운로드에 실패했습니다.')
+    } finally {
+      setDownloading(false)
+    }
+  }
+
+  // 세그먼트별 댓글 수
+  const commentCounts = useMemo(() => {
+    const counts: Record<string, number> = {}
+    for (const c of comments) {
+      if (c.segmentId && !c.parentId) {
+        counts[c.segmentId] = (counts[c.segmentId] ?? 0) + 1
+      }
+    }
+    return counts
+  }, [comments])
+
   // 데이터 로드
   useEffect(() => {
     const fetchSummary = async () => {
@@ -92,6 +132,17 @@ export default function ResultPage() {
     fetchSummary()
   }, [sessionId, router])
 
+  // 댓글 로드
+  useEffect(() => {
+    if (!sessionId) return
+    getCommentsBySession(sessionId as string)
+      .then(data => {
+        setComments(data)
+        setCommentCount(data.filter(c => !c.parentId).length)
+      })
+      .catch(() => {})
+  }, [sessionId])
+
   // 저장 여부 확인
   useEffect(() => {
     if (!data) return
@@ -107,6 +158,22 @@ export default function ResultPage() {
       playerRef.current.seekTo(timestampToSeconds(ts), true)
       playerRef.current.playVideo()
     }
+  }, [])
+
+  // 인라인 댓글 버블 클릭 → 댓글 섹션으로 스크롤 + 포커스
+  const handleComment = useCallback((segmentId: string, segmentLabel: string) => {
+    setFocusSegment({ id: segmentId, label: segmentLabel })
+    setTimeout(() => {
+      commentSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }, 100)
+  }, [])
+
+  // 댓글 버튼 클릭 → 댓글 섹션으로 스크롤
+  const handleCommentIconClick = useCallback(() => {
+    setFocusSegment(null)
+    setTimeout(() => {
+      commentSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }, 100)
   }, [])
 
   // 공개/비공개 토글
@@ -217,14 +284,19 @@ export default function ResultPage() {
         {/* 탭 콘텐츠 */}
         <div className="min-h-[300px]">
           {activeTab === 'summary' && (
-            <SummaryShell category={data.category} summary={data.summary} onSeek={handleSeek} />
+            <SummaryShell
+              category={data.category}
+              summary={data.summary}
+              onSeek={handleSeek}
+              onComment={handleComment}
+              commentCounts={commentCounts}
+            />
           )}
 
           {activeTab === 'transcript' && (
             <div className="bg-[#2a2826] rounded-2xl p-6 border border-white/5 space-y-3 shadow-lg h-[500px] overflow-y-auto">
               <h2 className="text-xl font-bold border-b border-white/10 pb-4 mb-4">전체 자막</h2>
               {data.transcript ? (() => {
-                // 파싱 후 150자 단위로 묶기
                 const lines = data.transcript.split('\n')
                 const parsed: { ts: string; text: string }[] = []
                 for (const line of lines) {
@@ -309,7 +381,6 @@ export default function ResultPage() {
         {/* 하단 버튼 영역 */}
         <div className="flex gap-3 mt-4">
           {savedItem ? (
-            /* 이미 저장된 경우 → 공개/비공개 토글 */
             <button
               onClick={handleToggleVisibility}
               disabled={togglingVisibility}
@@ -322,7 +393,6 @@ export default function ResultPage() {
               {togglingVisibility ? '변경 중...' : savedItem.isPublic ? '🌍 공개 중 → 비공개로 변경' : '🔒 비공개 → 광장에 공개'}
             </button>
           ) : (
-            /* 미저장 → 저장 모달 */
             <Button
               className="flex-1 bg-gradient-to-r from-orange-500 to-pink-500 hover:from-orange-600 hover:to-pink-600 text-white font-bold h-14 text-base border-none"
               onClick={() => setShowSaveModal(true)}
@@ -330,6 +400,37 @@ export default function ResultPage() {
               📚 라이브러리에 저장
             </Button>
           )}
+
+          {/* 댓글 버튼 */}
+          <button
+            onClick={handleCommentIconClick}
+            className="h-14 px-4 border border-white/10 bg-[#32302e] text-white hover:bg-[#3d3a38] hover:border-white/20 transition-all rounded-xl flex items-center gap-1.5"
+            title="댓글 보기"
+          >
+            <span className="text-lg">💬</span>
+            {commentCount > 0 && (
+              <span className="text-xs font-bold text-[#a4a09c]">{commentCount}</span>
+            )}
+          </button>
+
+          {/* PDF 다운로드 버튼 */}
+          <button
+            onClick={handleDownloadPdf}
+            disabled={downloading}
+            className="h-14 px-4 border border-white/10 bg-[#32302e] text-white hover:bg-[#3d3a38] hover:border-white/20 transition-all rounded-xl disabled:opacity-50 flex items-center gap-1.5"
+            title="PDF 다운로드"
+          >
+            {downloading ? (
+              <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+              </svg>
+            ) : (
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+            )}
+          </button>
 
           {/* 공유 버튼 */}
           <Button
@@ -352,9 +453,35 @@ export default function ResultPage() {
           </Button>
         </div>
 
+        {/* 댓글 섹션 */}
+        <div ref={commentSectionRef}>
+          <CommentSection
+            sessionId={sessionId as string}
+            focusSegmentId={focusSegment?.id ?? null}
+            focusSegmentLabel={focusSegment?.label ?? null}
+            onClearFocus={() => setFocusSegment(null)}
+            onCountChange={setCommentCount}
+          />
+        </div>
+
         <Button variant="ghost" className="text-zinc-500 mb-10" onClick={() => router.push('/')}>
           ← 새 영상 요약하기
         </Button>
+      </div>
+
+      {/* 숨겨진 PDF 렌더링 영역 - html2canvas 캡처용 */}
+      <div
+        style={{
+          position: 'absolute',
+          left: '-9999px',
+          top: 0,
+          pointerEvents: 'none',
+          zIndex: -1,
+        }}
+      >
+        <div ref={pdfRef}>
+          {data && <SummaryPdfTemplate data={data} />}
+        </div>
       </div>
 
       {showSaveModal && (
@@ -362,7 +489,6 @@ export default function ResultPage() {
           data={data}
           onClose={() => {
             setShowSaveModal(false)
-            // 저장 후 savedItem 재조회
             const uid = user?.uid || getLocalUserId()
             getSavedSummaryBySessionId(uid, data.sessionId).then(setSavedItem).catch(() => {})
           }}

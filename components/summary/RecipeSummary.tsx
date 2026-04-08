@@ -5,10 +5,13 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import TimestampBadge from './TimestampBadge'
 import CopyButton from './CopyButton'
+import CommentBubble from '@/components/comments/CommentBubble'
 
 interface Props {
   data: RecipeSummaryType
   onSeek: (ts: string) => void
+  onComment?: (segmentId: string, segmentLabel: string) => void
+  commentCounts?: Record<string, number>
 }
 
 const GROUP_COLORS: Record<string, string> = {
@@ -24,8 +27,7 @@ function groupColor(group: string) {
   return GROUP_COLORS[group] ?? 'text-zinc-400'
 }
 
-export default function RecipeSummary({ data, onSeek }: Props) {
-  // ingredient_groups 우선, 없으면 기존 ingredients 단일 그룹으로 표시
+export default function RecipeSummary({ data, onSeek, onComment, commentCounts = {} }: Props) {
   const groups = data.ingredient_groups ??
     (data.ingredients ? [{ group: '재료', items: data.ingredients }] : [])
 
@@ -43,6 +45,8 @@ export default function RecipeSummary({ data, onSeek }: Props) {
         <CopyButton text={copyText} />
       </CardHeader>
       <CardContent className="flex flex-col gap-6">
+
+        {/* 재료 (그룹별) */}
         <div>
           <h3 className="text-zinc-300 font-semibold mb-3">재료 ({data.servings})</h3>
           <div className="flex flex-col gap-3">
@@ -68,34 +72,62 @@ export default function RecipeSummary({ data, onSeek }: Props) {
 
         <Separator className="bg-zinc-800" />
 
+        {/* 만드는 법 */}
         <div>
           <h3 className="text-zinc-300 font-semibold mb-3">만드는 법</h3>
           <div className="flex flex-col gap-4">
-            {data.steps.map((step) => (
-              <div key={step.step} className="flex gap-3">
-                <span className="text-blue-400 font-bold text-sm w-5 shrink-0">{step.step}</span>
-                <div className="flex flex-col gap-1">
-                  <div className="flex items-center gap-2">
-                    <TimestampBadge timestamp={step.timestamp} onSeek={onSeek} />
-                    {step.tip && <span className="text-emerald-400 text-xs">★</span>}
+            {data.steps.map((step) => {
+              const segId = `step-${step.step}`
+              const segLabel = `${step.step}단계`
+              return (
+                <div key={step.step} id={`seg-${segId}`} className="flex gap-3 transition-all rounded-lg p-1 -m-1">
+                  <span className="text-blue-400 font-bold text-sm w-5 shrink-0 mt-0.5">{step.step}</span>
+                  <div className="flex flex-col gap-1 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <TimestampBadge timestamp={step.timestamp} onSeek={onSeek} />
+                      {step.tip && <span className="text-emerald-400 text-xs">★</span>}
+                      {onComment && (
+                        <CommentBubble
+                          segmentId={segId}
+                          segmentLabel={segLabel}
+                          count={commentCounts[segId] ?? 0}
+                          onComment={onComment}
+                        />
+                      )}
+                    </div>
+                    <p className="text-zinc-200 text-sm">{step.desc}</p>
+                    {step.tip && <p className="text-emerald-400 text-xs">{step.tip}</p>}
                   </div>
-                  <p className="text-zinc-200 text-sm">{step.desc}</p>
-                  {step.tip && <p className="text-emerald-400 text-xs">{step.tip}</p>}
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </div>
 
+        {/* 핵심 팁 */}
         {data.key_tips.length > 0 && (
           <>
             <Separator className="bg-zinc-800" />
             <div>
               <h3 className="text-emerald-400 font-semibold mb-2">💡 핵심 팁</h3>
-              <ul className="flex flex-col gap-1">
-                {data.key_tips.map((tip, i) => (
-                  <li key={i} className="text-zinc-300 text-sm">• {tip}</li>
-                ))}
+              <ul className="flex flex-col gap-2">
+                {data.key_tips.map((tip, i) => {
+                  const segId = `tip-${i}`
+                  const segLabel = `팁 ${i + 1}`
+                  return (
+                    <li key={i} id={`seg-${segId}`} className="flex items-start justify-between gap-2 transition-all rounded-lg p-1 -m-1">
+                      <span className="text-zinc-300 text-sm">• {tip}</span>
+                      {onComment && (
+                        <CommentBubble
+                          segmentId={segId}
+                          segmentLabel={segLabel}
+                          count={commentCounts[segId] ?? 0}
+                          onComment={onComment}
+                        />
+                      )}
+                    </li>
+                  )
+                })}
               </ul>
             </div>
           </>

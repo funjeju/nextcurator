@@ -25,19 +25,57 @@ export default function SquarePage() {
   const { user } = useAuth()
   const router = useRouter()
   const [summaries, setSummaries] = useState<SavedSummary[]>([])
+  const [allSummaries, setAllSummaries] = useState<SavedSummary[]>([])
   const [loading, setLoading] = useState(true)
   const [activeCategory, setActiveCategory] = useState('all')
   const [sortType, setSortType] = useState<SortType>('latest')
   const [likedIds, setLikedIds] = useState<Set<string>>(new Set())
   const [likingIds, setLikingIds] = useState<Set<string>>(new Set())
   const [messagingId, setMessagingId] = useState<string | null>(null)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searching, setSearching] = useState(false)
 
   useEffect(() => {
     getPublicSummaries()
-      .then(setSummaries)
+      .then(data => { setSummaries(data); setAllSummaries(data) })
       .catch(e => console.error('Failed to load square data:', e))
       .finally(() => setLoading(false))
   }, [])
+
+  const handleSearch = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!searchQuery.trim()) { setSummaries(allSummaries); return }
+    setSearching(true)
+    try {
+      const payload = allSummaries.map(s => ({
+        id: s.id,
+        title: s.title,
+        category: s.category,
+        tags: s.square_meta?.tags ?? [],
+        topic_cluster: s.square_meta?.topic_cluster ?? '',
+        vibe: s.square_meta?.vibe ?? '',
+      }))
+      const res = await fetch('/api/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: searchQuery, summaries: payload }),
+      })
+      const { results } = await res.json()
+      const ordered = results
+        .map((id: string) => allSummaries.find(s => s.id === id))
+        .filter(Boolean) as SavedSummary[]
+      setSummaries(ordered)
+    } catch {
+      alert('검색에 실패했습니다.')
+    } finally {
+      setSearching(false)
+    }
+  }
+
+  const handleClearSearch = () => {
+    setSearchQuery('')
+    setSummaries(allSummaries)
+  }
 
   useEffect(() => {
     if (!user) { setLikedIds(new Set()); return }
@@ -116,6 +154,31 @@ export default function SquarePage() {
       <Header title="🎬 Next Curator" />
 
       <div className="max-w-7xl mx-auto px-3 pb-12">
+
+        {/* AI 검색 바 */}
+        <div className="mb-4">
+          <form onSubmit={handleSearch} className="flex gap-2">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              placeholder="자연어로 검색... (예: 초보용 요리 영상 추천해줘)"
+              className="flex-1 h-10 px-4 bg-[#32302e] border border-white/10 rounded-xl text-sm text-white placeholder:text-[#75716e] focus:outline-none focus:border-orange-500/50 transition-colors"
+            />
+            {searchQuery && (
+              <button type="button" onClick={handleClearSearch} className="h-10 px-3 bg-[#32302e] border border-white/10 rounded-xl text-[#75716e] hover:text-white transition-colors text-sm">
+                ✕
+              </button>
+            )}
+            <button
+              type="submit"
+              disabled={searching || !searchQuery.trim()}
+              className="h-10 px-4 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-xl text-sm disabled:opacity-40 transition-colors whitespace-nowrap"
+            >
+              {searching ? '검색 중...' : '🔍'}
+            </button>
+          </form>
+        </div>
 
         {/* 필터 바 */}
         <div className="flex flex-col gap-2 mb-5">

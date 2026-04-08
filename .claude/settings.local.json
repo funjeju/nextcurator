@@ -48,7 +48,8 @@
       "WebFetch(domain:supadata.ai)",
       "WebFetch(domain:docs.supadata.ai)",
       "Bash(echo \"EXIT:$?\")",
-      "Bash(npx next:*)"
+      "Bash(npx next:*)",
+      "Bash(firebase deploy:*)"
     ]
   }
 }
