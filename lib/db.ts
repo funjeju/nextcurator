@@ -1,5 +1,5 @@
 import { db } from './firebase'
-import { collection, doc, setDoc, getDocs, getDoc, query, where, addDoc, deleteDoc, serverTimestamp } from 'firebase/firestore'
+import { collection, doc, setDoc, getDocs, getDoc, query, where, addDoc, deleteDoc, updateDoc, increment, serverTimestamp } from 'firebase/firestore'
 import { SummaryData } from '@/types/summary'
 
 export interface Folder {
@@ -22,6 +22,8 @@ export interface SavedSummary {
   isPublic: boolean
   createdAt: any
   transcript?: string
+  likeCount?: number
+  viewCount?: number
 }
 
 export async function getUserFolders(userId: string): Promise<Folder[]> {
@@ -78,6 +80,37 @@ export async function saveSummary({
 
 export async function deleteSavedSummary(id: string): Promise<void> {
   await deleteDoc(doc(db, 'saved_summaries', id))
+}
+
+export async function toggleLike(userId: string, savedSummaryId: string): Promise<boolean> {
+  const likeId = `${userId}_${savedSummaryId}`
+  const likeRef = doc(db, 'likes', likeId)
+  const savedRef = doc(db, 'saved_summaries', savedSummaryId)
+
+  const likeSnap = await getDoc(likeRef)
+  if (likeSnap.exists()) {
+    await deleteDoc(likeRef)
+    await updateDoc(savedRef, { likeCount: increment(-1) })
+    return false
+  } else {
+    await setDoc(likeRef, { userId, savedSummaryId, createdAt: serverTimestamp() })
+    await updateDoc(savedRef, { likeCount: increment(1) })
+    return true
+  }
+}
+
+export async function getUserLikedIds(userId: string): Promise<Set<string>> {
+  const q = query(collection(db, 'likes'), where('userId', '==', userId))
+  const snapshot = await getDocs(q)
+  return new Set(snapshot.docs.map(d => d.data().savedSummaryId as string))
+}
+
+export async function incrementViewCount(savedSummaryId: string): Promise<void> {
+  try {
+    await updateDoc(doc(db, 'saved_summaries', savedSummaryId), { viewCount: increment(1) })
+  } catch {
+    // 뷰카운트 실패는 무시
+  }
 }
 
 export async function getPublicSummaries(): Promise<SavedSummary[]> {

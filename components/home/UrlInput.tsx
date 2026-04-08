@@ -130,10 +130,33 @@ export default function UrlInput() {
       </div>
 
       {/* Category selection - URL 입력 아래 */}
-      <div className="flex flex-col items-start gap-3 w-full">
-        <p className="text-[#75716e] text-sm font-medium">분석 모드 선택</p>
+      <div className="flex flex-col gap-3 w-full">
+        {/* 첫 행: 분석 모드 선택 레이블 + 자동 분류 버튼 */}
+        <div className="flex items-center justify-between w-full">
+          <p className="text-[#75716e] text-sm font-medium">분석 모드 선택</p>
+          {(() => {
+            const auto = CATEGORIES[0]
+            const isSelected = selectedCategory === auto.id
+            return (
+              <Badge
+                variant="outline"
+                onClick={() => setSelectedCategory(auto.id)}
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-[14px] text-xs font-medium cursor-pointer transition-all duration-300 group ${
+                  isSelected
+                    ? 'border-transparent bg-white text-black shadow-[0_0_20px_rgba(255,255,255,0.2)]'
+                    : 'border-transparent bg-[#23211f] text-[#a4a09c] hover:bg-[#3d3a38] hover:text-white'
+                }`}
+              >
+                <span className={`text-sm transition-transform ${isSelected ? 'scale-110' : 'group-hover:scale-110'}`}>{auto.icon}</span>
+                <span>{auto.label}</span>
+              </Badge>
+            )
+          })()}
+        </div>
+
+        {/* 두 번째 행: 나머지 카테고리 3열 그리드 */}
         <div className="grid grid-cols-3 md:flex md:flex-wrap gap-2 w-full">
-          {CATEGORIES.map((cat) => {
+          {CATEGORIES.slice(1).map((cat) => {
             const isSelected = selectedCategory === cat.id
             return (
               <Badge
@@ -146,9 +169,7 @@ export default function UrlInput() {
                     : 'border-transparent bg-[#23211f] text-[#a4a09c] hover:bg-[#3d3a38] hover:text-white'
                 }`}
               >
-                <span className={`text-sm transition-transform ${isSelected ? 'scale-110' : 'group-hover:scale-110'}`}>
-                  {cat.icon}
-                </span>
+                <span className={`text-sm transition-transform ${isSelected ? 'scale-110' : 'group-hover:scale-110'}`}>{cat.icon}</span>
                 <span className="tracking-wide truncate">{cat.label}</span>
               </Badge>
             )

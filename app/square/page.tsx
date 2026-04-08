@@ -3,104 +3,208 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import Header from '@/components/common/Header'
-import { getPublicSummaries, SavedSummary } from '@/lib/db'
+import { getPublicSummaries, toggleLike, getUserLikedIds, incrementViewCount, SavedSummary } from '@/lib/db'
+import { useAuth } from '@/providers/AuthProvider'
 import { formatRelativeDate } from '@/lib/formatDate'
 
-const CATEGORY_LABEL: Record<string, string> = {
-  recipe: '🍳 요리',
-  english: '🔤 영어',
-  learning: '📐 학습',
-  news: '🗞️ 뉴스',
-  selfdev: '💪 자기계발',
-  travel: '🧳 여행',
-  story: '🍿 스토리',
-}
+const CATEGORIES = [
+  { id: 'all',     label: '전체' },
+  { id: 'recipe',  label: '🍳 요리' },
+  { id: 'english', label: '🔤 영어' },
+  { id: 'learning',label: '📐 학습' },
+  { id: 'news',    label: '🗞️ 뉴스' },
+  { id: 'selfdev', label: '💪 자기계발' },
+  { id: 'travel',  label: '🧳 여행' },
+  { id: 'story',   label: '🍿 스토리' },
+]
+
+type SortType = 'latest' | 'popular' | 'views'
 
 export default function SquarePage() {
+  const { user } = useAuth()
   const [summaries, setSummaries] = useState<SavedSummary[]>([])
   const [loading, setLoading] = useState(true)
+  const [activeCategory, setActiveCategory] = useState('all')
+  const [sortType, setSortType] = useState<SortType>('latest')
+  const [likedIds, setLikedIds] = useState<Set<string>>(new Set())
+  const [likingIds, setLikingIds] = useState<Set<string>>(new Set())
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const data = await getPublicSummaries()
-        setSummaries(data)
-      } catch (e) {
-        console.error('Failed to load square data:', e)
-      } finally {
-        setLoading(false)
-      }
-    }
-    fetchData()
+    getPublicSummaries()
+      .then(setSummaries)
+      .catch(e => console.error('Failed to load square data:', e))
+      .finally(() => setLoading(false))
   }, [])
+
+  useEffect(() => {
+    if (!user) { setLikedIds(new Set()); return }
+    getUserLikedIds(user.uid).then(setLikedIds).catch(() => {})
+  }, [user])
+
+  const handleLike = async (e: React.MouseEvent, item: SavedSummary) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (!user) {
+      alert('좋아요는 로그인 후 이용할 수 있습니다.')
+      return
+    }
+    if (likingIds.has(item.id)) return
+
+    setLikingIds(prev => new Set(prev).add(item.id))
+    const wasLiked = likedIds.has(item.id)
+
+    // 낙관적 업데이트
+    setLikedIds(prev => {
+      const next = new Set(prev)
+      wasLiked ? next.delete(item.id) : next.add(item.id)
+      return next
+    })
+    setSummaries(prev => prev.map(s =>
+      s.id === item.id ? { ...s, likeCount: (s.likeCount ?? 0) + (wasLiked ? -1 : 1) } : s
+    ))
+
+    try {
+      await toggleLike(user.uid, item.id)
+    } catch {
+      // 롤백
+      setLikedIds(prev => {
+        const next = new Set(prev)
+        wasLiked ? next.add(item.id) : next.delete(item.id)
+        return next
+      })
+      setSummaries(prev => prev.map(s =>
+        s.id === item.id ? { ...s, likeCount: (s.likeCount ?? 0) + (wasLiked ? 1 : -1) } : s
+      ))
+    } finally {
+      setLikingIds(prev => { const next = new Set(prev); next.delete(item.id); return next })
+    }
+  }
+
+  const filtered = summaries
+    .filter(s => activeCategory === 'all' || s.category === activeCategory)
+    .sort((a, b) => {
+      if (sortType === 'popular') return (b.likeCount ?? 0) - (a.likeCount ?? 0)
+      if (sortType === 'views')   return (b.viewCount ?? 0) - (a.viewCount ?? 0)
+      const aT = a.createdAt?.toMillis?.() ?? 0
+      const bT = b.createdAt?.toMillis?.() ?? 0
+      return bT - aT
+    })
 
   return (
     <div className="min-h-screen bg-[#252423] font-sans">
-      <Header title="🎬 The Square" />
+      <Header title="🎬 Next Curator" />
 
-      <div className="max-w-7xl mx-auto px-6 pb-12">
-        <div className="mb-10 text-center">
-          <h1 className="text-4xl md:text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-orange-400 to-pink-500 mb-4 tracking-tight">
-            The Square
-          </h1>
-          <p className="text-[#a4a09c] text-lg max-w-2xl mx-auto">
-            매일업데이트되는 집단지성 요약 라이브러리. 세상의 모든 지식을 탐험하세요.
-          </p>
+      <div className="max-w-7xl mx-auto px-3 pb-12">
+
+        {/* 필터 바 */}
+        <div className="flex flex-col gap-2 mb-5">
+          {/* 카테고리 탭 */}
+          <div className="flex gap-2 overflow-x-auto scrollbar-none pb-1">
+            {CATEGORIES.map(cat => (
+              <button
+                key={cat.id}
+                onClick={() => setActiveCategory(cat.id)}
+                className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
+                  activeCategory === cat.id
+                    ? 'bg-orange-500 text-white'
+                    : 'bg-[#32302e] text-[#a4a09c] hover:text-white'
+                }`}
+              >
+                {cat.label}
+              </button>
+            ))}
+          </div>
+
+          {/* 정렬 버튼 */}
+          <div className="flex items-center gap-2">
+            {(['latest', 'popular', 'views'] as SortType[]).map(type => {
+              const labels: Record<SortType, string> = { latest: '최신순', popular: '인기순', views: '조회수순' }
+              return (
+                <button
+                  key={type}
+                  onClick={() => setSortType(type)}
+                  className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${
+                    sortType === type
+                      ? 'bg-white text-black'
+                      : 'bg-[#32302e] text-[#a4a09c] hover:text-white'
+                  }`}
+                >
+                  {labels[type]}
+                </button>
+              )
+            })}
+            <span className="text-[#75716e] text-xs ml-auto">{filtered.length}개</span>
+          </div>
         </div>
 
+        {/* 카드 그리드 */}
         {loading ? (
           <div className="flex items-center justify-center py-32">
-            <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-pink-500"></div>
+            <div className="animate-spin rounded-full h-12 w-12 border-t-4 border-b-4 border-pink-500" />
           </div>
-        ) : summaries.length === 0 ? (
-          <div className="bg-[#32302e]/50 rounded-[32px] p-20 text-center border border-white/5">
-            <span className="text-6xl mb-6 block drop-shadow-xl">🌍</span>
-            <h2 className="text-2xl text-white font-bold mb-3">아직 공개된 요약이 없습니다</h2>
-            <p className="text-[#75716e] text-base">첫 번째 영상을 요약하고 광장에 공유해 보세요!</p>
-            <Link href="/" className="inline-block mt-8 px-8 py-4 bg-gradient-to-r from-orange-500 to-pink-500 text-white font-bold rounded-2xl shadow-lg hover:shadow-pink-500/25 transition-all hover:-translate-y-1">
+        ) : filtered.length === 0 ? (
+          <div className="bg-[#32302e]/50 rounded-[32px] p-16 text-center border border-white/5">
+            <span className="text-4xl mb-4 block">🌍</span>
+            <h2 className="text-xl text-white font-bold mb-2">
+              {activeCategory === 'all' ? '아직 공개된 요약이 없습니다' : '해당 카테고리의 요약이 없습니다'}
+            </h2>
+            <Link href="/" className="inline-block mt-6 px-6 py-3 bg-gradient-to-r from-orange-500 to-pink-500 text-white font-bold rounded-2xl">
               새 영상 분석하기
             </Link>
           </div>
         ) : (
-          <div className="columns-1 sm:columns-2 md:columns-3 lg:columns-4 gap-6 space-y-6">
-            {summaries.map(item => (
-              <Link
-                key={item.id}
-                href={`/result/${item.sessionId}`}
-                className="break-inside-avoid flex flex-col rounded-[24px] bg-[#32302e] border border-white/5 overflow-hidden hover:border-white/20 transition-all hover:-translate-y-1.5 shadow-xl group"
-              >
-                <div className="relative overflow-hidden bg-[#23211f]">
-                  <img 
-                    src={item.thumbnail} 
-                    alt={item.title} 
-                    className="w-full object-cover aspect-video group-hover:scale-105 transition-transform duration-700 ease-out"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-60 group-hover:opacity-40 transition-opacity duration-500" />
-                  <div className="absolute top-3 right-3 px-3 py-1.5 rounded-full bg-black/60 backdrop-blur-md text-xs font-bold text-white border border-white/10 flex items-center shadow-lg">
-                    {CATEGORY_LABEL[item.category] || '분석됨'}
-                  </div>
-                </div>
-                
-                <div className="p-6 flex flex-col gap-4">
-                  <h3 className="text-[#f4f4f5] text-base font-bold leading-snug group-hover:text-pink-100 transition-colors line-clamp-3">
-                    {item.title}
-                  </h3>
-
-                  {item.createdAt && (
-                    <p className="text-[#75716e] text-xs">{formatRelativeDate(item.createdAt)}</p>
-                  )}
-
-                  {item.square_meta && item.square_meta.tags && (
-                    <div className="flex flex-wrap gap-2 mt-auto">
-                      {item.square_meta.tags.slice(0, 5).map((tag: string, i: number) => (
-                        <span key={i} className="px-2.5 py-1 bg-[#23211f] border border-white/5 hover:border-pink-500/30 rounded-lg text-xs text-[#a4a09c] hover:text-pink-200 font-medium transition-colors">
-                          #{tag.replace(/\s+/g, '')}
-                        </span>
-                      ))}
+          // columns-2: 자연스러운 masonry 효과 (카드 높이 차이로 좌2우1, 좌1우2 번갈아 보임)
+          <div className="columns-2 md:columns-3 lg:columns-4 gap-3 space-y-3">
+            {filtered.map(item => (
+              <div key={item.id} className="break-inside-avoid relative group">
+                <Link
+                  href={`/result/${item.sessionId}`}
+                  onClick={() => incrementViewCount(item.id)}
+                  className="block rounded-[18px] bg-[#32302e] border border-white/5 overflow-hidden hover:border-white/20 transition-all shadow-md"
+                >
+                  {/* 썸네일 */}
+                  <div className="relative overflow-hidden bg-[#23211f]">
+                    <img
+                      src={item.thumbnail}
+                      alt={item.title}
+                      className="w-full object-cover aspect-video group-hover:scale-105 transition-transform duration-500"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+                    <div className="absolute top-2 right-2 px-2 py-0.5 rounded-full bg-black/60 backdrop-blur-sm text-[9px] font-bold text-white border border-white/10">
+                      {CATEGORIES.find(c => c.id === item.category)?.label ?? '분석됨'}
                     </div>
-                  )}
-                </div>
-              </Link>
+                  </div>
+
+                  {/* 콘텐츠 */}
+                  <div className="p-2.5 pb-8">
+                    <h3 className="text-[#f4f4f5] text-[11px] font-bold leading-snug line-clamp-2 mb-1.5">
+                      {item.title}
+                    </h3>
+                    <div className="flex items-center gap-2 text-[#75716e]">
+                      {item.createdAt && (
+                        <span className="text-[9px]">{formatRelativeDate(item.createdAt)}</span>
+                      )}
+                      {(item.viewCount ?? 0) > 0 && (
+                        <span className="text-[9px]">👁 {item.viewCount}</span>
+                      )}
+                    </div>
+                  </div>
+                </Link>
+
+                {/* 하트 버튼 (Link 밖에 위치) */}
+                <button
+                  onClick={(e) => handleLike(e, item)}
+                  disabled={likingIds.has(item.id)}
+                  className={`absolute bottom-2 right-2 flex items-center gap-1 px-2 py-1 rounded-full text-[9px] font-bold transition-all ${
+                    likedIds.has(item.id)
+                      ? 'bg-pink-500/20 text-pink-400 border border-pink-500/30'
+                      : 'bg-black/50 text-white/40 border border-white/10 hover:text-pink-400 hover:border-pink-500/30'
+                  } disabled:opacity-50`}
+                >
+                  <span className="text-[11px]">{likedIds.has(item.id) ? '❤️' : '🤍'}</span>
+                  <span>{item.likeCount ?? 0}</span>
+                </button>
+              </div>
             ))}
           </div>
         )}
