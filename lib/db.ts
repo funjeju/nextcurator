@@ -1,5 +1,5 @@
 import { db } from './firebase'
-import { collection, doc, setDoc, getDocs, getDoc, query, where, orderBy, addDoc, serverTimestamp } from 'firebase/firestore'
+import { collection, doc, setDoc, getDocs, getDoc, query, where, addDoc, serverTimestamp } from 'firebase/firestore'
 import { SummaryData } from '@/types/summary'
 
 export interface Folder {
@@ -26,9 +26,15 @@ export interface SavedSummary {
 
 export async function getUserFolders(userId: string): Promise<Folder[]> {
   const foldersRef = collection(db, 'folders')
-  const q = query(foldersRef, where('userId', '==', userId), orderBy('createdAt', 'desc'))
+  const q = query(foldersRef, where('userId', '==', userId))
   const snapshot = await getDocs(q)
-  return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }) as Folder)
+  const folders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }) as Folder)
+  // 복합 인덱스 없이 클라이언트에서 정렬
+  return folders.sort((a, b) => {
+    const aTime = a.createdAt?.toMillis?.() ?? a.createdAt?.getTime?.() ?? 0
+    const bTime = b.createdAt?.toMillis?.() ?? b.createdAt?.getTime?.() ?? 0
+    return bTime - aTime
+  })
 }
 
 export async function createFolder(userId: string, name: string): Promise<Folder> {
@@ -72,19 +78,30 @@ export async function saveSummary({
 
 export async function getPublicSummaries(): Promise<SavedSummary[]> {
   const savedRef = collection(db, 'saved_summaries')
-  const q = query(savedRef, where('isPublic', '==', true), orderBy('createdAt', 'desc'))
+  const q = query(savedRef, where('isPublic', '==', true))
   const snapshot = await getDocs(q)
-  return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }) as SavedSummary)
+  const summaries = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }) as SavedSummary)
+  return summaries.sort((a, b) => {
+    const aTime = a.createdAt?.toMillis?.() ?? a.createdAt?.getTime?.() ?? 0
+    const bTime = b.createdAt?.toMillis?.() ?? b.createdAt?.getTime?.() ?? 0
+    return bTime - aTime
+  })
 }
 
 export async function getSavedSummariesByFolder(userId: string, folderId: string): Promise<SavedSummary[]> {
   const savedRef = collection(db, 'saved_summaries')
   let q;
   if (folderId === 'all') {
-    q = query(savedRef, where('userId', '==', userId), orderBy('createdAt', 'desc'))
+    q = query(savedRef, where('userId', '==', userId))
   } else {
-    q = query(savedRef, where('userId', '==', userId), where('folderId', '==', folderId), orderBy('createdAt', 'desc'))
+    q = query(savedRef, where('userId', '==', userId), where('folderId', '==', folderId))
   }
   const snapshot = await getDocs(q)
-  return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }) as SavedSummary)
+  const summaries = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }) as SavedSummary)
+  // 복합 인덱스 없이 클라이언트에서 정렬
+  return summaries.sort((a, b) => {
+    const aTime = a.createdAt?.toMillis?.() ?? a.createdAt?.getTime?.() ?? 0
+    const bTime = b.createdAt?.toMillis?.() ?? b.createdAt?.getTime?.() ?? 0
+    return bTime - aTime
+  })
 }
