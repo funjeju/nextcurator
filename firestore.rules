@@ -1,0 +1,28 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // summaries: 분석 결과 - 누구나 읽기 가능, 쓰기는 서버(Admin SDK)만
+    match /summaries/{sessionId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // saved_summaries: 사용자가 저장한 항목
+    // 공개 항목(isPublic=true)은 누구나 읽기, 본인 항목만 쓰기/삭제
+    match /saved_summaries/{docId} {
+      allow read: if resource.data.isPublic == true
+                  || (request.auth != null && request.auth.uid == resource.data.userId);
+      allow create: if request.auth != null;
+      allow delete: if request.auth != null && request.auth.uid == resource.data.userId;
+      allow update: if request.auth != null && request.auth.uid == resource.data.userId;
+    }
+
+    // folders: 본인 폴더만 읽기/쓰기
+    match /folders/{docId} {
+      allow read, write: if request.auth != null && request.auth.uid == resource.data.userId;
+      allow create: if request.auth != null;
+    }
+  }
+}

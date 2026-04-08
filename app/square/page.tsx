@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import Header from '@/components/common/Header'
 import { getPublicSummaries, SavedSummary } from '@/lib/db'
+import { formatRelativeDate } from '@/lib/formatDate'
 
 const CATEGORY_LABEL: Record<string, string> = {
   recipe: '🍳 요리',
@@ -84,7 +85,11 @@ export default function SquarePage() {
                   <h3 className="text-[#f4f4f5] text-base font-bold leading-snug group-hover:text-pink-100 transition-colors line-clamp-3">
                     {item.title}
                   </h3>
-                  
+
+                  {item.createdAt && (
+                    <p className="text-[#75716e] text-xs">{formatRelativeDate(item.createdAt)}</p>
+                  )}
+
                   {item.square_meta && item.square_meta.tags && (
                     <div className="flex flex-wrap gap-2 mt-auto">
                       {item.square_meta.tags.slice(0, 5).map((tag: string, i: number) => (

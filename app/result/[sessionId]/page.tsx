@@ -46,20 +46,36 @@ export default function ResultPage() {
 
       try {
         const { db } = await import('@/lib/firebase')
-        const { doc, getDoc } = await import('firebase/firestore')
+        const { doc, getDoc, collection, query, where, getDocs } = await import('firebase/firestore')
+
+        // 1차: summaries 컬렉션 (분석 결과 직접 저장)
         const docRef = doc(db, 'summaries', sessionId as string)
         const docSnap = await getDoc(docRef)
-        
         if (docSnap.exists()) {
           const fetchedData = docSnap.data() as SummarizeResponse
           sessionStorage.setItem(`summary_${sessionId}`, JSON.stringify(fetchedData))
           setData(fetchedData)
           return
         }
+
+        // 2차: saved_summaries 컬렉션 폴백 (스퀘어 공유 항목)
+        const savedRef = collection(db, 'saved_summaries')
+        const q = query(savedRef, where('sessionId', '==', sessionId as string))
+        const snapshot = await getDocs(q)
+        if (!snapshot.empty) {
+          const saved = snapshot.docs[0].data()
+          // saved_summaries에 full summary 데이터가 있으면 사용
+          if (saved.summary) {
+            const fetchedData = saved as unknown as SummarizeResponse
+            sessionStorage.setItem(`summary_${sessionId}`, JSON.stringify(fetchedData))
+            setData(fetchedData)
+            return
+          }
+        }
       } catch (e) {
         console.error('Failed to fetch summary from DB:', e)
       }
-      
+
       router.push('/')
     }
 

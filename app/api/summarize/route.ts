@@ -41,7 +41,8 @@ async function saveResultToFirestore(sessionId: string, result: object) {
   try {
     const { db } = await import('@/lib/firebase')
     const { doc, setDoc } = await import('firebase/firestore')
-    await setDoc(doc(db, 'summaries', sessionId), result)
+    const { serverTimestamp } = await import('firebase/firestore')
+    await setDoc(doc(db, 'summaries', sessionId), { ...result, createdAt: serverTimestamp() })
     console.log('[Summarize] ✅ Saved to Firestore summaries:', sessionId)
   } catch (e) {
     console.warn('[Summarize] ⚠️ Failed to save to Firestore:', e)

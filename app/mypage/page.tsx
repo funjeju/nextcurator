@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import Header from '@/components/common/Header'
 import { getLocalUserId } from '@/lib/user'
+import { formatRelativeDate } from '@/lib/formatDate'
 import { getUserFolders, getSavedSummariesByFolder, deleteSavedSummary, Folder, SavedSummary } from '@/lib/db'
 
 const CATEGORY_LABEL: Record<string, string> = {
@@ -138,6 +139,10 @@ export default function MyPage() {
                       <p className="text-[#e2e2e2] text-sm font-bold leading-snug group-hover:text-white transition-colors">
                         {item.title}
                       </p>
+
+                      {item.createdAt && (
+                        <p className="text-[#75716e] text-xs">{formatRelativeDate(item.createdAt)}</p>
+                      )}
 
                       {item.square_meta && item.square_meta.tags && (
                         <div className="flex flex-wrap gap-1.5 mt-2">
