@@ -46,7 +46,9 @@
       "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('en events:', len\\(d.get\\('events',[]\\)\\)\\)\")",
       "Bash(curl -s 'https://www.youtube.com/watch?v=jRuOhuE61xk' -H 'User-Agent: Mozilla/5.0 \\(Windows NT 10.0; Win64; x64\\) AppleWebKit/537.36' -H 'Cookie: SOCS=CAI; CONSENT=YES+42')",
       "WebFetch(domain:supadata.ai)",
-      "WebFetch(domain:docs.supadata.ai)"
+      "WebFetch(domain:docs.supadata.ai)",
+      "Bash(echo \"EXIT:$?\")",
+      "Bash(npx next:*)"
     ]
   }
 }

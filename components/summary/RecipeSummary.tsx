@@ -11,8 +11,26 @@ interface Props {
   onSeek: (ts: string) => void
 }
 
+const GROUP_COLORS: Record<string, string> = {
+  '메인 재료': 'text-orange-400',
+  '양념':      'text-red-400',
+  '소스':      'text-red-400',
+  '육수':      'text-blue-400',
+  '반죽':      'text-yellow-400',
+  '채소':      'text-green-400',
+  '고명':      'text-pink-400',
+}
+function groupColor(group: string) {
+  return GROUP_COLORS[group] ?? 'text-zinc-400'
+}
+
 export default function RecipeSummary({ data, onSeek }: Props) {
-  const copyText = `${data.dish_name}\n난이도: ${data.difficulty} | ${data.total_time} | ${data.servings}\n\n재료:\n${data.ingredients.map(i => `- ${i.name} ${i.amount}`).join('\n')}\n\n만드는 법:\n${data.steps.map(s => `${s.step}. [${s.timestamp}] ${s.desc}${s.tip ? ` (팁: ${s.tip})` : ''}`).join('\n')}\n\n핵심 팁:\n${data.key_tips.map(t => `• ${t}`).join('\n')}`
+  // ingredient_groups 우선, 없으면 기존 ingredients 단일 그룹으로 표시
+  const groups = data.ingredient_groups ??
+    (data.ingredients ? [{ group: '재료', items: data.ingredients }] : [])
+
+  const allItems = groups.flatMap(g => g.items)
+  const copyText = `${data.dish_name}\n난이도: ${data.difficulty} | ${data.total_time} | ${data.servings}\n\n재료:\n${allItems.map(i => `- ${i.name} ${i.amount}`).join('\n')}\n\n만드는 법:\n${data.steps.map(s => `${s.step}. [${s.timestamp}] ${s.desc}${s.tip ? ` (팁: ${s.tip})` : ''}`).join('\n')}\n\n핵심 팁:\n${data.key_tips.map(t => `• ${t}`).join('\n')}`
 
   return (
     <Card className="bg-zinc-900 border-zinc-800">
@@ -26,12 +44,23 @@ export default function RecipeSummary({ data, onSeek }: Props) {
       </CardHeader>
       <CardContent className="flex flex-col gap-6">
         <div>
-          <h3 className="text-zinc-300 font-semibold mb-2">재료 ({data.servings})</h3>
-          <div className="bg-zinc-800 rounded-lg p-3 flex flex-col gap-1">
-            {data.ingredients.map((ing, i) => (
-              <div key={i} className="flex justify-between text-sm">
-                <span className="text-zinc-200">{ing.name}</span>
-                <span className="text-zinc-400">{ing.amount}</span>
+          <h3 className="text-zinc-300 font-semibold mb-3">재료 ({data.servings})</h3>
+          <div className="flex flex-col gap-3">
+            {groups.map((grp, gi) => (
+              <div key={gi} className="bg-zinc-800 rounded-xl overflow-hidden">
+                {groups.length > 1 && (
+                  <div className={`px-3 py-1.5 text-xs font-semibold bg-zinc-700/60 ${groupColor(grp.group)}`}>
+                    {grp.group}
+                  </div>
+                )}
+                <div className="p-3 flex flex-col gap-1">
+                  {grp.items.map((ing, i) => (
+                    <div key={i} className="flex justify-between text-sm">
+                      <span className="text-zinc-200">{ing.name}</span>
+                      <span className="text-zinc-400">{ing.amount}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
             ))}
           </div>

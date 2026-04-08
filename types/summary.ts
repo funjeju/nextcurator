@@ -12,7 +12,8 @@ export interface RecipeSummary {
   difficulty: '초보' | '중급' | '고급'
   total_time: string
   servings: string
-  ingredients: { name: string; amount: string }[]
+  ingredient_groups?: { group: string; items: { name: string; amount: string }[] }[]
+  ingredients?: { name: string; amount: string }[]
   steps: { step: number; desc: string; timestamp: string; tip?: string }[]
   key_tips: string[]
 }

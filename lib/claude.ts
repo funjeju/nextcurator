@@ -62,7 +62,9 @@ Respond with JSON: {"category": "news", "confidence": 0.95}`)
 const SUMMARY_PROMPTS: Record<Category, string> = {
   recipe: `다음 요리 영상 자막을 분석해서 레시피 JSON을 만드세요.
 
-{"square_meta":{"tags":["키워드1","키워드2","키워드3","키워드4","키워드5"],"topic_cluster":"대주제","vibe":"분위기"},"dish_name":"요리명","difficulty":"초보","total_time":"시간","servings":"인분","ingredients":[{"name":"재료","amount":"분량"}],"steps":[{"step":1,"desc":"설명","timestamp":"MM:SS"}],"key_tips":["팁"]}`,
+재료는 역할에 따라 그룹으로 분류하세요. 예: "메인 재료", "양념", "육수", "소스", "고명", "반죽", "채소" 등 해당되는 그룹만 사용하세요. 그룹이 1개라도 ingredient_groups를 사용하세요.
+
+{"square_meta":{"tags":["키워드1","키워드2","키워드3","키워드4","키워드5"],"topic_cluster":"대주제","vibe":"분위기"},"dish_name":"요리명","difficulty":"초보","total_time":"시간","servings":"인분","ingredient_groups":[{"group":"메인 재료","items":[{"name":"재료","amount":"분량"}]},{"group":"양념","items":[{"name":"재료","amount":"분량"}]}],"steps":[{"step":1,"desc":"설명","timestamp":"MM:SS"}],"key_tips":["팁"]}`,
 
   english: `다음 영어학습 영상 자막을 분석해서 학습카드 JSON을 만드세요.
 

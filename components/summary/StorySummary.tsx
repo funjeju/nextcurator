@@ -43,14 +43,12 @@ export default function StorySummary({ data, onSeek }: Props) {
           <h3 className="text-lg font-semibold text-white flex items-center gap-2">
             <span>⏱️</span> 스토리 타임라인
           </h3>
-          <div className="space-y-3 relative before:absolute before:inset-0 before:ml-4 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-white/10 before:to-transparent">
+          <div className="space-y-3 relative before:absolute before:left-4 before:top-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-white/10 before:to-transparent">
             {data.timeline.map((item, i) => (
-              <div key={i} className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active">
-                <div className="flex items-center justify-center w-8 h-8 rounded-full border-4 border-[#32302e] bg-[#23211f] text-pink-500 shadow shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 group-hover:bg-pink-500/20 transition-colors z-10" />
-                <div className="w-[calc(100%-4rem)] md:w-[calc(50%-2rem)] p-4 rounded-2xl bg-[#23211f] border border-white/5 flex gap-3 hover:bg-[#3d3a38] transition-colors">
-                  <div className="shrink-0 pt-0.5">
-                    <TimestampBadge timestamp={item.timestamp} onSeek={onSeek} />
-                  </div>
+              <div key={i} className="relative flex items-start gap-3 group">
+                <div className="flex items-center justify-center w-8 h-8 rounded-full border-4 border-[#32302e] bg-[#23211f] text-pink-500 shadow shrink-0 mt-1 group-hover:bg-pink-500/20 transition-colors z-10" />
+                <div className="flex-1 p-4 rounded-2xl bg-[#23211f] border border-white/5 flex flex-col gap-2 hover:bg-[#3d3a38] transition-colors">
+                  <TimestampBadge timestamp={item.timestamp} onSeek={onSeek} />
                   <p className="text-[#e2e2e2] leading-relaxed text-[15px]">{item.event}</p>
                 </div>
               </div>

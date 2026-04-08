@@ -3,9 +3,10 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import Header from '@/components/common/Header'
-import { getPublicSummaries, toggleLike, getUserLikedIds, incrementViewCount, SavedSummary } from '@/lib/db'
+import { getPublicSummaries, toggleLike, getUserLikedIds, incrementViewCount, getOrCreateConversation, SavedSummary } from '@/lib/db'
 import { useAuth } from '@/providers/AuthProvider'
 import { formatRelativeDate } from '@/lib/formatDate'
+import { useRouter } from 'next/navigation'
 
 const CATEGORIES = [
   { id: 'all',     label: '전체' },
@@ -22,12 +23,14 @@ type SortType = 'latest' | 'popular' | 'views'
 
 export default function SquarePage() {
   const { user } = useAuth()
+  const router = useRouter()
   const [summaries, setSummaries] = useState<SavedSummary[]>([])
   const [loading, setLoading] = useState(true)
   const [activeCategory, setActiveCategory] = useState('all')
   const [sortType, setSortType] = useState<SortType>('latest')
   const [likedIds, setLikedIds] = useState<Set<string>>(new Set())
   const [likingIds, setLikingIds] = useState<Set<string>>(new Set())
+  const [messagingId, setMessagingId] = useState<string | null>(null)
 
   useEffect(() => {
     getPublicSummaries()
@@ -40,6 +43,24 @@ export default function SquarePage() {
     if (!user) { setLikedIds(new Set()); return }
     getUserLikedIds(user.uid).then(setLikedIds).catch(() => {})
   }, [user])
+
+  const handleMessage = async (e: React.MouseEvent, item: SavedSummary) => {
+    e.preventDefault(); e.stopPropagation()
+    if (!user) { alert('쪽지는 로그인 후 이용할 수 있습니다.'); return }
+    if (item.userId === user.uid) return
+    if (messagingId) return
+    setMessagingId(item.id)
+    try {
+      const cid = await getOrCreateConversation(
+        user.uid,
+        { displayName: user.displayName || '', photoURL: user.photoURL || '' },
+        item.userId,
+        { displayName: item.userDisplayName || '익명', photoURL: item.userPhotoURL || '' }
+      )
+      router.push(`/messages/${cid}`)
+    } catch { alert('오류가 발생했습니다.') }
+    finally { setMessagingId(null) }
+  }
 
   const handleLike = async (e: React.MouseEvent, item: SavedSummary) => {
     e.preventDefault()
@@ -176,34 +197,67 @@ export default function SquarePage() {
                   </div>
 
                   {/* 콘텐츠 */}
-                  <div className="p-2.5 pb-8">
-                    <h3 className="text-[#f4f4f5] text-[11px] font-bold leading-snug line-clamp-2 mb-1.5">
+                  <div className="p-2.5 pb-9">
+                    <h3 className="text-[#f4f4f5] text-[11px] font-bold leading-snug line-clamp-2 mb-2">
                       {item.title}
                     </h3>
-                    <div className="flex items-center gap-2 text-[#75716e]">
-                      {item.createdAt && (
-                        <span className="text-[9px]">{formatRelativeDate(item.createdAt)}</span>
-                      )}
-                      {(item.viewCount ?? 0) > 0 && (
-                        <span className="text-[9px]">👁 {item.viewCount}</span>
-                      )}
+
+                    {/* 프로필 행 */}
+                    <div className="flex items-center justify-between">
+                      <Link
+                        href={`/profile/${item.userId}`}
+                        onClick={e => e.stopPropagation()}
+                        className="flex items-center gap-1 min-w-0 group/profile"
+                      >
+                        {item.userPhotoURL ? (
+                          <img src={item.userPhotoURL} alt="" className="w-4 h-4 rounded-full shrink-0 border border-white/10" />
+                        ) : (
+                          <div className="w-4 h-4 rounded-full bg-[#3d3a38] shrink-0 flex items-center justify-center text-[8px] text-white/40">👤</div>
+                        )}
+                        <span className="text-[9px] text-[#75716e] group-hover/profile:text-white truncate transition-colors">
+                          {item.userDisplayName || '익명'}
+                        </span>
+                      </Link>
+
+                      <div className="flex items-center gap-1 text-[#75716e] shrink-0">
+                        {item.createdAt && (
+                          <span className="text-[8px]">{formatRelativeDate(item.createdAt)}</span>
+                        )}
+                        {(item.viewCount ?? 0) > 0 && (
+                          <span className="text-[8px]">· 👁{item.viewCount}</span>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </Link>
 
-                {/* 하트 버튼 (Link 밖에 위치) */}
-                <button
-                  onClick={(e) => handleLike(e, item)}
-                  disabled={likingIds.has(item.id)}
-                  className={`absolute bottom-2 right-2 flex items-center gap-1 px-2 py-1 rounded-full text-[9px] font-bold transition-all ${
-                    likedIds.has(item.id)
-                      ? 'bg-pink-500/20 text-pink-400 border border-pink-500/30'
-                      : 'bg-black/50 text-white/40 border border-white/10 hover:text-pink-400 hover:border-pink-500/30'
-                  } disabled:opacity-50`}
-                >
-                  <span className="text-[11px]">{likedIds.has(item.id) ? '❤️' : '🤍'}</span>
-                  <span>{item.likeCount ?? 0}</span>
-                </button>
+                {/* 하단 버튼 행 */}
+                <div className="absolute bottom-2 left-2.5 right-2.5 flex items-center justify-between">
+                  {/* 쪽지 버튼 */}
+                  {user && item.userId !== user.uid ? (
+                    <button
+                      onClick={(e) => handleMessage(e, item)}
+                      disabled={messagingId === item.id}
+                      className="flex items-center gap-0.5 text-[9px] text-[#75716e] hover:text-blue-400 transition-colors disabled:opacity-50"
+                    >
+                      ✉️
+                    </button>
+                  ) : <span />}
+
+                  {/* 하트 버튼 */}
+                  <button
+                    onClick={(e) => handleLike(e, item)}
+                    disabled={likingIds.has(item.id)}
+                    className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold transition-all ${
+                      likedIds.has(item.id)
+                        ? 'bg-pink-500/20 text-pink-400 border border-pink-500/30'
+                        : 'bg-black/40 text-white/40 border border-white/10 hover:text-pink-400 hover:border-pink-500/30'
+                    } disabled:opacity-50`}
+                  >
+                    <span className="text-[10px]">{likedIds.has(item.id) ? '❤️' : '🤍'}</span>
+                    <span>{item.likeCount ?? 0}</span>
+                  </button>
+                </div>
               </div>
             ))}
           </div>

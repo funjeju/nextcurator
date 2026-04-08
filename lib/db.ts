@@ -12,6 +12,8 @@ export interface Folder {
 export interface SavedSummary {
   id: string
   userId: string
+  userDisplayName?: string
+  userPhotoURL?: string
   folderId: string
   sessionId: string
   videoId: string
@@ -24,6 +26,30 @@ export interface SavedSummary {
   transcript?: string
   likeCount?: number
   viewCount?: number
+}
+
+export interface UserProfile {
+  uid: string
+  displayName: string
+  photoURL: string
+  updatedAt: any
+}
+
+export interface Message {
+  id: string
+  senderId: string
+  text: string
+  createdAt: any
+  read: boolean
+}
+
+export interface Conversation {
+  id: string
+  participants: string[]
+  participantProfiles: Record<string, { displayName: string; photoURL: string }>
+  lastMessage: string
+  lastAt: any
+  unread: Record<string, number>
 }
 
 export async function getUserFolders(userId: string): Promise<Folder[]> {
@@ -51,6 +77,8 @@ export async function createFolder(userId: string, name: string): Promise<Folder
 
 export async function saveSummary({
   userId,
+  userDisplayName,
+  userPhotoURL,
   folderId,
   sessionId,
   videoId,
@@ -64,6 +92,8 @@ export async function saveSummary({
   const savedRef = collection(db, 'saved_summaries')
   const docRef = await addDoc(savedRef, {
     userId,
+    userDisplayName: userDisplayName || '',
+    userPhotoURL: userPhotoURL || '',
     folderId,
     sessionId,
     videoId,
@@ -73,13 +103,120 @@ export async function saveSummary({
     square_meta,
     isPublic,
     transcript,
+    likeCount: 0,
+    viewCount: 0,
     createdAt: serverTimestamp()
   })
   return docRef.id
 }
 
+// ─────────────────────────────────────────────
+// 유저 프로필
+// ─────────────────────────────────────────────
+export async function upsertUserProfile(profile: Omit<UserProfile, 'updatedAt'>): Promise<void> {
+  await setDoc(doc(db, 'users', profile.uid), {
+    ...profile,
+    updatedAt: serverTimestamp()
+  }, { merge: true })
+}
+
+export async function getUserProfile(uid: string): Promise<UserProfile | null> {
+  const snap = await getDoc(doc(db, 'users', uid))
+  return snap.exists() ? (snap.data() as UserProfile) : null
+}
+
+export async function getUserPublicSummaries(userId: string): Promise<SavedSummary[]> {
+  const q = query(
+    collection(db, 'saved_summaries'),
+    where('userId', '==', userId),
+    where('isPublic', '==', true)
+  )
+  const snap = await getDocs(q)
+  const items = snap.docs.map(d => ({ id: d.id, ...d.data() }) as SavedSummary)
+  return items.sort((a, b) => (b.createdAt?.toMillis?.() ?? 0) - (a.createdAt?.toMillis?.() ?? 0))
+}
+
+// ─────────────────────────────────────────────
+// 쪽지 (Conversations & Messages)
+// ─────────────────────────────────────────────
+function conversationId(uid1: string, uid2: string): string {
+  return [uid1, uid2].sort().join('_')
+}
+
+export async function getOrCreateConversation(
+  myUid: string,
+  myProfile: { displayName: string; photoURL: string },
+  otherUid: string,
+  otherProfile: { displayName: string; photoURL: string }
+): Promise<string> {
+  const cid = conversationId(myUid, otherUid)
+  const ref = doc(db, 'conversations', cid)
+  const snap = await getDoc(ref)
+  if (!snap.exists()) {
+    await setDoc(ref, {
+      participants: [myUid, otherUid],
+      participantProfiles: {
+        [myUid]: myProfile,
+        [otherUid]: otherProfile,
+      },
+      lastMessage: '',
+      lastAt: serverTimestamp(),
+      unread: { [myUid]: 0, [otherUid]: 0 },
+    })
+  }
+  return cid
+}
+
+export async function sendMessage(cid: string, senderId: string, text: string, receiverId: string): Promise<void> {
+  const messagesRef = collection(db, 'conversations', cid, 'messages')
+  await addDoc(messagesRef, { senderId, text, createdAt: serverTimestamp(), read: false })
+  await updateDoc(doc(db, 'conversations', cid), {
+    lastMessage: text.slice(0, 80),
+    lastAt: serverTimestamp(),
+    [`unread.${receiverId}`]: increment(1),
+  })
+}
+
+export async function getConversations(uid: string): Promise<Conversation[]> {
+  const q = query(collection(db, 'conversations'), where('participants', 'array-contains', uid))
+  const snap = await getDocs(q)
+  const items = snap.docs.map(d => ({ id: d.id, ...d.data() }) as Conversation)
+  return items.sort((a, b) => (b.lastAt?.toMillis?.() ?? 0) - (a.lastAt?.toMillis?.() ?? 0))
+}
+
+export async function getMessages(cid: string): Promise<Message[]> {
+  const q = query(collection(db, 'conversations', cid, 'messages'))
+  const snap = await getDocs(q)
+  const items = snap.docs.map(d => ({ id: d.id, ...d.data() }) as Message)
+  return items.sort((a, b) => (a.createdAt?.toMillis?.() ?? 0) - (b.createdAt?.toMillis?.() ?? 0))
+}
+
+export async function markConversationRead(cid: string, uid: string): Promise<void> {
+  await updateDoc(doc(db, 'conversations', cid), { [`unread.${uid}`]: 0 })
+}
+
+export async function getTotalUnread(uid: string): Promise<number> {
+  const convos = await getConversations(uid)
+  return convos.reduce((sum, c) => sum + (c.unread?.[uid] ?? 0), 0)
+}
+
 export async function deleteSavedSummary(id: string): Promise<void> {
   await deleteDoc(doc(db, 'saved_summaries', id))
+}
+
+export async function updateSummaryVisibility(id: string, isPublic: boolean): Promise<void> {
+  await updateDoc(doc(db, 'saved_summaries', id), { isPublic })
+}
+
+export async function getSavedSummaryBySessionId(userId: string, sessionId: string): Promise<SavedSummary | null> {
+  const q = query(
+    collection(db, 'saved_summaries'),
+    where('userId', '==', userId),
+    where('sessionId', '==', sessionId)
+  )
+  const snap = await getDocs(q)
+  if (snap.empty) return null
+  return { id: snap.docs[0].id, ...snap.docs[0].data() } as SavedSummary
 }
 
 export async function toggleLike(userId: string, savedSummaryId: string): Promise<boolean> {

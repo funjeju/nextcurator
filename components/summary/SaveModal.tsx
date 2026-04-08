@@ -4,7 +4,8 @@ import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { getLocalUserId } from '@/lib/user'
-import { getUserFolders, createFolder, saveSummary, Folder } from '@/lib/db'
+import { getUserFolders, createFolder, saveSummary, upsertUserProfile, Folder } from '@/lib/db'
+import { useAuth } from '@/providers/AuthProvider'
 
 function withTimeout<T>(promise: Promise<T>, ms = 8000): Promise<T> {
   return Promise.race([
@@ -16,6 +17,7 @@ function withTimeout<T>(promise: Promise<T>, ms = 8000): Promise<T> {
 }
 
 export default function SaveModal({ data, onClose }: { data: any, onClose: () => void }) {
+  const { user } = useAuth()
   const [folders, setFolders] = useState<Folder[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -42,8 +44,11 @@ export default function SaveModal({ data, onClose }: { data: any, onClose: () =>
     setSaving(true)
     try {
       const uid = getLocalUserId()
+      if (user) await upsertUserProfile({ uid: user.uid, displayName: user.displayName || '', photoURL: user.photoURL || '' })
       await withTimeout(saveSummary({
         userId: uid,
+        userDisplayName: user?.displayName || '',
+        userPhotoURL: user?.photoURL || '',
         folderId,
         sessionId: data.sessionId,
         videoId: data.videoId,
@@ -71,8 +76,11 @@ export default function SaveModal({ data, onClose }: { data: any, onClose: () =>
       const uid = getLocalUserId()
       const newFolder = await withTimeout(createFolder(uid, newFolderName.trim()))
       
+      if (user) await upsertUserProfile({ uid: user.uid, displayName: user.displayName || '', photoURL: user.photoURL || '' })
       await withTimeout(saveSummary({
         userId: uid,
+        userDisplayName: user?.displayName || '',
+        userPhotoURL: user?.photoURL || '',
         folderId: newFolder.id,
         sessionId: data.sessionId,
         videoId: data.videoId,
@@ -122,8 +130,12 @@ export default function SaveModal({ data, onClose }: { data: any, onClose: () =>
       }
 
       if (targetFolderId) {
+        const uid = getLocalUserId()
+        if (user) await upsertUserProfile({ uid: user.uid, displayName: user.displayName || '', photoURL: user.photoURL || '' })
         await withTimeout(saveSummary({
-          userId: getLocalUserId(),
+          userId: uid,
+          userDisplayName: user?.displayName || '',
+          userPhotoURL: user?.photoURL || '',
           folderId: targetFolderId,
           sessionId: data.sessionId,
           videoId: data.videoId,
