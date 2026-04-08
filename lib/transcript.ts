@@ -54,7 +54,33 @@ export function formatTimestamp(seconds: number): string {
 }
 
 // ─────────────────────────────────────────────
-// [1단계] SocialKit API (프로덕션 메인)
+// [1단계] Cloudflare Worker (프로덕션 메인)
+// - YouTube IP 차단 우회, 자막 직접 추출
+// ─────────────────────────────────────────────
+async function getTranscriptViaCloudflare(videoId: string): Promise<string> {
+  const workerUrl = process.env.CLOUDFLARE_WORKER_URL
+  if (!workerUrl) throw new Error('CLOUDFLARE_WORKER_NOT_CONFIGURED')
+
+  const res = await fetch(`${workerUrl}?videoId=${videoId}`, {
+    signal: AbortSignal.timeout(15000),
+  })
+
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({})) as { error?: string; details?: string[] }
+    throw new Error(`CLOUDFLARE_${res.status}: ${errData.error || 'unknown'}`)
+  }
+
+  const data = await res.json() as { transcript?: string; error?: string }
+
+  if (!data.transcript || data.transcript.trim().length < 10) {
+    throw new Error('CLOUDFLARE_EMPTY_TRANSCRIPT')
+  }
+
+  return data.transcript.trim()
+}
+
+// ─────────────────────────────────────────────
+// [2단계] SocialKit API (CF Worker 실패 시 폴백)
 // - 자막 있는 영상: 자막 직접 추출
 // - 자막 없는 영상: 오디오 다운로드 후 STT 변환
 // - YouTube IP 차단 자체 우회 처리
@@ -149,10 +175,20 @@ async function getTranscriptLocal(videoId: string): Promise<string> {
 // ─────────────────────────────────────────────
 // 메인 함수: 환경에 따른 폴백 파이프라인
 // ─────────────────────────────────────────────
-export async function getTranscript(videoId: string): Promise<string> {
-  // SocialKit이 설정된 경우: SocialKit → 로컬 → 에러
-  // 설정 안 된 경우: 로컬 → 에러
+export interface TranscriptResult {
+  text: string
+  source: string
+}
+
+export async function getTranscript(videoId: string): Promise<TranscriptResult> {
   const strategies: Array<{ name: string; fn: () => Promise<string> }> = []
+
+  if (process.env.CLOUDFLARE_WORKER_URL) {
+    strategies.push({
+      name: 'Cloudflare Worker',
+      fn: () => getTranscriptViaCloudflare(videoId),
+    })
+  }
 
   if (process.env.SOCIALKIT_API_KEY) {
     strategies.push({
@@ -171,9 +207,9 @@ export async function getTranscript(videoId: string): Promise<string> {
   for (const strategy of strategies) {
     try {
       console.log(`[Transcript] Trying: ${strategy.name} for ${videoId}`)
-      const result = await strategy.fn()
+      const text = await strategy.fn()
       console.log(`[Transcript] ✅ Success: ${strategy.name}`)
-      return result
+      return { text, source: strategy.name }
     } catch (e) {
       const msg = (e as Error).message
       console.warn(`[Transcript] ❌ Failed (${strategy.name}): ${msg}`)

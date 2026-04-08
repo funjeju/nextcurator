@@ -34,6 +34,7 @@ export default function ResultPage() {
   const playerRef = useRef<YT.Player | null>(null)
   const [showSaveModal, setShowSaveModal] = useState(false)
   const [activeTab, setActiveTab] = useState<'summary' | 'transcript'>('summary')
+  const [sharing, setSharing] = useState(false)
 
   useEffect(() => {
     const fetchSummary = async () => {
@@ -76,6 +77,54 @@ export default function ResultPage() {
     }
   }, [])
 
+  const handleShare = async () => {
+    if (!data) return
+    setSharing(true)
+    try {
+      const params = new URLSearchParams({
+        title:     data.title,
+        channel:   data.channel,
+        thumbnail: data.thumbnail,
+        category:  data.category,
+      })
+      const imageUrl = `/api/card-image?${params}`
+
+      // 이미지 blob 가져오기
+      const res = await fetch(imageUrl)
+      const blob = await res.blob()
+      const file = new File([blob], 'nextcurator-card.png', { type: 'image/png' })
+
+      if (navigator.canShare?.({ files: [file] })) {
+        // Web Share API (모바일: 카카오톡 등으로 공유)
+        await navigator.share({
+          title: data.title,
+          text: `📺 ${data.title}\n🎬 Next Curator로 분석한 영상`,
+          files: [file],
+        })
+      } else if (navigator.share) {
+        // 파일 공유 미지원 시 텍스트만 공유
+        await navigator.share({
+          title: data.title,
+          text: `📺 ${data.title}\n🎬 Next Curator로 분석한 영상`,
+          url: window.location.href,
+        })
+      } else {
+        // 데스크탑: 이미지 다운로드
+        const a = document.createElement('a')
+        a.href = URL.createObjectURL(blob)
+        a.download = 'nextcurator-card.png'
+        a.click()
+        URL.revokeObjectURL(a.href)
+      }
+    } catch (e) {
+      if ((e as Error).name !== 'AbortError') {
+        console.error('공유 실패:', e)
+      }
+    } finally {
+      setSharing(false)
+    }
+  }
+
   if (!data) return null
 
   const catInfo = CATEGORY_INFO[data.category]
@@ -101,6 +150,11 @@ export default function ResultPage() {
             <span className="text-zinc-500 text-sm">{data.channel}</span>
           </div>
           <h1 className="text-lg font-bold text-zinc-100">{data.title}</h1>
+          {data.transcriptSource && (
+            <p className="text-xs text-zinc-600 mt-1">
+              자막 출처: {data.transcriptSource}
+            </p>
+          )}
         </div>
 
         {/* Content Tabs */}
@@ -159,13 +213,33 @@ export default function ResultPage() {
           )}
         </div>
 
-        {/* Save button (Phase 2) */}
-        <Button
-          className="w-full flex-1 bg-gradient-to-r from-orange-500 to-pink-500 hover:from-orange-600 hover:to-pink-600 text-white font-bold h-14 text-lg border-none hover:shadow-lg hover:shadow-pink-500/25 transition-all mt-4"
-          onClick={() => setShowSaveModal(true)}
-        >
-          📚 라이브러리에 저장
-        </Button>
+        {/* 저장 / 공유 버튼 */}
+        <div className="flex gap-3 mt-4">
+          <Button
+            className="flex-1 bg-gradient-to-r from-orange-500 to-pink-500 hover:from-orange-600 hover:to-pink-600 text-white font-bold h-14 text-lg border-none hover:shadow-lg hover:shadow-pink-500/25 transition-all"
+            onClick={() => setShowSaveModal(true)}
+          >
+            📚 라이브러리에 저장
+          </Button>
+          <Button
+            variant="outline"
+            className="h-14 px-5 border-white/10 bg-[#32302e] text-white hover:bg-[#3d3a38] hover:border-white/20 transition-all disabled:opacity-50"
+            onClick={handleShare}
+            disabled={sharing}
+            title="카드 이미지로 공유"
+          >
+            {sharing ? (
+              <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+              </svg>
+            ) : (
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+              </svg>
+            )}
+          </Button>
+        </div>
 
         <Button
           variant="ghost"

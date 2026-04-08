@@ -1,5 +1,5 @@
 import { db } from './firebase'
-import { collection, doc, setDoc, getDocs, getDoc, query, where, addDoc, serverTimestamp } from 'firebase/firestore'
+import { collection, doc, setDoc, getDocs, getDoc, query, where, addDoc, deleteDoc, serverTimestamp } from 'firebase/firestore'
 import { SummaryData } from '@/types/summary'
 
 export interface Folder {
@@ -74,6 +74,10 @@ export async function saveSummary({
     createdAt: serverTimestamp()
   })
   return docRef.id
+}
+
+export async function deleteSavedSummary(id: string): Promise<void> {
+  await deleteDoc(doc(db, 'saved_summaries', id))
 }
 
 export async function getPublicSummaries(): Promise<SavedSummary[]> {

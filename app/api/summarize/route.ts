@@ -65,8 +65,11 @@ export async function POST(req: NextRequest) {
     const videoInfo = await getVideoInfo(videoId)
 
     let transcript: string = ''
+    let transcriptSource: string = ''
     try {
-      transcript = await getTranscript(videoId)
+      const result = await getTranscript(videoId)
+      transcript = result.text
+      transcriptSource = result.source
     } catch {
       console.log('자막 추출 실패: 영상 설명 및 댓글 요약으로 대체합니다. (Video ID:', videoId, ')')
     }
@@ -107,6 +110,7 @@ export async function POST(req: NextRequest) {
       category,
       summary,
       transcript,
+      transcriptSource,
     }
 
     // Firestore에 백그라운드 저장 (마이페이지/스퀘어 클릭 시 불러오기 위해)

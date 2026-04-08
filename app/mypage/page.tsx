@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import Header from '@/components/common/Header'
 import { getLocalUserId } from '@/lib/user'
-import { getUserFolders, getSavedSummariesByFolder, Folder, SavedSummary } from '@/lib/db'
+import { getUserFolders, getSavedSummariesByFolder, deleteSavedSummary, Folder, SavedSummary } from '@/lib/db'
 
 const CATEGORY_LABEL: Record<string, string> = {
   recipe: '🍳 요리',
@@ -21,6 +21,7 @@ export default function MyPage() {
   const [summaries, setSummaries] = useState<SavedSummary[]>([])
   const [activeFolder, setActiveFolder] = useState<string>('all')
   const [loading, setLoading] = useState(true)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
 
   useEffect(() => {
     const fetchInit = async () => {
@@ -38,6 +39,22 @@ export default function MyPage() {
     }
     fetchInit()
   }, [])
+
+  const handleDelete = async (e: React.MouseEvent, id: string) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (!confirm('이 항목을 삭제하시겠습니까?')) return
+    setDeletingId(id)
+    try {
+      await deleteSavedSummary(id)
+      setSummaries(prev => prev.filter(s => s.id !== id))
+    } catch (err) {
+      console.error('삭제 실패:', err)
+      alert('삭제에 실패했습니다.')
+    } finally {
+      setDeletingId(null)
+    }
+  }
 
   const handleFolderClick = async (folderId: string) => {
     setActiveFolder(folderId)
@@ -100,40 +117,59 @@ export default function MyPage() {
           ) : (
             <div className="columns-1 sm:columns-2 lg:columns-3 gap-6 space-y-6">
               {summaries.map(item => (
-                <Link
-                  key={item.id}
-                  href={`/result/${item.sessionId}`}
-                  className="break-inside-avoid block group flex-col rounded-[24px] bg-[#32302e] border border-white/5 overflow-hidden hover:border-white/20 transition-all hover:-translate-y-1 shadow-lg"
-                >
-                  <div className="relative overflow-hidden bg-[#23211f]">
-                    <img 
-                      src={item.thumbnail} 
-                      alt={item.title} 
-                      className="w-full object-cover aspect-video group-hover:scale-105 transition-transform duration-500"
-                    />
-                    <div className="absolute inset-0 bg-black/20 group-hover:bg-transparent transition-colors" />
-                    <div className="absolute top-3 right-3 px-2.5 py-1 rounded-full bg-black/60 backdrop-blur-md text-xs font-medium text-white border border-white/10">
-                      {CATEGORY_LABEL[item.category] || '분석됨'}
-                    </div>
-                  </div>
-                  
-                  <div className="p-5 flex flex-col gap-3">
-                    <p className="text-[#e2e2e2] text-sm font-bold leading-snug group-hover:text-white transition-colors">
-                      {item.title}
-                    </p>
-                    
-                    {/* Render Tags if available (Square Meta) */}
-                    {item.square_meta && item.square_meta.tags && (
-                      <div className="flex flex-wrap gap-1.5 mt-2">
-                        {item.square_meta.tags.slice(0, 4).map((tag: string, i: number) => (
-                          <span key={i} className="px-2 py-1 bg-[#23211f] border border-white/5 rounded-md text-[10px] text-[#a4a09c] font-medium lowercase">
-                            #{tag.replace(/\s+/g, '')}
-                          </span>
-                        ))}
+                <div key={item.id} className="break-inside-avoid relative group">
+                  <Link
+                    href={`/result/${item.sessionId}`}
+                    className="block flex-col rounded-[24px] bg-[#32302e] border border-white/5 overflow-hidden hover:border-white/20 transition-all hover:-translate-y-1 shadow-lg"
+                  >
+                    <div className="relative overflow-hidden bg-[#23211f]">
+                      <img
+                        src={item.thumbnail}
+                        alt={item.title}
+                        className="w-full object-cover aspect-video group-hover:scale-105 transition-transform duration-500"
+                      />
+                      <div className="absolute inset-0 bg-black/20 group-hover:bg-transparent transition-colors" />
+                      <div className="absolute top-3 right-3 px-2.5 py-1 rounded-full bg-black/60 backdrop-blur-md text-xs font-medium text-white border border-white/10">
+                        {CATEGORY_LABEL[item.category] || '분석됨'}
                       </div>
+                    </div>
+
+                    <div className="p-5 flex flex-col gap-3">
+                      <p className="text-[#e2e2e2] text-sm font-bold leading-snug group-hover:text-white transition-colors">
+                        {item.title}
+                      </p>
+
+                      {item.square_meta && item.square_meta.tags && (
+                        <div className="flex flex-wrap gap-1.5 mt-2">
+                          {item.square_meta.tags.slice(0, 4).map((tag: string, i: number) => (
+                            <span key={i} className="px-2 py-1 bg-[#23211f] border border-white/5 rounded-md text-[10px] text-[#a4a09c] font-medium lowercase">
+                              #{tag.replace(/\s+/g, '')}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </Link>
+
+                  {/* 삭제 버튼 */}
+                  <button
+                    onClick={(e) => handleDelete(e, item.id)}
+                    disabled={deletingId === item.id}
+                    className="absolute top-3 left-3 opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-full bg-black/60 backdrop-blur-md border border-white/10 text-white/70 hover:text-red-400 hover:border-red-400/50 disabled:opacity-50"
+                    title="삭제"
+                  >
+                    {deletingId === item.id ? (
+                      <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                      </svg>
+                    ) : (
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
                     )}
-                  </div>
-                </Link>
+                  </button>
+                </div>
               ))}
             </div>
           )}

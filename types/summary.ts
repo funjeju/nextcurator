@@ -82,4 +82,5 @@ export interface SummarizeResponse {
   category: Category
   summary: SummaryData
   transcript?: string
+  transcriptSource?: string
 }

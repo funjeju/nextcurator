@@ -12,7 +12,27 @@
       "Bash(npm uninstall:*)",
       "Bash(node -e \":*)",
       "Bash(node --input-type=module -e \":*)",
-      "Bash(node -e \"const p = require\\(''C:/Users/funjeju/Desktop/aiproject/nextcurator/node_modules/@google/generative-ai/package.json''\\); console.log\\(p.version\\)\")"
+      "Bash(node -e \"const p = require\\(''C:/Users/funjeju/Desktop/aiproject/nextcurator/node_modules/@google/generative-ai/package.json''\\); console.log\\(p.version\\)\")",
+      "Bash(git config:*)",
+      "Bash(ls .env*)",
+      "Bash(curl -s \"https://nextcurator-transcript.nextcurator.workers.dev?videoId=UIqmD9505cU\")",
+      "Bash(curl -s \"https://nextcurator-transcript.nextcurator.workers.dev?videoId=dQw4w9WgXcQ\")",
+      "Bash(curl -s \"https://api.socialkit.dev/youtube/transcript?url=https://www.youtube.com/watch?v=dQw4w9WgXcQ\" -H \"x-access-key: iEluWelc24Ke4q\")",
+      "Bash(curl -s 'https://www.youtube.com/watch?v=dQw4w9WgXcQ' -H 'User-Agent: Mozilla/5.0 \\(Windows NT 10.0; Win64; x64\\) AppleWebKit/537.36 \\(KHTML, like Gecko\\) Chrome/122.0.0.0 Safari/537.36' -H 'Accept-Language: en-US,en;q=0.9' -H 'Cookie: CONSENT=YES+42')",
+      "Bash(grep -o '\"captionTracks\":\\\\[.\\\\{0,200\\\\}')",
+      "Bash(curl -s 'https://www.youtube.com/watch?v=dQw4w9WgXcQ' -H 'User-Agent: Mozilla/5.0 \\(Windows NT 10.0; Win64; x64\\) AppleWebKit/537.36 \\(KHTML, like Gecko\\) Chrome/122.0.0.0 Safari/537.36' -H 'Accept-Language: en-US,en;q=0.9' -H 'Cookie: SOCS=CAI; CONSENT=YES+42')",
+      "Bash(curl -s \"https://nextcurator-transcript.nextcurator.workers.dev?videoId=dQw4w9WgXcQ\" -v)",
+      "Bash(npx wrangler:*)",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); t=d.get\\('transcript',''\\); print\\('SUCCESS, length:', len\\(t\\)\\); print\\(t[:200] if t else json.dumps\\(d\\)\\)\")",
+      "Bash(python -c ':*)",
+      "Bash(curl -s -X POST https://www.youtube.com/youtubei/v1/player -H 'Content-Type: application/json' -H 'User-Agent: com.google.ios.youtube/19.29.1 \\(iPhone14,3; U; CPU iOS 15_6 like Mac OS X\\)' -H 'X-YouTube-Client-Name: 5' -H 'X-YouTube-Client-Version: 19.29.1' -d '{\"videoId\":\"dQw4w9WgXcQ\",\"context\":{\"client\":{\"clientName\":\"IOS\",\"clientVersion\":\"19.29.1\",\"hl\":\"en\",\"gl\":\"US\"}}}')",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); tracks=d.get\\('captions',{}\\).get\\('playerCaptionsTracklistRenderer',{}\\).get\\('captionTracks',[]\\); status=d.get\\('playabilityStatus',{}\\).get\\('status'\\); print\\('status:', status, 'tracks:', len\\(tracks\\)\\)\")",
+      "Bash(curl -s -X POST https://www.youtube.com/youtubei/v1/player -H 'Content-Type: application/json' -d '{\"videoId\":\"dQw4w9WgXcQ\",\"context\":{\"client\":{\"clientName\":\"TVHTML5\",\"clientVersion\":\"7.20241201.13.00\",\"hl\":\"en\",\"gl\":\"US\"}}}')",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); tracks=d.get\\('captions',{}\\).get\\('playerCaptionsTracklistRenderer',{}\\).get\\('captionTracks',[]\\); status=d.get\\('playabilityStatus',{}\\).get\\('status','?'\\); print\\('status:', status, 'tracks:', len\\(tracks\\)\\); [print\\(t['languageCode']\\) for t in tracks]\")",
+      "Bash(curl -s -X POST https://www.youtube.com/youtubei/v1/player -H 'Content-Type: application/json' -d '{\"videoId\":\"dQw4w9WgXcQ\",\"context\":{\"client\":{\"clientName\":\"MWEB\",\"clientVersion\":\"2.20241201.01.00\",\"hl\":\"en\",\"gl\":\"US\"}}}')",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); tracks=d.get\\('captions',{}\\).get\\('playerCaptionsTracklistRenderer',{}\\).get\\('captionTracks',[]\\); status=d.get\\('playabilityStatus',{}\\).get\\('status','?'\\); print\\('MWEB status:', status, 'tracks:', len\\(tracks\\)\\)\")",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); deps={**d.get\\('dependencies',{}\\), **d.get\\('devDependencies',{}\\)}; [print\\(k,v\\) for k in ['html2canvas','dom-to-image','@vercel/og','satori'] if k in deps]\")",
+      "Bash(npx tsc:*)"
     ]
   }
 }
