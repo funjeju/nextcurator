@@ -3,30 +3,47 @@
 import { useEffect, useState } from 'react'
 import { Progress } from '@/components/ui/progress'
 
-const STEPS = [
+const STEPS_YOUTUBE = [
   { label: '영상 정보 확인 중...', weight: 1 },
-  { label: '자막 추출 중...',      weight: 3 }, // 가장 오래 걸림 → 더 천천히
+  { label: '자막 추출 중...',      weight: 3 },
   { label: '카테고리 분류 중...',  weight: 1 },
   { label: '요약 생성 중...',      weight: 2 },
   { label: '타임스탬프 연결 중...', weight: 1 },
 ]
 
-const TOTAL_WEIGHT = STEPS.reduce((s, step) => s + step.weight, 0)
+const STEPS_PDF = [
+  { label: 'PDF 파일 읽는 중...',  weight: 1 },
+  { label: '텍스트 추출 중...',    weight: 2 },
+  { label: '카테고리 분류 중...',  weight: 1 },
+  { label: '요약 생성 중...',      weight: 3 },
+  { label: '정리 마무리 중...',    weight: 1 },
+]
 
-// 각 단계의 완료 시점 퍼센트 (누적)
-const STEP_THRESHOLDS = (() => {
+const STEPS_URL = [
+  { label: '페이지 접근 중...',    weight: 1 },
+  { label: '본문 추출 중...',      weight: 2 },
+  { label: '카테고리 분류 중...',  weight: 1 },
+  { label: '요약 생성 중...',      weight: 3 },
+  { label: '정리 마무리 중...',    weight: 1 },
+]
+
+function buildThresholds(steps: { label: string; weight: number }[]) {
+  const total = steps.reduce((s, step) => s + step.weight, 0)
   let acc = 0
-  return STEPS.map(step => {
-    acc += (step.weight / TOTAL_WEIGHT) * 100
+  return steps.map(step => {
+    acc += (step.weight / total) * 100
     return acc
   })
-})()
+}
 
 interface LoadingStepsProps {
   currentStep: number
+  mode?: 'youtube' | 'pdf' | 'url'
 }
 
-export default function LoadingSteps({ currentStep }: LoadingStepsProps) {
+export default function LoadingSteps({ currentStep, mode = 'youtube' }: LoadingStepsProps) {
+  const STEPS = mode === 'pdf' ? STEPS_PDF : mode === 'url' ? STEPS_URL : STEPS_YOUTUBE
+  const STEP_THRESHOLDS = buildThresholds(STEPS)
   const [displayProgress, setDisplayProgress] = useState(0)
 
   useEffect(() => {

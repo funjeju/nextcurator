@@ -40,6 +40,7 @@ export default function UrlInput() {
   const [url, setUrl] = useState('')
   const [selectedCategory, setSelectedCategory] = useState<string>('auto')
   const [loading, setLoading] = useState(false)
+  const [loadingMode, setLoadingMode] = useState<'youtube' | 'pdf' | 'url'>('youtube')
   const [error, setError] = useState('')
   const [step, setStep] = useState(0)
   const [modal, setModal] = useState<ModalType>(null)
@@ -53,8 +54,9 @@ export default function UrlInput() {
     e.target.value = ''
 
     setError('')
+    setLoadingMode('pdf')
     setLoading(true)
-    setStep(2)
+    setStep(1)
     try {
       const formData = new FormData()
       formData.append('file', file)
@@ -79,6 +81,9 @@ export default function UrlInput() {
   // 실제 요약 실행
   const runSummarize = async () => {
     setError('')
+    // YouTube인지 일반 URL인지 판단
+    const isYoutube = /youtube\.com|youtu\.be/.test(url)
+    setLoadingMode(isYoutube ? 'youtube' : 'url')
     setLoading(true)
     setStep(1)
     try {
@@ -144,7 +149,7 @@ export default function UrlInput() {
     setModal('guest_info')
   }
 
-  if (loading) return <LoadingSteps currentStep={step} />
+  if (loading) return <LoadingSteps currentStep={step} mode={loadingMode} />
 
   return (
     <>

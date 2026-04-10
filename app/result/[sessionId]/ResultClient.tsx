@@ -29,7 +29,9 @@ const CATEGORY_INFO: Record<string, { label: string; icon: string; color: string
   selfdev: { label: '자기계발', icon: '💪', color: 'text-emerald-400 border-emerald-400' },
   travel:  { label: '여행',    icon: '🧳', color: 'text-cyan-400 border-cyan-400' },
   story:   { label: '스토리',  icon: '🍿', color: 'text-pink-400 border-pink-400' },
+  tips:    { label: '팁',      icon: '💡', color: 'text-yellow-400 border-yellow-400' },
 }
+const DEFAULT_CATEGORY_INFO = { label: '분석됨', icon: '✨', color: 'text-zinc-400 border-zinc-400' }
 
 const RE_ANALYZE_CATEGORIES = [
   { id: 'recipe',  icon: '🍳', label: '요리' },
@@ -39,6 +41,7 @@ const RE_ANALYZE_CATEGORIES = [
   { id: 'selfdev', icon: '💪', label: '자기계발' },
   { id: 'travel',  icon: '🧳', label: '여행' },
   { id: 'story',   icon: '🍿', label: '스토리' },
+  { id: 'tips',    icon: '💡', label: '팁' },
 ]
 
 function timestampToSeconds(ts: string): number {
@@ -279,26 +282,43 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
     }
   }
 
-  // 링크 공유 (OG 카드 기반)
+  const shareCardRef = useRef<HTMLDivElement>(null)
+
   const handleShare = async () => {
     if (!data) return
     setSharing(true)
-    const url = window.location.href
-    const shareTitle = data.title
-    const shareText = `📺 ${data.title}\n🎬 ${data.channel} · Next Curator`
+    const pageUrl = window.location.href
     try {
+      // 공유 카드 캡처 → 이미지+URL 같이 공유 (카톡에서 이미지 클릭 시 URL 이동)
+      if (shareCardRef.current && navigator.share) {
+        const { default: html2canvas } = await import('html2canvas')
+        const canvas = await html2canvas(shareCardRef.current, {
+          useCORS: true,
+          backgroundColor: '#18181b',
+          scale: 2,
+          onclone: (doc) => {
+            doc.querySelectorAll('link[rel="stylesheet"], style').forEach(el => el.remove())
+          },
+        })
+        const blob = await new Promise<Blob>((res) => canvas.toBlob(b => res(b!), 'image/png'))
+        const file = new File([blob], 'nextcurator.png', { type: 'image/png' })
+        if (navigator.canShare?.({ files: [file] })) {
+          await navigator.share({ files: [file], url: pageUrl, title: data.title })
+          return
+        }
+      }
+      // 파일 공유 불가 → URL만
       if (navigator.share) {
-        await navigator.share({ title: shareTitle, text: shareText, url })
+        await navigator.share({ title: data.title, url: pageUrl })
       } else {
-        await navigator.clipboard.writeText(url)
+        await navigator.clipboard.writeText(pageUrl)
         setShareCopied(true)
         setTimeout(() => setShareCopied(false), 2000)
       }
     } catch (e) {
       if ((e as Error).name !== 'AbortError') {
-        // share 실패 시 클립보드로 대체
         try {
-          await navigator.clipboard.writeText(url)
+          await navigator.clipboard.writeText(pageUrl)
           setShareCopied(true)
           setTimeout(() => setShareCopied(false), 2000)
         } catch { /* ignore */ }
@@ -336,7 +356,7 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
   }
 
   if (!data) return null
-  const catInfo = CATEGORY_INFO[data.category]
+  const catInfo = CATEGORY_INFO[data.category] ?? DEFAULT_CATEGORY_INFO
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
@@ -630,6 +650,77 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
       <div style={{ position: 'absolute', left: '-9999px', top: 0, pointerEvents: 'none', zIndex: -1 }}>
         <div ref={pdfRef}>
           {data && <SummaryPdfTemplate data={data} qrDataUrl={qrDataUrl} />}
+        </div>
+      </div>
+
+      {/* 공유용 카드 (캡처 전용, 화면 밖) */}
+      <div style={{ position: 'absolute', left: '-9999px', top: 0, pointerEvents: 'none', zIndex: -1 }}>
+        <div
+          ref={shareCardRef}
+          style={{
+            width: 400,
+            background: '#18181b',
+            borderRadius: 20,
+            overflow: 'hidden',
+            fontFamily: 'sans-serif',
+          }}
+        >
+          {/* 썸네일 */}
+          {data.thumbnail ? (
+            <img
+              src={data.thumbnail}
+              alt={data.title}
+              style={{ width: '100%', aspectRatio: '16/9', objectFit: 'cover', display: 'block' }}
+              crossOrigin="anonymous"
+            />
+          ) : (
+            <div style={{ width: '100%', aspectRatio: '16/9', background: '#27272a', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <span style={{ fontSize: 48, opacity: 0.3 }}>{(data as any).sourceType === 'pdf' ? '📄' : '🌐'}</span>
+            </div>
+          )}
+
+          {/* 정보 */}
+          <div style={{ padding: '14px 16px 8px' }}>
+            {/* 카테고리 + 채널 */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+              <span style={{
+                padding: '3px 10px', borderRadius: 99, fontSize: 11, fontWeight: 700,
+                background: '#27272a', color: '#fb923c', border: '1px solid #fb923c44',
+              }}>
+                {catInfo.icon} {catInfo.label}
+              </span>
+              <span style={{ color: '#71717a', fontSize: 12 }}>{data.channel}</span>
+            </div>
+
+            {/* 제목 */}
+            <p style={{
+              color: '#f4f4f5', fontSize: 15, fontWeight: 700,
+              lineHeight: 1.45, marginBottom: 14,
+              display: '-webkit-box', WebkitLineClamp: 2,
+              WebkitBoxOrient: 'vertical', overflow: 'hidden',
+            }}>
+              {data.title}
+            </p>
+
+            {/* 탭 버튼 행 */}
+            <div style={{ display: 'flex', borderTop: '1px solid #27272a', marginLeft: -16, marginRight: -16, padding: '0 16px' }}>
+              {['기본 요약', '전체 자막', '다시 분석'].map((tab, i) => (
+                <div key={tab} style={{
+                  flex: 1, textAlign: 'center', padding: '10px 0',
+                  fontSize: 12, fontWeight: i === 0 ? 700 : 400,
+                  color: i === 0 ? '#ffffff' : '#71717a',
+                  borderBottom: i === 0 ? '2px solid #fb923c' : '2px solid transparent',
+                }}>
+                  {tab}
+                </div>
+              ))}
+            </div>
+
+            {/* 브랜드 */}
+            <div style={{ textAlign: 'center', padding: '8px 0 4px', color: '#52525b', fontSize: 10 }}>
+              nextcurator.vercel.app
+            </div>
+          </div>
         </div>
       </div>
 
