@@ -5,7 +5,7 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-[#252423] font-sans">
       <Header />
-      <main className="flex flex-col items-center justify-center px-4 py-8 relative overflow-hidden">
+      <main className="flex flex-col items-center justify-center px-4 py-3 relative overflow-hidden">
       {/* Soft warm background glows mimicking the reference */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-0 right-0 w-[700px] h-[700px] bg-orange-500/10 rounded-full blur-[150px]" />

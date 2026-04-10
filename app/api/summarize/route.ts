@@ -63,6 +63,24 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: '올바른 YouTube URL을 입력해주세요.' }, { status: 400 })
     }
 
+    // 같은 영상이 이미 DB에 있으면 캐시 반환 (userCategory 지정 시 재분석)
+    if (!userCategory) {
+      try {
+        const { db } = await import('@/lib/firebase')
+        const { collection, query, where, getDocs, orderBy, limit } = await import('firebase/firestore')
+        const cached = await getDocs(
+          query(collection(db, 'summaries'), where('videoId', '==', videoId), orderBy('createdAt', 'desc'), limit(1))
+        )
+        if (!cached.empty) {
+          console.log('[Summarize] ✅ Cache hit for videoId:', videoId)
+          const data = cached.docs[0].data()
+          return NextResponse.json(data)
+        }
+      } catch (e) {
+        console.warn('[Summarize] ⚠️ Cache check failed, proceeding fresh:', e)
+      }
+    }
+
     const videoInfo = await getVideoInfo(videoId)
 
     let transcript: string = ''

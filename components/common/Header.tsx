@@ -20,7 +20,7 @@ export default function Header({ title = '🎬 Next Curator' }: { title?: string
     <div className="sticky top-0 z-50 bg-[#252423]/90 backdrop-blur-xl border-b border-white/5 py-2.5 px-4 md:px-8 mb-6">
       <div className="max-w-7xl mx-auto flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <Link href="/" className="text-base font-bold tracking-tight text-white hover:opacity-80 transition-opacity whitespace-nowrap">
+          <Link href="/" className="text-sm font-bold tracking-tight text-white hover:opacity-80 transition-opacity whitespace-nowrap">
             {title}
           </Link>
           <nav className="hidden md:flex items-center gap-4 text-sm font-medium">

@@ -78,6 +78,16 @@ export async function createFolder(userId: string, name: string): Promise<Folder
   return { id: docRef.id, userId, name, createdAt: new Date() }
 }
 
+// Firestore는 undefined 값을 거부 → 재귀적으로 null로 치환
+function stripUndefined(obj: any): any {
+  if (obj === undefined) return null
+  if (obj === null || typeof obj !== 'object') return obj
+  if (Array.isArray(obj)) return obj.map(stripUndefined)
+  return Object.fromEntries(
+    Object.entries(obj).map(([k, v]) => [k, stripUndefined(v)])
+  )
+}
+
 export async function saveSummary({
   userId,
   userDisplayName,
@@ -107,8 +117,8 @@ export async function saveSummary({
     channel: channel || '',
     thumbnail,
     category,
-    summary: summary ?? null,
-    square_meta: square_meta ?? null,
+    summary: stripUndefined(summary),
+    square_meta: stripUndefined(square_meta),
     isPublic,
     transcript: transcript || '',
     transcriptSource: transcriptSource || '',
