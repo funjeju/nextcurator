@@ -107,10 +107,10 @@ export async function saveSummary({
     channel: channel || '',
     thumbnail,
     category,
-    summary,           // AI 요약 내용 저장
-    square_meta,
+    summary: summary ?? null,
+    square_meta: square_meta ?? null,
     isPublic,
-    transcript,
+    transcript: transcript || '',
     transcriptSource: transcriptSource || '',
     likeCount: 0,
     viewCount: 0,
