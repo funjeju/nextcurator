@@ -10,6 +10,8 @@ import SummaryShell from '@/components/summary/SummaryShell'
 import SaveModal from '@/components/summary/SaveModal'
 import CommentSection from '@/components/comments/CommentSection'
 import SummaryPdfTemplate from '@/components/pdf/SummaryPdfTemplate'
+import QuizPanel from '@/components/quiz/QuizPanel'
+import type { QuizData } from '@/types/summary'
 import Header from '@/components/common/Header'
 import { SummarizeResponse } from '@/types/summary'
 import { useAuth } from '@/providers/AuthProvider'
@@ -69,6 +71,10 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
   const [downloading, setDownloading] = useState(false)
   const pdfRef = useRef<HTMLDivElement>(null)
   const [qrDataUrl, setQrDataUrl] = useState('')
+
+  // 퀴즈
+  const [quiz, setQuiz] = useState<QuizData | null>(null)
+  const [quizLoading, setQuizLoading] = useState(false)
 
   useEffect(() => {
     if (!data?.videoId) return
@@ -255,6 +261,24 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
     }
   }
 
+  const handleGenerateQuiz = async () => {
+    if (!data || quizLoading) return
+    setQuizLoading(true)
+    try {
+      const res = await fetch('/api/quiz', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ category: data.category, summary: data.summary, title: data.title }),
+      })
+      if (!res.ok) throw new Error('퀴즈 생성 실패')
+      setQuiz(await res.json())
+    } catch (e) {
+      alert('퀴즈 생성에 실패했습니다.')
+    } finally {
+      setQuizLoading(false)
+    }
+  }
+
   // 링크 공유 (OG 카드 기반)
   const handleShare = async () => {
     if (!data) return
@@ -320,12 +344,28 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
 
       <div className="max-w-2xl mx-auto px-4 py-2 flex flex-col gap-6">
 
-        {/* 플레이어 */}
-        <div className="sticky top-[68px] md:top-[76px] z-40 bg-zinc-950 pb-4 shadow-[0_15px_20px_-10px_rgba(9,9,11,1)]">
-          <div className="rounded-xl overflow-hidden shadow-2xl border border-white/10 ring-1 ring-black/50">
-            <YoutubePlayer videoId={data.videoId} onPlayerReady={handlePlayerReady} />
+        {/* 플레이어 (YouTube가 아닌 경우 썸네일 or 소스 표시) */}
+        {data.videoId ? (
+          <div className="sticky top-[68px] md:top-[76px] z-40 bg-zinc-950 pb-4 shadow-[0_15px_20px_-10px_rgba(9,9,11,1)]">
+            <div className="rounded-xl overflow-hidden shadow-2xl border border-white/10 ring-1 ring-black/50">
+              <YoutubePlayer videoId={data.videoId} onPlayerReady={handlePlayerReady} />
+            </div>
           </div>
-        </div>
+        ) : (data as any).sourceUrl || (data as any).sourceType === 'pdf' ? (
+          <div className="rounded-xl bg-[#2a2826] border border-white/10 p-5 flex items-center gap-4">
+            <span className="text-3xl">{(data as any).sourceType === 'pdf' ? '📄' : '🌐'}</span>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs text-[#75716e] mb-0.5">{(data as any).sourceType === 'pdf' ? 'PDF 문서' : '웹페이지'}</p>
+              <p className="text-white text-sm font-semibold truncate">{data.title}</p>
+              {(data as any).sourceUrl && (
+                <a href={(data as any).sourceUrl} target="_blank" rel="noopener noreferrer"
+                  className="text-xs text-orange-400 hover:underline truncate block mt-0.5">
+                  {(data as any).sourceUrl}
+                </a>
+              )}
+            </div>
+          </div>
+        ) : null}
 
         {/* 영상 정보 */}
         <div>
@@ -374,14 +414,36 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
         {/* 탭 콘텐츠 */}
         <div className="min-h-[300px]">
           {activeTab === 'summary' && (
-            <SummaryShell
-              category={data.category}
-              summary={data.summary}
-              onSeek={handleSeek}
-              sessionId={sessionId}
-              onComment={handleComment}
-              commentCounts={commentCounts}
-            />
+            <div className="flex flex-col gap-4">
+              <SummaryShell
+                category={data.category}
+                summary={data.summary}
+                onSeek={handleSeek}
+                sessionId={sessionId}
+                onComment={handleComment}
+                commentCounts={commentCounts}
+              />
+              {/* 퀴즈 버튼 — 영어/학습 카테고리만 */}
+              {(data.category === 'english' || data.category === 'learning') && (
+                <button
+                  onClick={handleGenerateQuiz}
+                  disabled={quizLoading}
+                  className="w-full py-3.5 rounded-2xl border border-dashed border-violet-500/40 bg-violet-500/5 hover:bg-violet-500/10 text-violet-400 hover:text-violet-300 font-semibold text-sm transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  {quizLoading ? (
+                    <>
+                      <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                      </svg>
+                      퀴즈 생성 중...
+                    </>
+                  ) : (
+                    <>🧠 퀴즈 생성하기</>
+                  )}
+                </button>
+              )}
+            </div>
           )}
 
           {activeTab === 'transcript' && (
@@ -570,6 +632,8 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
           {data && <SummaryPdfTemplate data={data} qrDataUrl={qrDataUrl} />}
         </div>
       </div>
+
+      {quiz && <QuizPanel quiz={quiz} onClose={() => setQuiz(null)} />}
 
       {showSaveModal && (
         <SaveModal

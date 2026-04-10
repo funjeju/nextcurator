@@ -155,6 +155,36 @@ ${fullContext.slice(0, 6000)}`)
   return result.response.text().trim()
 }
 
+export async function generateQuiz(
+  category: 'english' | 'learning',
+  summaryData: unknown,
+  title: string
+): Promise<import('@/types/summary').QuizData> {
+  const hint = category === 'english'
+    ? `영어 학습 요약에서 단어/표현 플래시카드와 사용법 객관식 문제를 만드세요.
+flashcard: 앞면=영어 단어/표현, 뒷면=한국어 의미+예문
+multiple_choice: "이 표현의 올바른 사용은?" 형태, 4개 보기`
+    : `학습 요약에서 개념 확인 플래시카드와 객관식 문제를 만드세요.
+flashcard: 앞면=개념명, 뒷면=설명
+multiple_choice: 개념 이해 확인 문제, 4개 보기`
+
+  const result = await classifyModel.generateContent(`${hint}
+
+요약 데이터:
+${JSON.stringify(summaryData).slice(0, 3000)}
+
+영상 제목: ${title}
+
+총 8~12개 문제를 만드세요. flashcard와 multiple_choice를 섞어서.
+multiple_choice의 options는 정답 포함 4개 문자열 배열.
+
+JSON 형식:
+{"category":"${category}","title":"퀴즈 제목","questions":[{"type":"flashcard","question":"앞면","answer":"뒷면","hint":"힌트(선택)"},{"type":"multiple_choice","question":"문제","answer":"정답 문자열","options":["보기1","보기2","보기3","보기4"]}]}`)
+
+  const text = result.response.text().trim()
+  return extractJSON(text) as import('@/types/summary').QuizData
+}
+
 export async function classifyFolder(videoTitle: string, tags: string[], existingFolders: string[]): Promise<{ suggestedFolder: string, isNew: boolean }> {
   const result = await classifyModel.generateContent(`You are a smart YouTube library organizer.
 The user wants to save a summarized video.

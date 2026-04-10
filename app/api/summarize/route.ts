@@ -139,6 +139,24 @@ async function getVideoInfo(videoId: string) {
   }
 }
 
+// 일반 URL에서 텍스트 추출
+async function fetchUrlContent(url: string): Promise<string> {
+  const res = await fetch(url, {
+    headers: { 'User-Agent': 'Mozilla/5.0 (compatible; NextCurator/1.0)' },
+    signal: AbortSignal.timeout(10000),
+  })
+  if (!res.ok) throw new Error('URL 접근 실패')
+  const html = await res.text()
+  // HTML 태그 제거, 공백 정리
+  return html
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/<style[\s\S]*?<\/style>/gi, '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 10000)
+}
+
 export async function POST(req: NextRequest) {
   try {
     const { url, category: userCategory } = await req.json()
@@ -148,8 +166,61 @@ export async function POST(req: NextRequest) {
     }
 
     const videoId = extractVideoId(url)
+
+    // ── 일반 URL (YouTube 아님) ──
     if (!videoId) {
-      return NextResponse.json({ error: '올바른 YouTube URL을 입력해주세요.' }, { status: 400 })
+      try { new URL(url) } catch {
+        return NextResponse.json({ error: '올바른 URL을 입력해주세요.' }, { status: 400 })
+      }
+
+      let pageText = ''
+      try { pageText = await fetchUrlContent(url) } catch {
+        return NextResponse.json({ error: 'URL 내용을 가져올 수 없습니다. 접근이 차단된 페이지일 수 있습니다.' }, { status: 422 })
+      }
+      if (!pageText.trim()) {
+        return NextResponse.json({ error: '페이지에서 텍스트를 추출할 수 없습니다.' }, { status: 422 })
+      }
+
+      let category = userCategory
+      if (!category) {
+        const classified = await classifyCategory(pageText)
+        category = classified.category
+      }
+
+      // 페이지 제목 추출
+      const titleMatch = pageText.match(/(?:^|\s)([^.!?]{10,80})(?:\s|$)/)
+      const pageTitle = titleMatch?.[1]?.trim() || new URL(url).hostname
+
+      const [summary, reportSummary] = await Promise.all([
+        generateSummary(category, pageText),
+        generateReportSummary(category, pageTitle, pageText).catch(() => ''),
+      ])
+
+      const sessionId = randomUUID()
+      const result = {
+        sessionId,
+        videoId: '',
+        sourceUrl: url,
+        title: pageTitle,
+        channel: new URL(url).hostname,
+        thumbnail: '',
+        duration: 0,
+        category,
+        summary,
+        transcript: pageText.slice(0, 3000),
+        transcriptSource: 'web',
+        videoPublishedAt: '',
+        summarizedAt: new Date().toISOString(),
+        reportSummary: reportSummary || '',
+      }
+
+      try {
+        await saveToFirestore(sessionId, result)
+      } catch (e) {
+        console.warn('[Summarize] ⚠️ Failed to save URL result:', e)
+      }
+
+      return NextResponse.json(result)
     }
 
     // 같은 영상이 이미 DB에 있으면 캐시 반환 (userCategory 지정 시 재분석)

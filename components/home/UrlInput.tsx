@@ -46,6 +46,36 @@ export default function UrlInput() {
   const [checkingDuration, setCheckingDuration] = useState(false)
   const router = useRouter()
 
+  // PDF 업로드 처리
+  const handlePdfUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    e.target.value = ''
+
+    setError('')
+    setLoading(true)
+    setStep(2)
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      if (selectedCategory !== 'auto') formData.append('category', selectedCategory)
+
+      setStep(3)
+      const res = await fetch('/api/summarize-pdf', { method: 'POST', body: formData })
+      setStep(4)
+      if (!res.ok) { const d = await res.json(); throw new Error(d.error || 'PDF 처리 실패') }
+      const data = await res.json()
+      setStep(5)
+
+      sessionStorage.setItem(`summary_${data.sessionId}`, JSON.stringify(data))
+      router.push(`/result/${data.sessionId}`)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'PDF 처리 중 오류가 발생했습니다.')
+      setLoading(false)
+      setStep(0)
+    }
+  }
+
   // 실제 요약 실행
   const runSummarize = async () => {
     setError('')
@@ -127,13 +157,30 @@ export default function UrlInput() {
             영상 주소 입력 <span className="text-orange-400">⚡</span>
           </label>
           <div className="relative group flex flex-col md:flex-row gap-3">
-            <Input
-              placeholder="https://youtube.com/watch?v=..."
-              value={url}
-              onChange={(e) => setUrl(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
-              className="flex-1 h-[56px] text-base pl-5 pr-4 bg-[#23211f] border-none text-white placeholder:text-[#75716e] rounded-[20px] focus-visible:ring-1 focus-visible:ring-orange-500/50 shadow-inner transition-all duration-300"
-            />
+            <div className="flex flex-1 gap-2">
+              <Input
+                placeholder="YouTube, 웹페이지 URL 입력..."
+                value={url}
+                onChange={(e) => setUrl(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
+                className="flex-1 h-[56px] text-base pl-5 pr-4 bg-[#23211f] border-none text-white placeholder:text-[#75716e] rounded-[20px] focus-visible:ring-1 focus-visible:ring-orange-500/50 shadow-inner transition-all duration-300"
+              />
+              {/* PDF 업로드 버튼 */}
+              <label
+                className="shrink-0 h-[56px] w-[56px] flex items-center justify-center rounded-[20px] bg-[#23211f] hover:bg-[#2e2c2a] border border-white/5 hover:border-white/20 cursor-pointer transition-all text-[#75716e] hover:text-white"
+                title="PDF 업로드"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                <input
+                  type="file"
+                  accept=".pdf"
+                  className="hidden"
+                  onChange={handlePdfUpload}
+                />
+              </label>
+            </div>
             <Button
               variant="default"
               onClick={handleSubmit}

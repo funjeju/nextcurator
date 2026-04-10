@@ -82,6 +82,20 @@ export interface TipsSummary {
 
 export type SummaryData = RecipeSummary | EnglishSummary | LearningSummary | NewsSummary | SelfDevSummary | TravelSummary | StorySummary | TipsSummary
 
+export interface QuizQuestion {
+  type: 'flashcard' | 'multiple_choice'
+  question: string
+  answer: string
+  options?: string[]   // multiple_choice only
+  hint?: string
+}
+
+export interface QuizData {
+  category: 'english' | 'learning'
+  title: string
+  questions: QuizQuestion[]
+}
+
 export interface SummarizeResponse {
   sessionId: string
   videoId: string
