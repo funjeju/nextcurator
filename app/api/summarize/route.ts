@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { extractVideoId, getTranscript, getVideoMeta } from '@/lib/transcript'
-import { classifyCategory, generateSummary } from '@/lib/claude'
+import { classifyCategory, generateSummary, generateReportSummary } from '@/lib/claude'
 import { randomUUID } from 'crypto'
 
 async function getVideoInfo(videoId: string) {
@@ -124,7 +124,10 @@ export async function POST(req: NextRequest) {
       category = classified.category
     }
 
-    const summary = await generateSummary(category, fullContext)
+    const [summary, reportSummary] = await Promise.all([
+      generateSummary(category, fullContext),
+      generateReportSummary(category, videoInfo.title, fullContext).catch(() => ''),
+    ])
 
     const sessionId = randomUUID()
     const result = {
@@ -140,6 +143,7 @@ export async function POST(req: NextRequest) {
       transcriptSource,
       videoPublishedAt: videoInfo.publishedAt || '',
       summarizedAt: new Date().toISOString(),
+      reportSummary: reportSummary || '',
     }
 
     // Firestore 저장 후 응답 반환 (fire-and-forget은 Vercel에서 저장 완료 전 종료됨)

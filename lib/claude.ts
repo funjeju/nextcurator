@@ -102,6 +102,52 @@ ${transcript.slice(0, 8000)}`)
   return extractJSON(text) as SummaryData
 }
 
+const reportModel = genAI.getGenerativeModel({
+  model: 'gemini-2.5-flash',
+  generationConfig: {
+    temperature: 0.4,
+    maxOutputTokens: 4096,
+    // @ts-expect-error thinkingConfig not yet in types but supported
+    thinkingConfig: { thinkingBudget: 0 },
+  },
+})
+
+export async function generateReportSummary(
+  category: Category,
+  title: string,
+  fullContext: string
+): Promise<string> {
+  const categoryHint: Record<Category, string> = {
+    recipe:   '요리/레시피 영상',
+    english:  '영어 학습 영상',
+    learning: '학습/강의 영상',
+    news:     '뉴스/시사 영상',
+    selfdev:  '자기계발 영상',
+    travel:   '여행 영상',
+    story:    '스토리/드라마 영상',
+  }
+
+  const result = await reportModel.generateContent(`당신은 전문 콘텐츠 에디터입니다.
+아래 "${categoryHint[category]}"의 자막/설명을 읽고, 보고서 형식의 정리 문서를 한국어로 작성하세요.
+
+요구사항:
+- 4~6개의 소제목(##)으로 구성
+- 각 섹션은 2~4문장의 서술형 단락으로 작성 (글머리표 최소화)
+- 첫 섹션은 반드시 "## 개요"로 시작하여 배경과 주제를 소개
+- 마지막 섹션은 반드시 "## 핵심 정리"로 끝내며 결론/시사점 서술
+- 중간 섹션 소제목은 내용에 맞게 자유롭게 설정
+- 전체 분량: 600~900자 내외
+- 마크다운 형식만 사용 (bold, 소제목만), 표나 코드블록 사용 금지
+
+영상 제목: ${title}
+카테고리: ${categoryHint[category]}
+
+자막/내용:
+${fullContext.slice(0, 6000)}`)
+
+  return result.response.text().trim()
+}
+
 export async function classifyFolder(videoTitle: string, tags: string[], existingFolders: string[]): Promise<{ suggestedFolder: string, isNew: boolean }> {
   const result = await classifyModel.generateContent(`You are a smart YouTube library organizer.
 The user wants to save a summarized video.

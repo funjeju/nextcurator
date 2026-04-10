@@ -68,6 +68,16 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
   // PDF
   const [downloading, setDownloading] = useState(false)
   const pdfRef = useRef<HTMLDivElement>(null)
+  const [qrDataUrl, setQrDataUrl] = useState('')
+
+  useEffect(() => {
+    if (!data?.videoId) return
+    import('qrcode').then(QRCode => {
+      QRCode.toDataURL(`https://www.youtube.com/watch?v=${data.videoId}`, { width: 96, margin: 1 })
+        .then(setQrDataUrl)
+        .catch(() => {})
+    })
+  }, [data?.videoId])
 
   const handleDownloadPdf = async () => {
     if (!pdfRef.current || !data) return
@@ -557,7 +567,7 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
       {/* 숨겨진 PDF 렌더링 영역 */}
       <div style={{ position: 'absolute', left: '-9999px', top: 0, pointerEvents: 'none', zIndex: -1 }}>
         <div ref={pdfRef}>
-          {data && <SummaryPdfTemplate data={data} />}
+          {data && <SummaryPdfTemplate data={data} qrDataUrl={qrDataUrl} />}
         </div>
       </div>
 

@@ -6,61 +6,95 @@ import {
 
 interface Props {
   data: SummarizeResponse
+  qrDataUrl?: string
 }
 
-const CATEGORY_META: Record<string, { label: string; icon: string; color: string; bg: string }> = {
-  recipe:  { label: '요리',    icon: '🍳', color: '#ea580c', bg: '#fff7ed' },
-  english: { label: '영어학습', icon: '🔤', color: '#2563eb', bg: '#eff6ff' },
-  learning:{ label: '학습',    icon: '📐', color: '#7c3aed', bg: '#f5f3ff' },
-  news:    { label: '뉴스',    icon: '🗞️', color: '#374151', bg: '#f9fafb' },
-  selfdev: { label: '자기계발', icon: '💪', color: '#059669', bg: '#ecfdf5' },
-  travel:  { label: '여행',    icon: '🧳', color: '#0891b2', bg: '#ecfeff' },
-  story:   { label: '스토리',  icon: '🍿', color: '#db2777', bg: '#fdf2f8' },
+const CATEGORY_META: Record<string, { label: string; icon: string; color: string; bg: string; border: string }> = {
+  recipe:  { label: '요리',    icon: '🍳', color: '#ea580c', bg: '#fff7ed', border: '#fed7aa' },
+  english: { label: '영어학습', icon: '🔤', color: '#2563eb', bg: '#eff6ff', border: '#bfdbfe' },
+  learning:{ label: '학습',    icon: '📐', color: '#7c3aed', bg: '#f5f3ff', border: '#ddd6fe' },
+  news:    { label: '뉴스',    icon: '🗞️', color: '#374151', bg: '#f9fafb', border: '#e5e7eb' },
+  selfdev: { label: '자기계발', icon: '💪', color: '#059669', bg: '#ecfdf5', border: '#a7f3d0' },
+  travel:  { label: '여행',    icon: '🧳', color: '#0891b2', bg: '#ecfeff', border: '#a5f3fc' },
+  story:   { label: '스토리',  icon: '🍿', color: '#db2777', bg: '#fdf2f8', border: '#f9a8d4' },
 }
 
-// ─── 섹션 제목 ───
-function SectionTitle({ children }: { children: React.ReactNode }) {
+// ─── 섹션 헤더 ───
+function SectionHeader({ title, color, bg, border }: { title: string; color: string; bg: string; border: string }) {
   return (
-    <h3 style={{ fontSize: 13, fontWeight: 700, color: '#111827', borderBottom: '1.5px solid #e5e7eb', paddingBottom: 6, marginBottom: 10, marginTop: 0 }}>
-      {children}
-    </h3>
+    <div style={{
+      background: bg,
+      borderLeft: `4px solid ${color}`,
+      borderRadius: '0 8px 8px 0',
+      padding: '8px 14px',
+      marginBottom: 12,
+      marginTop: 0,
+    }}>
+      <h3 style={{ fontSize: 13, fontWeight: 700, color, margin: 0 }}>{title}</h3>
+    </div>
   )
 }
 
-// ─── 태그 뱃지 ───
-function Tag({ text, color = '#6b7280', bg = '#f3f4f6' }: { text: string; color?: string; bg?: string }) {
-  return (
-    <span style={{ display: 'inline-block', fontSize: 10, color, background: bg, borderRadius: 99, padding: '2px 8px', marginRight: 4, marginBottom: 4, fontWeight: 600 }}>
-      {text}
-    </span>
-  )
+// ─── 보고서형 마크다운 렌더러 ───
+function ReportSection({ markdown, color, bg, border }: { markdown: string; color: string; bg: string; border: string }) {
+  const lines = markdown.split('\n')
+  const elements: React.ReactNode[] = []
+  let key = 0
+
+  for (const line of lines) {
+    const trimmed = line.trim()
+    if (!trimmed) { key++; continue }
+
+    if (trimmed.startsWith('## ')) {
+      const title = trimmed.replace(/^## /, '')
+      elements.push(
+        <div key={key++} style={{ marginTop: elements.length === 0 ? 0 : 20 }}>
+          <SectionHeader title={title} color={color} bg={bg} border={border} />
+        </div>
+      )
+    } else if (trimmed.startsWith('**') && trimmed.endsWith('**') && !trimmed.slice(2, -2).includes('**')) {
+      elements.push(
+        <p key={key++} style={{ fontSize: 12, fontWeight: 700, color: '#1f2937', margin: '6px 0 3px' }}>
+          {trimmed.slice(2, -2)}
+        </p>
+      )
+    } else if (trimmed.startsWith('- ') || trimmed.startsWith('• ')) {
+      elements.push(
+        <div key={key++} style={{ display: 'flex', gap: 6, marginBottom: 4, paddingLeft: 4 }}>
+          <span style={{ color, fontWeight: 700, flexShrink: 0 }}>•</span>
+          <p style={{ fontSize: 12, color: '#374151', margin: 0, lineHeight: 1.65 }}>
+            {trimmed.replace(/^[-•] /, '')}
+          </p>
+        </div>
+      )
+    } else {
+      // 인라인 bold (**text**) 처리
+      const parts = trimmed.split(/(\*\*[^*]+\*\*)/)
+      elements.push(
+        <p key={key++} style={{ fontSize: 12, color: '#374151', margin: '0 0 6px', lineHeight: 1.75 }}>
+          {parts.map((part, i) =>
+            part.startsWith('**') && part.endsWith('**')
+              ? <strong key={i} style={{ color: '#111827' }}>{part.slice(2, -2)}</strong>
+              : part
+          )}
+        </p>
+      )
+    }
+  }
+
+  return <div>{elements}</div>
 }
 
 // ─────────────────────────────────────────
-// 카테고리별 콘텐츠
+// 카테고리별 구조화 요약 (축약형)
 // ─────────────────────────────────────────
 
-function RecipeContent({ data }: { data: RecipeSummary }) {
+function RecipeContent({ data, color, bg, border }: { data: RecipeSummary; color: string; bg: string; border: string }) {
   const groups = data.ingredient_groups ?? (data.ingredients ? [{ group: '재료', items: data.ingredients }] : [])
   return (
     <>
-      {/* 기본 정보 행 */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
-        {[
-          { label: '난이도', value: data.difficulty },
-          { label: '조리 시간', value: data.total_time },
-          { label: '분량', value: data.servings },
-        ].map(item => (
-          <div key={item.label} style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 8, padding: '6px 14px', textAlign: 'center' }}>
-            <div style={{ fontSize: 9, color: '#9ca3af', marginBottom: 2 }}>{item.label}</div>
-            <div style={{ fontSize: 12, fontWeight: 700, color: '#111827' }}>{item.value}</div>
-          </div>
-        ))}
-      </div>
-
-      {/* 재료 */}
       <div style={{ marginBottom: 20 }}>
-        <SectionTitle>재료</SectionTitle>
+        <SectionHeader title="재료" color={color} bg={bg} border={border} />
         <div style={{ display: 'grid', gridTemplateColumns: groups.length > 1 ? '1fr 1fr' : '1fr', gap: 10 }}>
           {groups.map((grp, gi) => (
             <div key={gi} style={{ background: '#f9fafb', borderRadius: 10, overflow: 'hidden', border: '1px solid #e5e7eb' }}>
@@ -79,34 +113,24 @@ function RecipeContent({ data }: { data: RecipeSummary }) {
           ))}
         </div>
       </div>
-
-      {/* 만드는 법 */}
       <div style={{ marginBottom: 20 }}>
-        <SectionTitle>만드는 법</SectionTitle>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {data.steps.map(step => (
-            <div key={step.step} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-              <span style={{ width: 22, height: 22, borderRadius: '50%', background: '#ea580c', color: '#fff', fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                {step.step}
-              </span>
-              <div style={{ flex: 1 }}>
-                <p style={{ fontSize: 12, color: '#1f2937', margin: 0, lineHeight: 1.6 }}>{step.desc}</p>
-                {step.tip && (
-                  <p style={{ fontSize: 11, color: '#059669', margin: '3px 0 0', fontStyle: 'italic' }}>💡 {step.tip}</p>
-                )}
-              </div>
+        <SectionHeader title="만드는 법" color={color} bg={bg} border={border} />
+        {data.steps.map(step => (
+          <div key={step.step} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', marginBottom: 8 }}>
+            <span style={{ width: 22, height: 22, borderRadius: '50%', background: color, color: '#fff', fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{step.step}</span>
+            <div style={{ flex: 1 }}>
+              <p style={{ fontSize: 12, color: '#1f2937', margin: 0, lineHeight: 1.6 }}>{step.desc}</p>
+              {step.tip && <p style={{ fontSize: 11, color: '#059669', margin: '3px 0 0' }}>💡 {step.tip}</p>}
             </div>
-          ))}
-        </div>
+          </div>
+        ))}
       </div>
-
-      {/* 핵심 팁 */}
       {data.key_tips.length > 0 && (
         <div>
-          <SectionTitle>💡 핵심 팁</SectionTitle>
+          <SectionHeader title="💡 핵심 팁" color={color} bg={bg} border={border} />
           {data.key_tips.map((tip, i) => (
             <div key={i} style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
-              <span style={{ color: '#059669', fontWeight: 700, flexShrink: 0 }}>•</span>
+              <span style={{ color, fontWeight: 700 }}>•</span>
               <p style={{ fontSize: 12, color: '#374151', margin: 0, lineHeight: 1.6 }}>{tip}</p>
             </div>
           ))}
@@ -116,298 +140,233 @@ function RecipeContent({ data }: { data: RecipeSummary }) {
   )
 }
 
-function EnglishContent({ data }: { data: EnglishSummary }) {
-  return (
-    <>
-      {data.expressions.length > 0 && (
-        <div style={{ marginBottom: 20 }}>
-          <SectionTitle>주요 표현</SectionTitle>
-          {data.expressions.map((expr, i) => (
-            <div key={i} style={{ background: '#eff6ff', borderRadius: 8, padding: '10px 12px', marginBottom: 8, borderLeft: '3px solid #2563eb' }}>
-              <p style={{ fontSize: 13, fontWeight: 700, color: '#1e40af', margin: '0 0 4px' }}>{expr.text}</p>
-              <p style={{ fontSize: 12, color: '#1f2937', margin: '0 0 3px' }}>{expr.meaning}</p>
-              {expr.note && <p style={{ fontSize: 11, color: '#6b7280', margin: 0, fontStyle: 'italic' }}>{expr.note}</p>}
-            </div>
-          ))}
-        </div>
-      )}
-      {data.vocabulary.length > 0 && (
-        <div style={{ marginBottom: 20 }}>
-          <SectionTitle>단어장</SectionTitle>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
-            {data.vocabulary.map((v, i) => (
-              <div key={i} style={{ background: '#f9fafb', borderRadius: 8, padding: '8px 10px', border: '1px solid #e5e7eb' }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: '#1e40af' }}>{v.word}</div>
-                <div style={{ fontSize: 10, color: '#6b7280' }}>{v.pronunciation}</div>
-                <div style={{ fontSize: 11, color: '#374151', marginTop: 2 }}>{v.meaning}</div>
+function StructuredContent({ data, category, color, bg, border }: { data: any; category: string; color: string; bg: string; border: string }) {
+  if (category === 'recipe') return <RecipeContent data={data as RecipeSummary} color={color} bg={bg} border={border} />
+
+  if (category === 'english') {
+    const d = data as EnglishSummary
+    return (
+      <>
+        {d.expressions.length > 0 && (
+          <div style={{ marginBottom: 20 }}>
+            <SectionHeader title="핵심 표현" color={color} bg={bg} border={border} />
+            {d.expressions.map((e, i) => (
+              <div key={i} style={{ background: bg, borderRadius: 8, padding: '8px 12px', marginBottom: 8, borderLeft: `3px solid ${color}` }}>
+                <p style={{ fontSize: 13, fontWeight: 700, color, margin: '0 0 3px' }}>{e.text}</p>
+                <p style={{ fontSize: 12, color: '#374151', margin: '0 0 2px' }}>{e.meaning}</p>
+                {e.note && <p style={{ fontSize: 11, color: '#6b7280', margin: 0 }}>{e.note}</p>}
               </div>
             ))}
           </div>
-        </div>
-      )}
-      {data.patterns.length > 0 && (
-        <div>
-          <SectionTitle>핵심 패턴</SectionTitle>
-          {data.patterns.map((p, i) => (
-            <div key={i} style={{ display: 'flex', gap: 6, marginBottom: 5 }}>
-              <span style={{ color: '#2563eb', fontWeight: 700 }}>•</span>
-              <p style={{ fontSize: 12, color: '#374151', margin: 0 }}>{p}</p>
+        )}
+        {d.vocabulary.length > 0 && (
+          <div>
+            <SectionHeader title="주요 단어" color={color} bg={bg} border={border} />
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+              {d.vocabulary.map((v, i) => (
+                <div key={i} style={{ background: '#f9fafb', borderRadius: 8, padding: '8px 10px', border: '1px solid #e5e7eb' }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color }}>{v.word}</div>
+                  <div style={{ fontSize: 10, color: '#6b7280' }}>{v.pronunciation}</div>
+                  <div style={{ fontSize: 11, color: '#374151', marginTop: 2 }}>{v.meaning}</div>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
-      )}
-      {data.cultural_context && (
-        <div style={{ marginTop: 16, background: '#f0fdf4', borderRadius: 8, padding: '10px 12px' }}>
-          <p style={{ fontSize: 11, color: '#374151', margin: 0, fontStyle: 'italic' }}>🌍 {data.cultural_context}</p>
-        </div>
-      )}
-    </>
-  )
-}
+          </div>
+        )}
+      </>
+    )
+  }
 
-function LearningContent({ data }: { data: LearningSummary }) {
-  return (
-    <>
-      {data.concepts.length > 0 && (
+  if (category === 'learning') {
+    const d = data as LearningSummary
+    return (
+      <>
         <div style={{ marginBottom: 20 }}>
-          <SectionTitle>핵심 개념</SectionTitle>
-          {data.concepts.map((c, i) => (
-            <div key={i} style={{ marginBottom: 10, paddingLeft: 10, borderLeft: '3px solid #7c3aed' }}>
-              <p style={{ fontSize: 13, fontWeight: 700, color: '#4c1d95', margin: '0 0 3px' }}>{c.name}</p>
+          <SectionHeader title="핵심 개념" color={color} bg={bg} border={border} />
+          {d.concepts.map((c, i) => (
+            <div key={i} style={{ marginBottom: 10, paddingLeft: 10, borderLeft: `3px solid ${color}` }}>
+              <p style={{ fontSize: 13, fontWeight: 700, color, margin: '0 0 3px' }}>{c.name}</p>
               <p style={{ fontSize: 12, color: '#374151', margin: 0, lineHeight: 1.6 }}>{c.desc}</p>
             </div>
           ))}
         </div>
-      )}
-      {data.key_points.length > 0 && (
-        <div style={{ marginBottom: 20 }}>
-          <SectionTitle>핵심 포인트</SectionTitle>
-          {data.key_points.map((kp, i) => (
+        <div>
+          <SectionHeader title="핵심 포인트" color={color} bg={bg} border={border} />
+          {d.key_points.map((kp, i) => (
             <div key={i} style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
-              <span style={{ color: '#7c3aed', fontWeight: 700, flexShrink: 0 }}>✓</span>
+              <span style={{ color, fontWeight: 700 }}>✓</span>
               <p style={{ fontSize: 12, color: '#374151', margin: 0, lineHeight: 1.6 }}>{kp.point}</p>
             </div>
           ))}
         </div>
-      )}
-      {data.examples.length > 0 && (
-        <div>
-          <SectionTitle>예시</SectionTitle>
-          {data.examples.map((ex, i) => (
-            <div key={i} style={{ background: '#f5f3ff', borderRadius: 8, padding: '8px 12px', marginBottom: 6 }}>
-              <p style={{ fontSize: 12, color: '#374151', margin: 0 }}>{ex.desc}</p>
-            </div>
-          ))}
-        </div>
-      )}
-    </>
-  )
-}
+      </>
+    )
+  }
 
-function NewsContent({ data }: { data: NewsSummary }) {
-  const w = data.five_w
-  return (
-    <>
-      <div style={{ background: '#f9fafb', borderRadius: 10, padding: '12px 14px', marginBottom: 16, border: '1px solid #e5e7eb' }}>
-        <p style={{ fontSize: 13, color: '#1f2937', margin: 0, lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>{data.three_line_summary}</p>
-      </div>
-      <div style={{ marginBottom: 20 }}>
-        <SectionTitle>육하원칙</SectionTitle>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
-          {[
-            { label: '누가', value: w.who },
-            { label: '언제', value: w.when },
-            { label: '어디서', value: w.where },
-            { label: '무엇을', value: w.what },
-            { label: '어떻게', value: w.how },
-            { label: '왜', value: w.why },
-          ].map(item => (
-            <div key={item.label} style={{ background: '#f9fafb', borderRadius: 8, padding: '8px 10px', border: '1px solid #e5e7eb' }}>
-              <div style={{ fontSize: 9, color: '#9ca3af', fontWeight: 600, marginBottom: 2 }}>{item.label}</div>
-              <div style={{ fontSize: 11, color: '#1f2937', lineHeight: 1.5 }}>{item.value}</div>
-            </div>
-          ))}
+  if (category === 'news') {
+    const d = data as NewsSummary
+    const w = d.five_w
+    return (
+      <>
+        <div style={{ background: '#f9fafb', borderRadius: 10, padding: '12px 14px', marginBottom: 20, border: `1px solid ${border}`, borderLeft: `4px solid ${color}` }}>
+          <p style={{ fontSize: 13, color: '#1f2937', margin: 0, lineHeight: 1.7 }}>{d.three_line_summary}</p>
         </div>
-      </div>
-      {data.implications.length > 0 && (
-        <div>
-          <SectionTitle>시사점</SectionTitle>
-          {data.implications.map((imp, i) => (
-            <div key={i} style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
-              <span style={{ color: '#374151', fontWeight: 700 }}>→</span>
-              <p style={{ fontSize: 12, color: '#374151', margin: 0, lineHeight: 1.6 }}>{imp.point}</p>
-            </div>
-          ))}
-        </div>
-      )}
-    </>
-  )
-}
-
-function SelfDevContent({ data }: { data: SelfDevSummary }) {
-  return (
-    <>
-      <div style={{ background: '#ecfdf5', borderRadius: 10, padding: '14px 16px', marginBottom: 20, border: '1px solid #a7f3d0' }}>
-        <p style={{ fontSize: 11, color: '#6b7280', margin: '0 0 4px', fontWeight: 600 }}>핵심 메시지</p>
-        <p style={{ fontSize: 14, fontWeight: 700, color: '#065f46', margin: 0, lineHeight: 1.6 }}>"{data.core_message.text}"</p>
-      </div>
-      {data.insights.length > 0 && (
         <div style={{ marginBottom: 20 }}>
-          <SectionTitle>인사이트</SectionTitle>
-          {data.insights.map((ins, i) => (
-            <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 8, alignItems: 'flex-start' }}>
-              <span style={{ width: 20, height: 20, borderRadius: '50%', background: '#059669', color: '#fff', fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                {i + 1}
-              </span>
-              <p style={{ fontSize: 12, color: '#374151', margin: 0, lineHeight: 1.6 }}>{ins.point}</p>
-            </div>
-          ))}
-        </div>
-      )}
-      {data.checklist.length > 0 && (
-        <div style={{ marginBottom: 20 }}>
-          <SectionTitle>실천 체크리스트</SectionTitle>
-          {data.checklist.map((item, i) => (
-            <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 6, alignItems: 'flex-start' }}>
-              <span style={{ width: 14, height: 14, border: '1.5px solid #059669', borderRadius: 3, flexShrink: 0, marginTop: 1 }} />
-              <p style={{ fontSize: 12, color: '#374151', margin: 0 }}>{item}</p>
-            </div>
-          ))}
-        </div>
-      )}
-      {data.quotes.length > 0 && (
-        <div>
-          <SectionTitle>인상 깊은 문구</SectionTitle>
-          {data.quotes.map((q, i) => (
-            <div key={i} style={{ background: '#f0fdf4', borderRadius: 8, padding: '10px 12px', marginBottom: 8, borderLeft: '3px solid #059669' }}>
-              <p style={{ fontSize: 12, color: '#065f46', margin: 0, fontStyle: 'italic', lineHeight: 1.6 }}>"{q.text}"</p>
-            </div>
-          ))}
-        </div>
-      )}
-    </>
-  )
-}
-
-function TravelContent({ data }: { data: TravelSummary }) {
-  return (
-    <>
-      {data.places.length > 0 && (
-        <div style={{ marginBottom: 20 }}>
-          <SectionTitle>추천 장소</SectionTitle>
-          {data.places.map((place, i) => (
-            <div key={i} style={{ background: '#ecfeff', borderRadius: 10, padding: '10px 12px', marginBottom: 8, border: '1px solid #a5f3fc' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
-                <p style={{ fontSize: 13, fontWeight: 700, color: '#0e7490', margin: 0 }}>{place.name}</p>
-                {place.price && <span style={{ fontSize: 10, color: '#6b7280', background: '#f0fdfe', padding: '1px 6px', borderRadius: 99 }}>{place.price}</span>}
-              </div>
-              <p style={{ fontSize: 12, color: '#374151', margin: '0 0 4px', lineHeight: 1.6 }}>{place.desc}</p>
-              {place.tip && <p style={{ fontSize: 11, color: '#0891b2', margin: 0, fontStyle: 'italic' }}>💡 {place.tip}</p>}
-            </div>
-          ))}
-        </div>
-      )}
-      {data.route && (
-        <div style={{ marginBottom: 16 }}>
-          <SectionTitle>추천 동선</SectionTitle>
-          <div style={{ background: '#f9fafb', borderRadius: 8, padding: '10px 12px' }}>
-            <p style={{ fontSize: 12, color: '#374151', margin: 0, lineHeight: 1.6 }}>{data.route}</p>
-          </div>
-        </div>
-      )}
-      {data.practical_info.length > 0 && (
-        <div style={{ marginBottom: 16 }}>
-          <SectionTitle>실용 정보</SectionTitle>
-          {data.practical_info.map((info, i) => (
-            <div key={i} style={{ display: 'flex', gap: 6, marginBottom: 5 }}>
-              <span style={{ color: '#0891b2', fontWeight: 700 }}>•</span>
-              <p style={{ fontSize: 12, color: '#374151', margin: 0 }}>{info}</p>
-            </div>
-          ))}
-        </div>
-      )}
-      {data.warnings.length > 0 && (
-        <div>
-          <SectionTitle>⚠️ 주의사항</SectionTitle>
-          {data.warnings.map((w, i) => (
-            <div key={i} style={{ display: 'flex', gap: 6, marginBottom: 5 }}>
-              <span style={{ color: '#dc2626', fontWeight: 700 }}>!</span>
-              <p style={{ fontSize: 12, color: '#374151', margin: 0 }}>{w}</p>
-            </div>
-          ))}
-        </div>
-      )}
-    </>
-  )
-}
-
-function StoryContent({ data }: { data: StorySummary }) {
-  return (
-    <>
-      <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-        <span style={{ background: '#fce7f3', color: '#be185d', borderRadius: 99, padding: '3px 10px', fontSize: 11, fontWeight: 600 }}>{data.genre}</span>
-      </div>
-      {data.characters.length > 0 && (
-        <div style={{ marginBottom: 20 }}>
-          <SectionTitle>주요 인물</SectionTitle>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-            {data.characters.map((char, i) => (
-              <div key={i} style={{ background: '#fdf2f8', borderRadius: 8, padding: '8px 10px', border: '1px solid #f9a8d4' }}>
-                <p style={{ fontSize: 12, fontWeight: 700, color: '#be185d', margin: '0 0 3px' }}>{char.name}</p>
-                <p style={{ fontSize: 11, color: '#6b7280', margin: 0 }}>{char.desc}</p>
+          <SectionHeader title="육하원칙" color={color} bg={bg} border={border} />
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+            {[{label:'누가',value:w.who},{label:'언제',value:w.when},{label:'어디서',value:w.where},{label:'무엇을',value:w.what},{label:'어떻게',value:w.how},{label:'왜',value:w.why}].map(item => (
+              <div key={item.label} style={{ background: '#f9fafb', borderRadius: 8, padding: '8px 10px', border: '1px solid #e5e7eb' }}>
+                <div style={{ fontSize: 9, color: '#9ca3af', fontWeight: 600, marginBottom: 2 }}>{item.label}</div>
+                <div style={{ fontSize: 11, color: '#1f2937', lineHeight: 1.5 }}>{item.value}</div>
               </div>
             ))}
           </div>
         </div>
-      )}
-      {data.timeline.length > 0 && (
-        <div style={{ marginBottom: 20 }}>
-          <SectionTitle>스토리 타임라인</SectionTitle>
-          {data.timeline.map((item, i) => (
-            <div key={i} style={{ display: 'flex', gap: 10, marginBottom: 10, alignItems: 'flex-start' }}>
-              <div style={{ width: 22, height: 22, borderRadius: '50%', background: '#db2777', color: '#fff', fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                {i + 1}
+        {d.implications.length > 0 && (
+          <div>
+            <SectionHeader title="시사점" color={color} bg={bg} border={border} />
+            {d.implications.map((imp, i) => (
+              <div key={i} style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
+                <span style={{ color, fontWeight: 700 }}>→</span>
+                <p style={{ fontSize: 12, color: '#374151', margin: 0, lineHeight: 1.6 }}>{imp.point}</p>
               </div>
+            ))}
+          </div>
+        )}
+      </>
+    )
+  }
+
+  if (category === 'selfdev') {
+    const d = data as SelfDevSummary
+    return (
+      <>
+        <div style={{ background: bg, borderRadius: 10, padding: '14px 16px', marginBottom: 20, border: `1px solid ${border}` }}>
+          <p style={{ fontSize: 11, color: '#6b7280', margin: '0 0 4px', fontWeight: 600 }}>핵심 메시지</p>
+          <p style={{ fontSize: 14, fontWeight: 700, color, margin: 0, lineHeight: 1.6 }}>"{d.core_message.text}"</p>
+        </div>
+        <div style={{ marginBottom: 20 }}>
+          <SectionHeader title="주요 인사이트" color={color} bg={bg} border={border} />
+          {d.insights.map((ins, i) => (
+            <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 8, alignItems: 'flex-start' }}>
+              <span style={{ width: 20, height: 20, borderRadius: '50%', background: color, color: '#fff', fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{i + 1}</span>
+              <p style={{ fontSize: 12, color: '#374151', margin: 0, lineHeight: 1.6 }}>{ins.point}</p>
+            </div>
+          ))}
+        </div>
+        {d.checklist.length > 0 && (
+          <div>
+            <SectionHeader title="실천 체크리스트" color={color} bg={bg} border={border} />
+            {d.checklist.map((item, i) => (
+              <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 6, alignItems: 'flex-start' }}>
+                <span style={{ width: 14, height: 14, border: `1.5px solid ${color}`, borderRadius: 3, flexShrink: 0, marginTop: 1 }} />
+                <p style={{ fontSize: 12, color: '#374151', margin: 0 }}>{item}</p>
+              </div>
+            ))}
+          </div>
+        )}
+      </>
+    )
+  }
+
+  if (category === 'travel') {
+    const d = data as TravelSummary
+    return (
+      <>
+        <div style={{ marginBottom: 20 }}>
+          <SectionHeader title="추천 장소" color={color} bg={bg} border={border} />
+          {d.places.map((place, i) => (
+            <div key={i} style={{ background: bg, borderRadius: 10, padding: '10px 12px', marginBottom: 8, border: `1px solid ${border}` }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
+                <p style={{ fontSize: 13, fontWeight: 700, color, margin: 0 }}>{place.name}</p>
+                {place.price && <span style={{ fontSize: 10, color: '#6b7280' }}>{place.price}</span>}
+              </div>
+              <p style={{ fontSize: 12, color: '#374151', margin: '0 0 4px', lineHeight: 1.6 }}>{place.desc}</p>
+              {place.tip && <p style={{ fontSize: 11, color, margin: 0 }}>💡 {place.tip}</p>}
+            </div>
+          ))}
+        </div>
+        {d.route && (
+          <div style={{ marginBottom: 16 }}>
+            <SectionHeader title="추천 동선" color={color} bg={bg} border={border} />
+            <p style={{ fontSize: 12, color: '#374151', margin: 0, lineHeight: 1.6, background: '#f9fafb', padding: '10px 12px', borderRadius: 8 }}>{d.route}</p>
+          </div>
+        )}
+      </>
+    )
+  }
+
+  if (category === 'story') {
+    const d = data as StorySummary
+    return (
+      <>
+        {d.characters.length > 0 && (
+          <div style={{ marginBottom: 20 }}>
+            <SectionHeader title="주요 인물" color={color} bg={bg} border={border} />
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+              {d.characters.map((char, i) => (
+                <div key={i} style={{ background: bg, borderRadius: 8, padding: '8px 10px', border: `1px solid ${border}` }}>
+                  <p style={{ fontSize: 12, fontWeight: 700, color, margin: '0 0 3px' }}>{char.name}</p>
+                  <p style={{ fontSize: 11, color: '#6b7280', margin: 0 }}>{char.desc}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        <div style={{ marginBottom: 20 }}>
+          <SectionHeader title="스토리 전개" color={color} bg={bg} border={border} />
+          {d.timeline.map((item, i) => (
+            <div key={i} style={{ display: 'flex', gap: 10, marginBottom: 10, alignItems: 'flex-start' }}>
+              <div style={{ width: 22, height: 22, borderRadius: '50%', background: color, color: '#fff', fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{i + 1}</div>
               <p style={{ fontSize: 12, color: '#374151', margin: 0, lineHeight: 1.6, flex: 1 }}>{item.event}</p>
             </div>
           ))}
         </div>
-      )}
-      {data.conclusion && (
-        <div>
-          <SectionTitle>🎬 결말 / 핵심 요약</SectionTitle>
-          <div style={{ background: '#fdf2f8', borderRadius: 10, padding: '12px 14px', border: '1px solid #f9a8d4' }}>
-            <p style={{ fontSize: 12, color: '#374151', margin: 0, lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>{data.conclusion}</p>
+        {d.conclusion && (
+          <div>
+            <SectionHeader title="🎬 결말 / 핵심 요약" color={color} bg={bg} border={border} />
+            <div style={{ background: bg, borderRadius: 10, padding: '12px 14px', border: `1px solid ${border}` }}>
+              <p style={{ fontSize: 12, color: '#374151', margin: 0, lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>{d.conclusion}</p>
+            </div>
           </div>
-        </div>
-      )}
-    </>
-  )
+        )}
+      </>
+    )
+  }
+
+  return null
 }
 
 // ─────────────────────────────────────────
 // 메인 템플릿
 // ─────────────────────────────────────────
-export default function SummaryPdfTemplate({ data }: Props) {
+export default function SummaryPdfTemplate({ data, qrDataUrl }: Props) {
   const cat = CATEGORY_META[data.category] ?? CATEGORY_META.news
   const summary = data.summary as any
   const tags: string[] = summary?.square_meta?.tags ?? []
+  const videoUrl = `https://www.youtube.com/watch?v=${data.videoId}`
+
+  const formatDate = (iso?: string) => {
+    if (!iso) return ''
+    return new Date(iso).toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' })
+  }
 
   return (
-    <div
-      style={{
-        width: 794,
-        background: '#ffffff',
-        fontFamily: '"Pretendard", "Apple SD Gothic Neo", "Noto Sans KR", Arial, sans-serif',
-        color: '#1f2937',
-        padding: '40px 44px 32px',
-        boxSizing: 'border-box',
-      }}
-    >
-      {/* ── 헤더: 썸네일 + 기본 정보 ── */}
-      <div style={{ display: 'flex', gap: 20, marginBottom: 28, alignItems: 'flex-start' }}>
-        {/* 썸네일 */}
-        <div style={{ flexShrink: 0, width: 260, borderRadius: 12, overflow: 'hidden', border: '1px solid #e5e7eb' }}>
+    <div style={{
+      width: 794,
+      background: '#ffffff',
+      fontFamily: '"Apple SD Gothic Neo", "Noto Sans KR", Arial, sans-serif',
+      color: '#1f2937',
+      padding: '40px 44px 36px',
+      boxSizing: 'border-box',
+    }}>
+
+      {/* ── 헤더 상단 바 ── */}
+      <div style={{ height: 5, background: `linear-gradient(90deg, ${cat.color}, ${cat.color}88)`, borderRadius: 99, marginBottom: 28 }} />
+
+      {/* ── 썸네일 + 기본 정보 ── */}
+      <div style={{ display: 'flex', gap: 20, marginBottom: 24, alignItems: 'flex-start' }}>
+        <div style={{ flexShrink: 0, width: 240, borderRadius: 12, overflow: 'hidden', border: `1px solid ${cat.border}` }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={`/api/proxy-image?url=${encodeURIComponent(data.thumbnail)}`}
@@ -417,62 +376,78 @@ export default function SummaryPdfTemplate({ data }: Props) {
           />
         </div>
 
-        {/* 기본 정보 */}
-        <div style={{ flex: 1, minWidth: 0, paddingTop: 4 }}>
-          {/* 카테고리 뱃지 */}
-          <span style={{
-            display: 'inline-block', fontSize: 10, fontWeight: 700,
-            color: cat.color, background: cat.bg,
-            borderRadius: 99, padding: '3px 10px', marginBottom: 8,
-          }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <span style={{ display: 'inline-block', fontSize: 10, fontWeight: 700, color: cat.color, background: cat.bg, borderRadius: 99, padding: '3px 10px', marginBottom: 8, border: `1px solid ${cat.border}` }}>
             {cat.icon} {cat.label}
           </span>
-
-          {/* 제목 */}
           <h1 style={{ fontSize: 17, fontWeight: 800, color: '#111827', margin: '0 0 6px', lineHeight: 1.4 }}>
             {data.title}
           </h1>
+          <p style={{ fontSize: 12, color: '#6b7280', margin: '0 0 10px' }}>{data.channel}</p>
 
-          {/* 채널 */}
-          <p style={{ fontSize: 12, color: '#6b7280', margin: '0 0 12px' }}>{data.channel}</p>
+          {/* 날짜 */}
+          <div style={{ display: 'flex', gap: 14, marginBottom: 10 }}>
+            {data.videoPublishedAt && (
+              <span style={{ fontSize: 10, color: '#9ca3af' }}>📅 업로드 {formatDate(data.videoPublishedAt)}</span>
+            )}
+            {data.summarizedAt && (
+              <span style={{ fontSize: 10, color: '#9ca3af' }}>🤖 요약 {formatDate(data.summarizedAt)}</span>
+            )}
+          </div>
 
           {/* 태그 */}
           {tags.length > 0 && (
-            <div style={{ marginBottom: 12 }}>
+            <div>
               {tags.slice(0, 5).map((tag, i) => (
-                <Tag key={i} text={`#${tag}`} color={cat.color} bg={cat.bg} />
+                <span key={i} style={{ display: 'inline-block', fontSize: 10, color: cat.color, background: cat.bg, borderRadius: 99, padding: '2px 8px', marginRight: 4, marginBottom: 4, fontWeight: 600, border: `1px solid ${cat.border}` }}>
+                  #{tag}
+                </span>
               ))}
             </div>
-          )}
-
-          {/* topic / vibe */}
-          {summary?.square_meta?.topic_cluster && (
-            <p style={{ fontSize: 11, color: '#9ca3af', margin: 0 }}>
-              {summary.square_meta.topic_cluster}
-              {summary.square_meta.vibe ? ` · ${summary.square_meta.vibe}` : ''}
-            </p>
           )}
         </div>
       </div>
 
       {/* ── 구분선 ── */}
-      <div style={{ height: 1, background: '#e5e7eb', marginBottom: 24 }} />
+      <div style={{ height: 1, background: '#e5e7eb', marginBottom: 28 }} />
 
-      {/* ── 카테고리별 요약 콘텐츠 ── */}
-      <div>
-        {data.category === 'recipe'  && <RecipeContent  data={summary as RecipeSummary} />}
-        {data.category === 'english' && <EnglishContent data={summary as EnglishSummary} />}
-        {data.category === 'learning'&& <LearningContent data={summary as LearningSummary} />}
-        {data.category === 'news'    && <NewsContent    data={summary as NewsSummary} />}
-        {data.category === 'selfdev' && <SelfDevContent data={summary as SelfDevSummary} />}
-        {data.category === 'travel'  && <TravelContent  data={summary as TravelSummary} />}
-        {data.category === 'story'   && <StoryContent   data={summary as StorySummary} />}
+      {/* ── 보고서형 서술 요약 ── */}
+      {data.reportSummary ? (
+        <div style={{ marginBottom: 32 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+            <div style={{ width: 4, height: 20, background: cat.color, borderRadius: 99 }} />
+            <h2 style={{ fontSize: 15, fontWeight: 800, color: '#111827', margin: 0 }}>영상 분석 보고서</h2>
+          </div>
+          <ReportSection markdown={data.reportSummary} color={cat.color} bg={cat.bg} border={cat.border} />
+        </div>
+      ) : null}
+
+      {/* ── 구분선 ── */}
+      <div style={{ height: 1, background: '#e5e7eb', marginBottom: 28 }} />
+
+      {/* ── 카테고리별 구조화 요약 ── */}
+      <div style={{ marginBottom: 32 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+          <div style={{ width: 4, height: 20, background: cat.color, borderRadius: 99 }} />
+          <h2 style={{ fontSize: 15, fontWeight: 800, color: '#111827', margin: 0 }}>상세 정리</h2>
+        </div>
+        <StructuredContent data={summary} category={data.category} color={cat.color} bg={cat.bg} border={cat.border} />
       </div>
 
-      {/* ── 하단 브랜딩 ── */}
-      <div style={{ marginTop: 32, paddingTop: 14, borderTop: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <span style={{ fontSize: 12, fontWeight: 700, color: '#ea580c' }}>🎬 Next Curator</span>
-        <span style={{ fontSize: 10, color: '#d1d5db' }}>nextcurator.vercel.app</span>
+      {/* ── 하단 브랜딩 + QR ── */}
+      <div style={{ marginTop: 24, paddingTop: 16, borderTop: '2px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+        <div>
+          <div style={{ fontSize: 14, fontWeight: 800, color: cat.color, marginBottom: 4 }}>🎬 Next Curator</div>
+          <div style={{ fontSize: 10, color: '#9ca3af', marginBottom: 2 }}>nextcurator.vercel.app</div>
+          <div style={{ fontSize: 10, color: '#9ca3af' }}>{videoUrl}</div>
+        </div>
+        {qrDataUrl && (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={qrDataUrl} alt="QR" style={{ width: 72, height: 72, border: `1px solid ${cat.border}`, borderRadius: 8, padding: 4 }} />
+            <span style={{ fontSize: 9, color: '#9ca3af' }}>원본 영상 보기</span>
+          </div>
+        )}
       </div>
     </div>
   )

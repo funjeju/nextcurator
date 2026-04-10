@@ -227,6 +227,10 @@ export async function updateSummaryVisibility(id: string, isPublic: boolean): Pr
   await updateDoc(doc(db, 'saved_summaries', id), { isPublic })
 }
 
+export async function updateSummaryFolder(id: string, folderId: string): Promise<void> {
+  await updateDoc(doc(db, 'saved_summaries', id), { folderId })
+}
+
 export async function getSavedSummaryBySessionId(userId: string, sessionId: string): Promise<SavedSummary | null> {
   const q = query(
     collection(db, 'saved_summaries'),
