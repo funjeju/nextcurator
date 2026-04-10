@@ -3,10 +3,11 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // summaries: 분석 결과 - 누구나 읽기 가능, 쓰기는 서버(Admin SDK)만
+    // summaries: 분석 결과 - 누구나 읽기, 생성은 허용(API 서버에서 클라이언트 SDK로 저장), 수정/삭제 금지
     match /summaries/{sessionId} {
       allow read: if true;
-      allow write: if false;
+      allow create: if true;
+      allow update, delete: if false;
     }
 
     // saved_summaries: 사용자가 저장한 항목

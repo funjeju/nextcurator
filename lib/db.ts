@@ -18,12 +18,15 @@ export interface SavedSummary {
   sessionId: string
   videoId: string
   title: string
+  channel?: string
   thumbnail: string
   category: string
+  summary?: any       // AI 요약 내용 (결과 페이지 복원에 필요)
   square_meta?: any
   isPublic: boolean
   createdAt: any
   transcript?: string
+  transcriptSource?: string
   likeCount?: number
   viewCount?: number
 }
@@ -83,11 +86,14 @@ export async function saveSummary({
   sessionId,
   videoId,
   title,
+  channel,
   thumbnail,
   category,
+  summary,
   square_meta,
   isPublic = false,
-  transcript
+  transcript,
+  transcriptSource,
 }: Partial<SavedSummary>): Promise<string> {
   const savedRef = collection(db, 'saved_summaries')
   const docRef = await addDoc(savedRef, {
@@ -98,11 +104,14 @@ export async function saveSummary({
     sessionId,
     videoId,
     title,
+    channel: channel || '',
     thumbnail,
     category,
+    summary,           // AI 요약 내용 저장
     square_meta,
     isPublic,
     transcript,
+    transcriptSource: transcriptSource || '',
     likeCount: 0,
     viewCount: 0,
     createdAt: serverTimestamp()

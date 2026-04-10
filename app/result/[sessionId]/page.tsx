@@ -49,6 +49,7 @@ export default function ResultPage() {
   const router = useRouter()
   const { user } = useAuth()
   const [data, setData] = useState<SummarizeResponse | null>(null)
+  const [loadError, setLoadError] = useState(false)
   const [savedItem, setSavedItem] = useState<SavedSummary | null>(null)
   const playerRef = useRef<YT.Player | null>(null)
   const [showSaveModal, setShowSaveModal] = useState(false)
@@ -97,40 +98,75 @@ export default function ResultPage() {
   // 데이터 로드
   useEffect(() => {
     const fetchSummary = async () => {
+      // 1. sessionStorage 우선
       const stored = sessionStorage.getItem(`summary_${sessionId}`)
-      if (stored) { setData(JSON.parse(stored)); return }
+      if (stored) {
+        try { setData(JSON.parse(stored)); return } catch { /* 손상된 캐시 무시 */ }
+      }
 
       try {
         const { db } = await import('@/lib/firebase')
         const { doc, getDoc, collection, query, where, getDocs } = await import('firebase/firestore')
 
-        const docRef = doc(db, 'summaries', sessionId as string)
-        const docSnap = await getDoc(docRef)
+        // 2. summaries 컬렉션 직접 조회 (요약 직후 저장되는 곳)
+        const docSnap = await getDoc(doc(db, 'summaries', sessionId as string))
         if (docSnap.exists()) {
-          const fetchedData = docSnap.data() as SummarizeResponse
-          sessionStorage.setItem(`summary_${sessionId}`, JSON.stringify(fetchedData))
-          setData(fetchedData)
+          const fetched = docSnap.data() as SummarizeResponse
+          sessionStorage.setItem(`summary_${sessionId}`, JSON.stringify(fetched))
+          setData(fetched)
           return
         }
 
-        const q = query(collection(db, 'saved_summaries'), where('sessionId', '==', sessionId as string))
-        const snapshot = await getDocs(q)
-        if (!snapshot.empty) {
-          const saved = snapshot.docs[0].data()
+        // 3. saved_summaries에서 공개 항목 조회
+        //    비로그인 유저도 접근 가능하도록 isPublic 조건 명시
+        const publicSnap = await getDocs(
+          query(
+            collection(db, 'saved_summaries'),
+            where('sessionId', '==', sessionId as string),
+            where('isPublic', '==', true)
+          )
+        )
+        if (!publicSnap.empty) {
+          const saved = publicSnap.docs[0].data()
           if (saved.summary) {
-            const fetchedData = saved as unknown as SummarizeResponse
-            sessionStorage.setItem(`summary_${sessionId}`, JSON.stringify(fetchedData))
-            setData(fetchedData)
+            const fetched = saved as unknown as SummarizeResponse
+            sessionStorage.setItem(`summary_${sessionId}`, JSON.stringify(fetched))
+            setData(fetched)
             return
           }
         }
+
+        // 4. 로그인 유저라면 본인의 비공개 항목도 조회
+        const currentUid = user?.uid
+        if (currentUid) {
+          const privateSnap = await getDocs(
+            query(
+              collection(db, 'saved_summaries'),
+              where('sessionId', '==', sessionId as string),
+              where('userId', '==', currentUid)
+            )
+          )
+          if (!privateSnap.empty) {
+            const saved = privateSnap.docs[0].data()
+            if (saved.summary) {
+              const fetched = saved as unknown as SummarizeResponse
+              sessionStorage.setItem(`summary_${sessionId}`, JSON.stringify(fetched))
+              setData(fetched)
+              return
+            }
+          }
+        }
+
+        // 모든 경로 실패 → 에러 표시 (즉시 리다이렉트 하지 않음)
+        console.warn('[Result] 요약 데이터를 찾을 수 없음:', sessionId)
+        setLoadError(true)
       } catch (e) {
-        console.error('Failed to fetch summary from DB:', e)
+        console.error('[Result] 데이터 로드 오류:', e)
+        setLoadError(true)
       }
-      router.push('/')
     }
     fetchSummary()
-  }, [sessionId, router])
+  }, [sessionId, user])
 
   // 댓글 로드
   useEffect(() => {
@@ -231,6 +267,33 @@ export default function ResultPage() {
       }
     } catch (e) { if ((e as Error).name !== 'AbortError') console.error(e) }
     finally { setSharing(false) }
+  }
+
+  if (loadError) {
+    return (
+      <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col items-center justify-center gap-6 px-4">
+        <span className="text-5xl">😵</span>
+        <h1 className="text-xl font-bold text-white">요약을 불러오지 못했습니다</h1>
+        <p className="text-zinc-400 text-sm text-center max-w-xs">
+          요약 데이터가 만료됐거나 존재하지 않습니다.<br/>
+          저장된 항목은 마이페이지에서, 공개 항목은 스퀘어에서 확인하세요.
+        </p>
+        <div className="flex gap-3">
+          <button
+            onClick={() => router.push('/')}
+            className="px-5 py-2.5 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-xl text-sm transition-colors"
+          >
+            새 영상 요약하기
+          </button>
+          <button
+            onClick={() => router.push('/mypage')}
+            className="px-5 py-2.5 bg-[#32302e] border border-white/10 text-white rounded-xl text-sm hover:bg-[#3d3a38] transition-colors"
+          >
+            마이페이지
+          </button>
+        </div>
+      </div>
+    )
   }
 
   if (!data) return null

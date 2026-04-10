@@ -114,9 +114,8 @@ export async function POST(req: NextRequest) {
       transcriptSource,
     }
 
-    // Firestore에 백그라운드 저장 (마이페이지/스퀘어 클릭 시 불러오기 위해)
-    // 저장 실패해도 클라이언트 응답에는 영향 없음
-    saveResultToFirestore(sessionId, result).catch(() => {})
+    // Firestore 저장 후 응답 반환 (fire-and-forget은 Vercel에서 저장 완료 전 종료됨)
+    await saveResultToFirestore(sessionId, result)
 
     return NextResponse.json(result)
   } catch (error) {

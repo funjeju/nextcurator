@@ -53,10 +53,13 @@ export default function SaveModal({ data, onClose }: { data: any, onClose: () =>
         sessionId: data.sessionId,
         videoId: data.videoId,
         title: data.title,
+        channel: data.channel,
         thumbnail: data.thumbnail,
         category: data.category,
+        summary: data.summary,
         square_meta: data.summary?.square_meta,
         transcript: data.transcript,
+        transcriptSource: data.transcriptSource,
         isPublic
       }))
       alert('저장되었습니다!')
@@ -85,10 +88,13 @@ export default function SaveModal({ data, onClose }: { data: any, onClose: () =>
         sessionId: data.sessionId,
         videoId: data.videoId,
         title: data.title,
+        channel: data.channel,
         thumbnail: data.thumbnail,
         category: data.category,
+        summary: data.summary,
         square_meta: data.summary?.square_meta,
         transcript: data.transcript,
+        transcriptSource: data.transcriptSource,
         isPublic
       }))
       alert('저장되었습니다!')
