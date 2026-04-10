@@ -4,36 +4,44 @@ import { classifyCategory, generateSummary } from '@/lib/claude'
 import { randomUUID } from 'crypto'
 
 async function getVideoInfo(videoId: string) {
-  try {
-    const res = await fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`)
-    if (res.ok) {
-      const data = await res.json()
-      return {
-        title: data.title as string,
-        channel: data.author_name as string,
-        thumbnail: `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`,
-      }
-    }
-  } catch {
-    // Fall back to API
-  }
-
   const apiKey = process.env.YOUTUBE_API_KEY
+  let title = '', channel = '', publishedAt = ''
+
+  // YouTube Data API v3 — title, channel, publishedAt 모두 가져옴
   if (apiKey) {
-    const apiRes = await fetch(`https://www.googleapis.com/youtube/v3/videos?id=${videoId}&part=snippet&key=${apiKey}`)
-    if (apiRes.ok) {
-      const data = await apiRes.json()
-      if (data.items && data.items.length > 0) {
-        return {
-          title: data.items[0].snippet.title,
-          channel: data.items[0].snippet.channelTitle,
-          thumbnail: `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`,
+    try {
+      const apiRes = await fetch(`https://www.googleapis.com/youtube/v3/videos?id=${videoId}&part=snippet&key=${apiKey}`)
+      if (apiRes.ok) {
+        const data = await apiRes.json()
+        if (data.items && data.items.length > 0) {
+          title = data.items[0].snippet.title
+          channel = data.items[0].snippet.channelTitle
+          publishedAt = data.items[0].snippet.publishedAt ?? ''
         }
       }
-    }
+    } catch { /* fall through */ }
   }
 
-  throw new Error('VIDEO_NOT_FOUND')
+  // title/channel 없으면 oEmbed로 보완
+  if (!title || !channel) {
+    try {
+      const res = await fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`)
+      if (res.ok) {
+        const data = await res.json()
+        if (!title) title = data.title as string
+        if (!channel) channel = data.author_name as string
+      }
+    } catch { /* ignore */ }
+  }
+
+  if (!title) throw new Error('VIDEO_NOT_FOUND')
+
+  return {
+    title,
+    channel,
+    thumbnail: `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`,
+    publishedAt,
+  }
 }
 
 // 결과를 Firestore에 저장 - 마이페이지/스퀘어에서 클릭 시 불러오기 위해
@@ -130,6 +138,8 @@ export async function POST(req: NextRequest) {
       summary,
       transcript,
       transcriptSource,
+      videoPublishedAt: videoInfo.publishedAt || '',
+      summarizedAt: new Date().toISOString(),
     }
 
     // Firestore 저장 후 응답 반환 (fire-and-forget은 Vercel에서 저장 완료 전 종료됨)

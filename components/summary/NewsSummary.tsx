@@ -6,13 +6,17 @@ import { Separator } from '@/components/ui/separator'
 import { Table, TableBody, TableCell, TableRow } from '@/components/ui/table'
 import TimestampBadge from './TimestampBadge'
 import CopyButton from './CopyButton'
+import CommentBubble from '@/components/comments/CommentBubble'
 
 interface Props {
   data: NewsSummaryType
   onSeek: (ts: string) => void
+  sessionId?: string
+  commentCounts?: Record<string, number>
+  onComment?: (segmentId: string, segmentLabel: string) => void
 }
 
-export default function NewsSummary({ data, onSeek }: Props) {
+export default function NewsSummary({ data, onSeek, sessionId, commentCounts = {} }: Props) {
   const fiveW = [
     { key: '누가', value: data.five_w.who },
     { key: '언제', value: data.five_w.when },
@@ -34,47 +38,74 @@ export default function NewsSummary({ data, onSeek }: Props) {
         <CopyButton text={copyText} />
       </CardHeader>
       <CardContent className="flex flex-col gap-6">
-        <div className="bg-zinc-800 rounded-lg p-4 border-l-4 border-blue-500">
-          <h3 className="text-blue-400 font-semibold text-sm mb-2">📌 3줄 요약</h3>
+
+        {/* 3줄 요약 */}
+        <div id="seg-three-line" className="bg-zinc-800 rounded-lg p-4 border-l-4 border-blue-500">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-blue-400 font-semibold text-sm">📌 3줄 요약</h3>
+            {sessionId && (
+              <CommentBubble sessionId={sessionId} segmentId="three-line" segmentLabel="3줄 요약" initialCount={commentCounts['three-line'] ?? 0} />
+            )}
+          </div>
           <p className="text-zinc-200 text-sm leading-relaxed">{data.three_line_summary}</p>
         </div>
 
+        {/* 육하원칙 */}
         <div>
           <h3 className="text-zinc-300 font-semibold mb-3">육하원칙</h3>
           <Table>
             <TableBody>
-              {fiveW.map((item) => (
-                <TableRow key={item.key} className="border-zinc-800">
-                  <TableCell className="text-zinc-400 font-medium w-20">{item.key}</TableCell>
-                  <TableCell className="text-zinc-200">{item.value}</TableCell>
-                </TableRow>
-              ))}
+              {fiveW.map((item, i) => {
+                const segId = `fivew-${i}`
+                return (
+                  <TableRow key={item.key} id={`seg-${segId}`} className="border-zinc-800">
+                    <TableCell className="text-zinc-400 font-medium w-20">{item.key}</TableCell>
+                    <TableCell className="text-zinc-200">{item.value}</TableCell>
+                    <TableCell className="w-10 text-right">
+                      {sessionId && (
+                        <CommentBubble sessionId={sessionId} segmentId={segId} segmentLabel={`육하원칙 - ${item.key}`} initialCount={commentCounts[segId] ?? 0} />
+                      )}
+                    </TableCell>
+                  </TableRow>
+                )
+              })}
             </TableBody>
           </Table>
         </div>
 
         <Separator className="bg-zinc-800" />
 
-        <div>
+        {/* 배경 */}
+        <div id="seg-background">
           <div className="flex items-center gap-2 mb-2">
             <h3 className="text-zinc-300 font-semibold">배경</h3>
             <TimestampBadge timestamp={data.background.timestamp} onSeek={onSeek} />
+            {sessionId && (
+              <CommentBubble sessionId={sessionId} segmentId="background" segmentLabel="배경" initialCount={commentCounts['background'] ?? 0} />
+            )}
           </div>
           <p className="text-zinc-300 text-sm">{data.background.desc}</p>
         </div>
 
+        {/* 시사점 */}
         {data.implications.length > 0 && (
           <>
             <Separator className="bg-zinc-800" />
             <div>
               <h3 className="text-zinc-300 font-semibold mb-3">시사점</h3>
               <div className="flex flex-col gap-2">
-                {data.implications.map((imp, i) => (
-                  <div key={i} className="flex items-start gap-3">
-                    <TimestampBadge timestamp={imp.timestamp} onSeek={onSeek} />
-                    <p className="text-zinc-200 text-sm">{imp.point}</p>
-                  </div>
-                ))}
+                {data.implications.map((imp, i) => {
+                  const segId = `implication-${i}`
+                  return (
+                    <div key={i} id={`seg-${segId}`} className="flex items-start gap-3">
+                      <TimestampBadge timestamp={imp.timestamp} onSeek={onSeek} />
+                      <p className="text-zinc-200 text-sm flex-1">{imp.point}</p>
+                      {sessionId && (
+                        <CommentBubble sessionId={sessionId} segmentId={segId} segmentLabel={`시사점 ${i + 1}`} initialCount={commentCounts[segId] ?? 0} />
+                      )}
+                    </div>
+                  )
+                })}
               </div>
             </div>
           </>

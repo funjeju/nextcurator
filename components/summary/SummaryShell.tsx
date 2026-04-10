@@ -13,26 +13,28 @@ interface Props {
   category: Category
   summary: SummaryData
   onSeek: (ts: string) => void
-  onComment?: (segmentId: string, segmentLabel: string) => void
+  sessionId?: string
   commentCounts?: Record<string, number>
+  // kept for CommentSection scroll behavior (action bar comment icon)
+  onComment?: (segmentId: string, segmentLabel: string) => void
 }
 
-export default function SummaryShell({ category, summary, onSeek, onComment, commentCounts }: Props) {
-  const commentProps = { onComment, commentCounts }
+export default function SummaryShell({ category, summary, onSeek, sessionId, commentCounts, onComment }: Props) {
+  const sharedProps = { sessionId, commentCounts, onComment }
   switch (category) {
     case 'recipe':
-      return <RecipeSummary data={summary as RecipeSummaryType} onSeek={onSeek} {...commentProps} />
+      return <RecipeSummary data={summary as RecipeSummaryType} onSeek={onSeek} {...sharedProps} />
     case 'english':
-      return <EnglishSummary data={summary as EnglishSummaryType} onSeek={onSeek} {...commentProps} />
+      return <EnglishSummary data={summary as EnglishSummaryType} onSeek={onSeek} {...sharedProps} />
     case 'learning':
-      return <LearningSummary data={summary as LearningSummaryType} onSeek={onSeek} {...commentProps} />
+      return <LearningSummary data={summary as LearningSummaryType} onSeek={onSeek} {...sharedProps} />
     case 'news':
-      return <NewsSummary data={summary as NewsSummaryType} onSeek={onSeek} {...commentProps} />
+      return <NewsSummary data={summary as NewsSummaryType} onSeek={onSeek} {...sharedProps} />
     case 'selfdev':
-      return <SelfDevSummary data={summary as SelfDevSummaryType} onSeek={onSeek} {...commentProps} />
+      return <SelfDevSummary data={summary as SelfDevSummaryType} onSeek={onSeek} {...sharedProps} />
     case 'travel':
-      return <TravelSummary data={summary as TravelSummaryType} onSeek={onSeek} {...commentProps} />
+      return <TravelSummary data={summary as TravelSummaryType} onSeek={onSeek} {...sharedProps} />
     case 'story':
-      return <StorySummary data={summary as StorySummaryType} onSeek={onSeek} {...commentProps} />
+      return <StorySummary data={summary as StorySummaryType} onSeek={onSeek} {...sharedProps} />
   }
 }

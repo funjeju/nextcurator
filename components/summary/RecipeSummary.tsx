@@ -10,8 +10,9 @@ import CommentBubble from '@/components/comments/CommentBubble'
 interface Props {
   data: RecipeSummaryType
   onSeek: (ts: string) => void
-  onComment?: (segmentId: string, segmentLabel: string) => void
+  sessionId?: string
   commentCounts?: Record<string, number>
+  onComment?: (segmentId: string, segmentLabel: string) => void
 }
 
 const GROUP_COLORS: Record<string, string> = {
@@ -27,7 +28,7 @@ function groupColor(group: string) {
   return GROUP_COLORS[group] ?? 'text-zinc-400'
 }
 
-export default function RecipeSummary({ data, onSeek, onComment, commentCounts = {} }: Props) {
+export default function RecipeSummary({ data, onSeek, sessionId, commentCounts = {} }: Props) {
   const groups = data.ingredient_groups ??
     (data.ingredients ? [{ group: '재료', items: data.ingredients }] : [])
 
@@ -86,12 +87,12 @@ export default function RecipeSummary({ data, onSeek, onComment, commentCounts =
                     <div className="flex items-center gap-2 flex-wrap">
                       <TimestampBadge timestamp={step.timestamp} onSeek={onSeek} />
                       {step.tip && <span className="text-emerald-400 text-xs">★</span>}
-                      {onComment && (
+                      {sessionId && (
                         <CommentBubble
+                          sessionId={sessionId}
                           segmentId={segId}
                           segmentLabel={segLabel}
-                          count={commentCounts[segId] ?? 0}
-                          onComment={onComment}
+                          initialCount={commentCounts[segId] ?? 0}
                         />
                       )}
                     </div>
@@ -117,12 +118,12 @@ export default function RecipeSummary({ data, onSeek, onComment, commentCounts =
                   return (
                     <li key={i} id={`seg-${segId}`} className="flex items-start justify-between gap-2 transition-all rounded-lg p-1 -m-1">
                       <span className="text-zinc-300 text-sm">• {tip}</span>
-                      {onComment && (
+                      {sessionId && (
                         <CommentBubble
+                          sessionId={sessionId}
                           segmentId={segId}
                           segmentLabel={segLabel}
-                          count={commentCounts[segId] ?? 0}
-                          onComment={onComment}
+                          initialCount={commentCounts[segId] ?? 0}
                         />
                       )}
                     </li>

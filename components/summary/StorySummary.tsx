@@ -7,11 +7,12 @@ import CommentBubble from '@/components/comments/CommentBubble'
 interface Props {
   data: StorySummaryType
   onSeek: (ts: string) => void
-  onComment?: (segmentId: string, segmentLabel: string) => void
+  sessionId?: string
   commentCounts?: Record<string, number>
+  onComment?: (segmentId: string, segmentLabel: string) => void
 }
 
-export default function StorySummary({ data, onSeek, onComment, commentCounts = {} }: Props) {
+export default function StorySummary({ data, onSeek, sessionId, commentCounts = {} }: Props) {
   return (
     <div className="space-y-6 bg-[#32302e]/80 backdrop-blur-3xl p-6 md:p-8 rounded-[32px] border border-white/5 shadow-2xl mt-4">
 
@@ -56,12 +57,12 @@ export default function StorySummary({ data, onSeek, onComment, commentCounts = 
                   <div className="flex-1 p-4 rounded-2xl bg-[#23211f] border border-white/5 flex flex-col gap-2 hover:bg-[#3d3a38] transition-colors">
                     <div className="flex items-center gap-2 flex-wrap">
                       <TimestampBadge timestamp={item.timestamp} onSeek={onSeek} />
-                      {onComment && (
+                      {sessionId && (
                         <CommentBubble
+                          sessionId={sessionId}
                           segmentId={segId}
                           segmentLabel={segLabel}
-                          count={commentCounts[segId] ?? 0}
-                          onComment={onComment}
+                          initialCount={commentCounts[segId] ?? 0}
                         />
                       )}
                     </div>
@@ -84,12 +85,12 @@ export default function StorySummary({ data, onSeek, onComment, commentCounts = 
             <p className="text-[#a4a09c] text-[15px] leading-relaxed whitespace-pre-wrap flex-1">
               {data.conclusion}
             </p>
-            {onComment && (
+            {sessionId && (
               <CommentBubble
+                sessionId={sessionId}
                 segmentId="conclusion"
                 segmentLabel="결말/핵심 요약"
-                count={commentCounts['conclusion'] ?? 0}
-                onComment={onComment}
+                initialCount={commentCounts['conclusion'] ?? 0}
               />
             )}
           </div>

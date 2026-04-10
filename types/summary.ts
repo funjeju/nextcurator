@@ -84,4 +84,6 @@ export interface SummarizeResponse {
   summary: SummaryData
   transcript?: string
   transcriptSource?: string
+  videoPublishedAt?: string   // YouTube 업로드 날짜 (ISO 8601)
+  summarizedAt?: string       // 요약 생성 일시 (ISO 8601)
 }

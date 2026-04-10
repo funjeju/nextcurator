@@ -29,25 +29,22 @@ export default function Header({ title = '🎬 Next Curator' }: { title?: string
           </nav>
         </div>
 
-        <div className="flex items-center gap-3">
-          <div className="flex md:hidden items-center gap-3 text-xs">
-            <Link href="/mypage" className="text-[#a4a09c] hover:text-white whitespace-nowrap">My</Link>
-            <Link href="/square" className="text-[#a4a09c] hover:text-white whitespace-nowrap">Square</Link>
-          </div>
+        <div className="flex items-center gap-1.5">
+          <Link href="/mypage" className="md:hidden text-[11px] text-[#a4a09c] hover:text-white whitespace-nowrap px-1.5 py-1 rounded-md hover:bg-white/5 transition-colors">My</Link>
+          <Link href="/square" className="md:hidden text-[11px] text-[#a4a09c] hover:text-white whitespace-nowrap px-1.5 py-1 rounded-md hover:bg-white/5 transition-colors">Square</Link>
 
           {user ? (
-            <div className="flex items-center gap-2">
-              {/* 쪽지 아이콘 */}
-              <Link href="/messages" className="relative text-[#a4a09c] hover:text-white transition-colors">
-                <span className="text-base">✉️</span>
+            <div className="flex items-center gap-1.5 ml-1 pl-1.5 border-l border-white/10 md:border-none md:ml-0 md:pl-0">
+              <Link href="/messages" className="relative text-[#a4a09c] hover:text-white transition-colors p-1">
+                <span className="text-sm">✉️</span>
                 {unread > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-orange-500 text-white text-[8px] font-bold w-3.5 h-3.5 rounded-full flex items-center justify-center">
+                  <span className="absolute top-0 right-0 bg-orange-500 text-white text-[7px] font-bold w-3 h-3 rounded-full flex items-center justify-center">
                     {unread > 9 ? '9+' : unread}
                   </span>
                 )}
               </Link>
-              <img src={user.photoURL || ''} alt="Profile" className="w-7 h-7 rounded-full border border-white/10" />
-              <button onClick={signOut} className="text-xs text-orange-400 hover:text-orange-300 whitespace-nowrap">
+              <img src={user.photoURL || ''} alt="Profile" className="w-6 h-6 rounded-full border border-white/10" />
+              <button onClick={signOut} className="text-[11px] text-orange-400 hover:text-orange-300 whitespace-nowrap">
                 Logout
               </button>
             </div>

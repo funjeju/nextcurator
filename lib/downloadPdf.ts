@@ -11,6 +11,11 @@ export async function downloadPdf(element: HTMLElement, filename: string) {
     backgroundColor: '#ffffff',
     logging: false,
     imageTimeout: 10000,
+    onclone: (clonedDoc) => {
+      // PDF 템플릿은 인라인 스타일만 사용하므로 전역 CSS(Tailwind 등) 제거
+      // → html2canvas가 lab() 같은 미지원 색상 함수 파싱 시도 자체를 방지
+      clonedDoc.querySelectorAll('link[rel="stylesheet"], style').forEach(el => el.remove())
+    },
   })
 
   const imgData = canvas.toDataURL('image/png')
