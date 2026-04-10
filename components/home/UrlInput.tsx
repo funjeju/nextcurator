@@ -18,6 +18,7 @@ const CATEGORIES = [
   { id: 'selfdev', icon: '💪', label: '자기계발' },
   { id: 'travel',  icon: '🧳', label: '여행' },
   { id: 'story',   icon: '🍿', label: '스토리' },
+  { id: 'tips',    icon: '💡', label: '팁' },
 ]
 
 const GUEST_STORAGE_KEY = 'nextcurator_guest_usage'

@@ -1,7 +1,7 @@
 import { SummarizeResponse } from '@/types/summary'
 import {
   RecipeSummary, EnglishSummary, LearningSummary,
-  NewsSummary, SelfDevSummary, TravelSummary, StorySummary,
+  NewsSummary, SelfDevSummary, TravelSummary, StorySummary, TipsSummary,
 } from '@/types/summary'
 
 interface Props {
@@ -17,6 +17,7 @@ const CATEGORY_META: Record<string, { label: string; icon: string; color: string
   selfdev: { label: '자기계발', icon: '💪', color: '#059669', bg: '#ecfdf5', border: '#a7f3d0' },
   travel:  { label: '여행',    icon: '🧳', color: '#0891b2', bg: '#ecfeff', border: '#a5f3fc' },
   story:   { label: '스토리',  icon: '🍿', color: '#db2777', bg: '#fdf2f8', border: '#f9a8d4' },
+  tips:    { label: '팁',     icon: '💡', color: '#d97706', bg: '#fffbeb', border: '#fde68a' },
 }
 
 // ─── 섹션 헤더 ───
@@ -327,6 +328,51 @@ function StructuredContent({ data, category, color, bg, border }: { data: any; c
             <SectionHeader title="🎬 결말 / 핵심 요약" color={color} bg={bg} border={border} />
             <div style={{ background: bg, borderRadius: 10, padding: '12px 14px', border: `1px solid ${border}` }}>
               <p style={{ fontSize: 12, color: '#374151', margin: 0, lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>{d.conclusion}</p>
+            </div>
+          </div>
+        )}
+      </>
+    )
+  }
+
+  if (category === 'tips') {
+    const d = data as TipsSummary
+    return (
+      <>
+        <div style={{ marginBottom: 16, background: '#fffbeb', borderRadius: 10, padding: '12px 14px', border: '1px solid #fde68a' }}>
+          <p style={{ fontSize: 11, color: '#92400e', fontWeight: 700, margin: '0 0 3px' }}>💬 핵심 메시지</p>
+          <p style={{ fontSize: 13, color: '#374151', margin: 0, lineHeight: 1.7, fontWeight: 600 }}>&quot;{d.key_message}&quot;</p>
+        </div>
+        <div style={{ marginBottom: 20 }}>
+          <SectionHeader title={`팁 ${d.tips.length}가지`} color={color} bg={bg} border={border} />
+          {d.tips.map((tip) => (
+            <div key={tip.number} style={{ display: 'flex', gap: 10, marginBottom: 10, alignItems: 'flex-start' }}>
+              <div style={{ width: 22, height: 22, borderRadius: '50%', background: color, color: '#fff', fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{tip.number}</div>
+              <div style={{ flex: 1 }}>
+                <p style={{ fontSize: 12, fontWeight: 700, color: '#1f2937', margin: '0 0 2px' }}>{tip.title}</p>
+                <p style={{ fontSize: 11, color: '#6b7280', margin: 0, lineHeight: 1.6 }}>{tip.desc}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+        {d.top3.length > 0 && (
+          <div style={{ marginBottom: 16 }}>
+            <SectionHeader title="⭐ 바로 적용할 Top 3" color={color} bg={bg} border={border} />
+            {d.top3.map((item, i) => (
+              <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 6, alignItems: 'flex-start' }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color, minWidth: 14 }}>{i + 1}.</span>
+                <p style={{ fontSize: 12, color: '#374151', margin: 0, lineHeight: 1.6 }}>{item}</p>
+              </div>
+            ))}
+          </div>
+        )}
+        {d.tools.length > 0 && (
+          <div>
+            <SectionHeader title="🛠️ 준비물 / 도구" color={color} bg={bg} border={border} />
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {d.tools.map((tool, i) => (
+                <span key={i} style={{ fontSize: 11, padding: '3px 10px', borderRadius: 99, background: bg, border: `1px solid ${border}`, color }}>{tool}</span>
+              ))}
             </div>
           </div>
         )}

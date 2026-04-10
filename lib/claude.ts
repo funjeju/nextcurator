@@ -25,7 +25,7 @@ const summaryModel = genAI.getGenerativeModel({
   },
 })
 
-const VALID_CATEGORIES: Category[] = ['recipe', 'english', 'learning', 'news', 'selfdev', 'travel', 'story']
+const VALID_CATEGORIES: Category[] = ['recipe', 'english', 'learning', 'news', 'selfdev', 'travel', 'story', 'tips']
 
 function extractJSON(text: string): unknown {
   // 마크다운 코드블록 제거 후 JSON 추출
@@ -43,7 +43,8 @@ export async function classifyCategory(transcript: string): Promise<{ category: 
 - "news": news, current events, reviews, analysis, information
 - "selfdev": self-improvement, motivation, psychology, meditation
 - "travel": travel vlogs, place introductions, tourism, local food tours
-- "story": drama, movies, storytelling, gossip, narrative content focusing on a sequence of events.
+- "story": drama, movies, storytelling, gossip, narrative content focusing on a sequence of events
+- "tips": life hacks, how-to guides, productivity tips, daily life tips, saving money, home organization, app/tool usage tips. Use this when the video presents a numbered or listed set of practical tips/hacks.
 
 Transcript:
 ${transcript.slice(0, 2000)}
@@ -89,6 +90,11 @@ const SUMMARY_PROMPTS: Record<Category, string> = {
   story: `다음 스토리/드라마/가십 영상 자막을 분석해서 스토리 전개를 알 수 있는 타임라인 중심 JSON을 만드세요.
 
 {"square_meta":{"tags":["키워드1","키워드2","키워드3","키워드4","키워드5"],"topic_cluster":"대주제","vibe":"분위기"},"title":"스토리/드라마 제목 또는 주제","genre":"장르(코미디/드라마/미스터리/썰 등)","characters":[{"name":"등장인물(가명/호칭 등)","desc":"특징이나 역할"}],"timeline":[{"timestamp":"MM:SS","event":"이 시간대에 벌어진 주요 사건"}],"conclusion":"결말 또는 요약"}`,
+
+  tips: `다음 팁/하우투 영상 자막을 분석해서 팁 카드 JSON을 만드세요.
+각 팁은 번호와 함께 명확한 제목과 실용적인 설명으로 정리하세요. difficulty는 "쉬움"/"보통"/"어려움" 중 하나.
+
+{"square_meta":{"tags":["키워드1","키워드2","키워드3","키워드4","키워드5"],"topic_cluster":"대주제","vibe":"분위기"},"topic":"팁 주제 (예: 집 정리 꿀팁)","tips":[{"number":1,"title":"팁 제목","desc":"팁 설명 1~2문장","timestamp":"MM:SS","difficulty":"쉬움"}],"key_message":"영상을 관통하는 핵심 메시지 한 줄","tools":["필요한 도구나 앱 등 (없으면 빈 배열)"],"top3":["지금 당장 적용할 수 있는 팁 요약 1","지금 당장 적용할 수 있는 팁 요약 2","지금 당장 적용할 수 있는 팁 요약 3"]}`,
 }
 
 export async function generateSummary(category: Category, transcript: string): Promise<SummaryData> {
@@ -125,6 +131,7 @@ export async function generateReportSummary(
     selfdev:  '자기계발 영상',
     travel:   '여행 영상',
     story:    '스토리/드라마 영상',
+    tips:     '팁/라이프핵 영상',
   }
 
   const result = await reportModel.generateContent(`당신은 전문 콘텐츠 에디터입니다.

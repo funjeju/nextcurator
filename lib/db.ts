@@ -285,6 +285,125 @@ export async function getPublicSummaries(): Promise<SavedSummary[]> {
   })
 }
 
+// 친구가 저장한 전체 요약 (공개 + 비공개)
+export async function getAllSavedSummariesByUser(userId: string): Promise<SavedSummary[]> {
+  const q = query(collection(db, 'saved_summaries'), where('userId', '==', userId))
+  const snap = await getDocs(q)
+  const summaries = snap.docs.map(d => ({ id: d.id, ...d.data() }) as SavedSummary)
+  return summaries.sort((a, b) => {
+    const aT = a.createdAt?.toMillis?.() ?? 0
+    const bT = b.createdAt?.toMillis?.() ?? 0
+    return bT - aT
+  })
+}
+
+// ─────────────────────────────────────────────
+// 친구 요청 / 친구 관계
+// ─────────────────────────────────────────────
+
+export interface FriendRequest {
+  id: string
+  fromUid: string
+  fromDisplayName: string
+  fromPhotoURL: string
+  toUid: string
+  status: 'pending' | 'accepted' | 'rejected'
+  createdAt: any
+}
+
+function friendshipId(uid1: string, uid2: string): string {
+  return [uid1, uid2].sort().join('_')
+}
+
+export async function sendFriendRequest(
+  fromUid: string,
+  fromDisplayName: string,
+  fromPhotoURL: string,
+  toUid: string
+): Promise<void> {
+  const fid = friendshipId(fromUid, toUid)
+  // 이미 친구거나 요청 중이면 무시
+  const existing = await getDoc(doc(db, 'friendships', fid))
+  if (existing.exists()) return
+
+  const reqRef = doc(db, 'friend_requests', `${fromUid}_${toUid}`)
+  await setDoc(reqRef, {
+    fromUid,
+    fromDisplayName,
+    fromPhotoURL,
+    toUid,
+    status: 'pending',
+    createdAt: serverTimestamp(),
+  })
+}
+
+export async function getFriendStatus(
+  myUid: string,
+  otherUid: string
+): Promise<'none' | 'pending_sent' | 'pending_received' | 'friends'> {
+  const fid = friendshipId(myUid, otherUid)
+  const friendSnap = await getDoc(doc(db, 'friendships', fid))
+  if (friendSnap.exists()) return 'friends'
+
+  const sentSnap = await getDoc(doc(db, 'friend_requests', `${myUid}_${otherUid}`))
+  if (sentSnap.exists() && sentSnap.data().status === 'pending') return 'pending_sent'
+
+  const receivedSnap = await getDoc(doc(db, 'friend_requests', `${otherUid}_${myUid}`))
+  if (receivedSnap.exists() && receivedSnap.data().status === 'pending') return 'pending_received'
+
+  return 'none'
+}
+
+export async function acceptFriendRequest(fromUid: string, myUid: string): Promise<void> {
+  const reqRef = doc(db, 'friend_requests', `${fromUid}_${myUid}`)
+  const fid = friendshipId(fromUid, myUid)
+  await Promise.all([
+    updateDoc(reqRef, { status: 'accepted' }),
+    setDoc(doc(db, 'friendships', fid), {
+      uids: [fromUid, myUid],
+      createdAt: serverTimestamp(),
+    }),
+  ])
+}
+
+export async function rejectFriendRequest(fromUid: string, myUid: string): Promise<void> {
+  await updateDoc(doc(db, 'friend_requests', `${fromUid}_${myUid}`), { status: 'rejected' })
+}
+
+export async function cancelFriendRequest(myUid: string, toUid: string): Promise<void> {
+  await deleteDoc(doc(db, 'friend_requests', `${myUid}_${toUid}`))
+}
+
+export async function removeFriend(myUid: string, otherUid: string): Promise<void> {
+  const fid = friendshipId(myUid, otherUid)
+  await deleteDoc(doc(db, 'friendships', fid))
+}
+
+export async function getPendingFriendRequests(myUid: string): Promise<FriendRequest[]> {
+  const q = query(
+    collection(db, 'friend_requests'),
+    where('toUid', '==', myUid),
+    where('status', '==', 'pending')
+  )
+  const snap = await getDocs(q)
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }) as FriendRequest)
+    .sort((a, b) => (b.createdAt?.toMillis?.() ?? 0) - (a.createdAt?.toMillis?.() ?? 0))
+}
+
+export async function getFriends(myUid: string): Promise<{ uid: string; displayName: string; photoURL: string }[]> {
+  const q = query(collection(db, 'friendships'), where('uids', 'array-contains', myUid))
+  const snap = await getDocs(q)
+  const otherUids = snap.docs.map(d => {
+    const uids = d.data().uids as string[]
+    return uids.find(u => u !== myUid) ?? ''
+  }).filter(Boolean)
+
+  const profiles = await Promise.all(otherUids.map(uid => getUserProfile(uid)))
+  return profiles
+    .filter(Boolean)
+    .map(p => ({ uid: p!.uid, displayName: p!.displayName, photoURL: p!.photoURL }))
+}
+
 export async function getSavedSummariesByFolder(userId: string, folderId: string): Promise<SavedSummary[]> {
   const savedRef = collection(db, 'saved_summaries')
   let q;

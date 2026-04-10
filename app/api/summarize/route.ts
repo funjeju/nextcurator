@@ -3,6 +3,101 @@ import { extractVideoId, getTranscript, getVideoMeta } from '@/lib/transcript'
 import { classifyCategory, generateSummary, generateReportSummary } from '@/lib/claude'
 import { randomUUID } from 'crypto'
 
+const PROJECT_ID = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID!
+const API_KEY = process.env.NEXT_PUBLIC_FIREBASE_API_KEY!
+const FIRESTORE_BASE = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents`
+
+// Firestore REST API로 저장 (Client SDK는 Vercel 서버리스에서 불안정)
+async function saveToFirestore(sessionId: string, data: Record<string, unknown>): Promise<void> {
+  const fields = toFirestoreFields(data)
+  const url = `${FIRESTORE_BASE}/summaries/${sessionId}?key=${API_KEY}`
+  const res = await fetch(url, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fields }),
+  })
+  if (!res.ok) {
+    const err = await res.text()
+    throw new Error(`Firestore write failed: ${err}`)
+  }
+}
+
+// Firestore REST API로 videoId 캐시 조회
+async function getCachedByVideoId(videoId: string): Promise<Record<string, unknown> | null> {
+  const url = `${FIRESTORE_BASE}:runQuery?key=${API_KEY}`
+  const body = {
+    structuredQuery: {
+      from: [{ collectionId: 'summaries' }],
+      where: {
+        fieldFilter: {
+          field: { fieldPath: 'videoId' },
+          op: 'EQUAL',
+          value: { stringValue: videoId },
+        },
+      },
+      orderBy: [{ field: { fieldPath: 'createdAt' }, direction: 'DESCENDING' }],
+      limit: 1,
+    },
+  }
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) return null
+  const results = await res.json()
+  // 결과 없으면 [{ }] 또는 document 없는 객체 반환
+  if (!results[0]?.document?.fields) return null
+  return fromFirestoreFields(results[0].document.fields)
+}
+
+// JS 값 → Firestore REST 필드 변환
+function toFirestoreFields(obj: unknown): Record<string, unknown> {
+  if (obj === null || obj === undefined) return {}
+  if (typeof obj !== 'object' || Array.isArray(obj)) return {}
+  const out: Record<string, unknown> = {}
+  for (const [k, v] of Object.entries(obj as Record<string, unknown>)) {
+    out[k] = toFirestoreValue(v)
+  }
+  return out
+}
+
+function toFirestoreValue(v: unknown): unknown {
+  if (v === null || v === undefined) return { nullValue: null }
+  if (typeof v === 'string') return { stringValue: v }
+  if (typeof v === 'number') return { integerValue: String(v) }
+  if (typeof v === 'boolean') return { booleanValue: v }
+  if (Array.isArray(v)) return { arrayValue: { values: v.map(toFirestoreValue) } }
+  if (typeof v === 'object') return { mapValue: { fields: toFirestoreFields(v) } }
+  return { stringValue: String(v) }
+}
+
+// Firestore REST 필드 → JS 값 변환
+function fromFirestoreFields(fields: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {}
+  for (const [k, v] of Object.entries(fields)) {
+    out[k] = fromFirestoreValue(v as Record<string, unknown>)
+  }
+  return out
+}
+
+function fromFirestoreValue(v: Record<string, unknown>): unknown {
+  if ('stringValue' in v) return v.stringValue
+  if ('integerValue' in v) return Number(v.integerValue)
+  if ('doubleValue' in v) return Number(v.doubleValue)
+  if ('booleanValue' in v) return v.booleanValue
+  if ('nullValue' in v) return null
+  if ('arrayValue' in v) {
+    const arr = v.arrayValue as { values?: unknown[] }
+    return (arr.values ?? []).map(i => fromFirestoreValue(i as Record<string, unknown>))
+  }
+  if ('mapValue' in v) {
+    const map = v.mapValue as { fields?: Record<string, unknown> }
+    return map.fields ? fromFirestoreFields(map.fields) : {}
+  }
+  return null
+}
+
 async function getVideoInfo(videoId: string) {
   const apiKey = process.env.YOUTUBE_API_KEY
   let title = '', channel = '', publishedAt = ''
@@ -44,20 +139,6 @@ async function getVideoInfo(videoId: string) {
   }
 }
 
-// 결과를 Firestore에 저장 - 마이페이지/스퀘어에서 클릭 시 불러오기 위해
-async function saveResultToFirestore(sessionId: string, result: object) {
-  try {
-    const { db } = await import('@/lib/firebase')
-    const { doc, setDoc } = await import('firebase/firestore')
-    const { serverTimestamp } = await import('firebase/firestore')
-    await setDoc(doc(db, 'summaries', sessionId), { ...result, createdAt: serverTimestamp() })
-    console.log('[Summarize] ✅ Saved to Firestore summaries:', sessionId)
-  } catch (e) {
-    console.warn('[Summarize] ⚠️ Failed to save to Firestore:', e)
-    // 저장 실패해도 클라이언트 응답은 정상 반환
-  }
-}
-
 export async function POST(req: NextRequest) {
   try {
     const { url, category: userCategory } = await req.json()
@@ -74,15 +155,10 @@ export async function POST(req: NextRequest) {
     // 같은 영상이 이미 DB에 있으면 캐시 반환 (userCategory 지정 시 재분석)
     if (!userCategory) {
       try {
-        const { db } = await import('@/lib/firebase')
-        const { collection, query, where, getDocs, orderBy, limit } = await import('firebase/firestore')
-        const cached = await getDocs(
-          query(collection(db, 'summaries'), where('videoId', '==', videoId), orderBy('createdAt', 'desc'), limit(1))
-        )
-        if (!cached.empty) {
+        const cached = await getCachedByVideoId(videoId)
+        if (cached) {
           console.log('[Summarize] ✅ Cache hit for videoId:', videoId)
-          const data = cached.docs[0].data()
-          return NextResponse.json(data)
+          return NextResponse.json(cached)
         }
       } catch (e) {
         console.warn('[Summarize] ⚠️ Cache check failed, proceeding fresh:', e)
@@ -146,8 +222,13 @@ export async function POST(req: NextRequest) {
       reportSummary: reportSummary || '',
     }
 
-    // Firestore 저장 후 응답 반환 (fire-and-forget은 Vercel에서 저장 완료 전 종료됨)
-    await saveResultToFirestore(sessionId, result)
+    // Firestore REST API로 저장 (Client SDK보다 Vercel 서버리스에서 안정적)
+    try {
+      await saveToFirestore(sessionId, result)
+      console.log('[Summarize] ✅ Saved to Firestore summaries:', sessionId)
+    } catch (e) {
+      console.warn('[Summarize] ⚠️ Failed to save to Firestore:', e)
+    }
 
     return NextResponse.json(result)
   } catch (error) {

@@ -5,7 +5,12 @@ import Link from 'next/link'
 import Header from '@/components/common/Header'
 import { getLocalUserId } from '@/lib/user'
 import { formatRelativeDate } from '@/lib/formatDate'
-import { getUserFolders, getSavedSummariesByFolder, deleteSavedSummary, updateSummaryFolder, Folder, SavedSummary } from '@/lib/db'
+import {
+  getUserFolders, getSavedSummariesByFolder, deleteSavedSummary, updateSummaryFolder,
+  getPendingFriendRequests, acceptFriendRequest, rejectFriendRequest, getFriends,
+  Folder, SavedSummary, FriendRequest,
+} from '@/lib/db'
+import { useAuth } from '@/providers/AuthProvider'
 
 const CATEGORY_LABEL: Record<string, string> = {
   recipe: '🍳 요리',
@@ -15,6 +20,7 @@ const CATEGORY_LABEL: Record<string, string> = {
   selfdev: '💪 자기계발',
   travel: '🧳 여행',
   story: '🍿 스토리',
+  tips: '💡 팁',
 }
 
 // ── 폴더 이동 드롭다운 ──
@@ -92,7 +98,127 @@ function FolderMoveDropdown({
   )
 }
 
+// ── 친구 요청 탭 ──
+function FriendsTab({ myUid }: { myUid: string }) {
+  const [requests, setRequests] = useState<FriendRequest[]>([])
+  const [friends, setFriends] = useState<{ uid: string; displayName: string; photoURL: string }[]>([])
+  const [loading, setLoading] = useState(true)
+  const [actingId, setActingId] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!myUid) return
+    Promise.all([
+      getPendingFriendRequests(myUid),
+      getFriends(myUid),
+    ]).then(([reqs, friendList]) => {
+      setRequests(reqs)
+      setFriends(friendList)
+    }).catch(console.error).finally(() => setLoading(false))
+  }, [myUid])
+
+  const handleAccept = async (req: FriendRequest) => {
+    setActingId(req.id)
+    try {
+      await acceptFriendRequest(req.fromUid, myUid)
+      setRequests(prev => prev.filter(r => r.id !== req.id))
+      setFriends(prev => [...prev, { uid: req.fromUid, displayName: req.fromDisplayName, photoURL: req.fromPhotoURL }])
+    } catch { alert('오류가 발생했습니다.') }
+    finally { setActingId(null) }
+  }
+
+  const handleReject = async (req: FriendRequest) => {
+    setActingId(req.id)
+    try {
+      await rejectFriendRequest(req.fromUid, myUid)
+      setRequests(prev => prev.filter(r => r.id !== req.id))
+    } catch { alert('오류가 발생했습니다.') }
+    finally { setActingId(null) }
+  }
+
+  if (loading) return (
+    <div className="flex justify-center py-20">
+      <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-orange-500" />
+    </div>
+  )
+
+  return (
+    <div className="flex flex-col gap-8">
+      {/* 받은 친구 요청 */}
+      <section>
+        <h3 className="text-white font-bold mb-3 flex items-center gap-2">
+          친구 요청
+          {requests.length > 0 && (
+            <span className="px-2 py-0.5 rounded-full bg-orange-500 text-white text-xs font-bold">{requests.length}</span>
+          )}
+        </h3>
+        {requests.length === 0 ? (
+          <p className="text-[#75716e] text-sm bg-[#32302e]/50 rounded-2xl px-5 py-4">받은 친구 요청이 없습니다.</p>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {requests.map(req => (
+              <div key={req.id} className="flex items-center gap-3 bg-[#32302e] rounded-2xl px-4 py-3 border border-white/5">
+                {req.fromPhotoURL ? (
+                  <img src={req.fromPhotoURL} alt="" className="w-10 h-10 rounded-full border border-white/10 shrink-0" />
+                ) : (
+                  <div className="w-10 h-10 rounded-full bg-[#3d3a38] flex items-center justify-center text-lg shrink-0">👤</div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <p className="text-white font-semibold text-sm truncate">{req.fromDisplayName || '익명'}</p>
+                  <p className="text-[#75716e] text-xs mt-0.5">친구 요청을 보냈어요</p>
+                </div>
+                <div className="flex gap-2 shrink-0">
+                  <button
+                    onClick={() => handleAccept(req)}
+                    disabled={actingId === req.id}
+                    className="px-3 py-1.5 bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold rounded-full transition-colors disabled:opacity-50"
+                  >
+                    수락
+                  </button>
+                  <button
+                    onClick={() => handleReject(req)}
+                    disabled={actingId === req.id}
+                    className="px-3 py-1.5 bg-[#3d3a38] hover:bg-[#4a4745] text-[#a4a09c] text-xs font-bold rounded-full transition-colors disabled:opacity-50"
+                  >
+                    거절
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* 친구 목록 */}
+      <section>
+        <h3 className="text-white font-bold mb-3">친구 목록 <span className="text-[#75716e] font-normal text-sm">{friends.length}명</span></h3>
+        {friends.length === 0 ? (
+          <p className="text-[#75716e] text-sm bg-[#32302e]/50 rounded-2xl px-5 py-4">아직 친구가 없습니다. 스퀘어에서 마음에 드는 유저에게 친구 요청을 보내보세요.</p>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            {friends.map(f => (
+              <Link
+                key={f.uid}
+                href={`/profile/${f.uid}`}
+                className="flex items-center gap-3 bg-[#32302e] hover:bg-[#3d3a38] rounded-2xl px-3 py-3 border border-white/5 hover:border-orange-500/30 transition-all group"
+              >
+                {f.photoURL ? (
+                  <img src={f.photoURL} alt="" className="w-9 h-9 rounded-full border border-white/10 shrink-0" />
+                ) : (
+                  <div className="w-9 h-9 rounded-full bg-[#3d3a38] flex items-center justify-center shrink-0">👤</div>
+                )}
+                <span className="text-[#e2e2e2] text-sm font-medium truncate group-hover:text-white transition-colors">{f.displayName || '익명'}</span>
+              </Link>
+            ))}
+          </div>
+        )}
+      </section>
+    </div>
+  )
+}
+
 export default function MyPage() {
+  const { user } = useAuth()
+  const [activeTab, setActiveTab] = useState<'library' | 'friends'>('library')
   const [folders, setFolders] = useState<Folder[]>([])
   const [summaries, setSummaries] = useState<SavedSummary[]>([])
   const [allSummaries, setAllSummaries] = useState<SavedSummary[]>([])
@@ -102,6 +228,7 @@ export default function MyPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [searching, setSearching] = useState(false)
   const [openMoveId, setOpenMoveId] = useState<string | null>(null)
+  const [pendingCount, setPendingCount] = useState(0)
 
   useEffect(() => {
     const fetchInit = async () => {
@@ -112,6 +239,10 @@ export default function MyPage() {
         const allItems = await getSavedSummariesByFolder(uid, 'all')
         setAllSummaries(allItems)
         setSummaries(allItems)
+        // 친구 요청 배지
+        if (user) {
+          getPendingFriendRequests(user.uid).then(reqs => setPendingCount(reqs.length)).catch(() => {})
+        }
       } catch (e) {
         console.error('Failed to load mypage data:', e)
       } finally {
@@ -119,7 +250,7 @@ export default function MyPage() {
       }
     }
     fetchInit()
-  }, [])
+  }, [user])
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -203,6 +334,47 @@ export default function MyPage() {
     <div className="min-h-screen bg-[#252423] font-sans">
       <Header title="나의 요약 갤러리" />
 
+      {/* 탭 */}
+      <div className="max-w-7xl mx-auto px-6 mb-4">
+        <div className="flex gap-1 bg-[#32302e]/60 rounded-xl p-1 w-fit">
+          <button
+            onClick={() => setActiveTab('library')}
+            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+              activeTab === 'library' ? 'bg-[#3d3a38] text-white shadow' : 'text-[#75716e] hover:text-white'
+            }`}
+          >
+            📚 내 라이브러리
+          </button>
+          <button
+            onClick={() => setActiveTab('friends')}
+            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all flex items-center gap-1.5 ${
+              activeTab === 'friends' ? 'bg-[#3d3a38] text-white shadow' : 'text-[#75716e] hover:text-white'
+            }`}
+          >
+            👥 친구
+            {pendingCount > 0 && (
+              <span className="w-4 h-4 rounded-full bg-orange-500 text-white text-[9px] font-bold flex items-center justify-center">
+                {pendingCount}
+              </span>
+            )}
+          </button>
+        </div>
+      </div>
+
+      {/* 친구 탭 */}
+      {activeTab === 'friends' && user && (
+        <div className="max-w-7xl mx-auto px-6 pb-12">
+          <FriendsTab myUid={user.uid} />
+        </div>
+      )}
+      {activeTab === 'friends' && !user && (
+        <div className="max-w-7xl mx-auto px-6 pb-12 text-center py-20 text-[#75716e]">
+          로그인 후 이용할 수 있습니다.
+        </div>
+      )}
+
+      {activeTab === 'library' && (
+      <>
       {/* AI 검색 바 */}
       <div className="max-w-7xl mx-auto px-6 mb-4">
         <form onSubmit={handleSearch} className="flex gap-2">
@@ -368,6 +540,8 @@ export default function MyPage() {
           )}
         </main>
       </div>
+      </>
+      )}
     </div>
   )
 }

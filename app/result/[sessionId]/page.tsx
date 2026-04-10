@@ -29,19 +29,18 @@ async function getOgData(sessionId: string) {
     const channel = getString(fields.channel)
     const category = getString(fields.category)
 
-    // 카테고리별 짧은 설명 추출
-    let description = `${channel} · Next Curator 요약`
-    const summaryFields = fields.summary?.mapValue?.fields
-    if (summaryFields) {
-      // 공통: overview, one_line_summary, essence 등 짧은 텍스트 필드 탐색
-      const shortField = summaryFields.one_line_summary
-        ?? summaryFields.overview
-        ?? summaryFields.essence
-        ?? summaryFields.theme
-      if (shortField?.stringValue) {
-        description = shortField.stringValue.slice(0, 120)
-      }
+    const CATEGORY_FEATURED: Record<string, string> = {
+      recipe:  '🍳 요리 AI 요약 | 재료 · 단계별 조리법 · 핵심 팁',
+      english: '🔤 영어학습 AI 요약 | 핵심 표현 · 단어장 · 학습 포인트',
+      learning:'📐 학습 AI 요약 | 핵심 개념 · 포인트 정리 · 예시',
+      news:    '🗞️ 뉴스 AI 요약 | 3줄 요약 · 육하원칙 · 시사점',
+      selfdev: '💪 자기계발 AI 요약 | 핵심 메시지 · 인사이트 · 실천 체크리스트',
+      travel:  '🧳 여행 AI 요약 | 추천 장소 · 동선 · 실용 정보',
+      story:   '🍿 스토리 AI 요약 | 인물 · 타임라인 · 핵심 요약',
+      tips:    '💡 팁 AI 요약 | 팁 카드 · Top 3 · 준비물 정리',
     }
+
+    const description = `${CATEGORY_FEATURED[category] ?? 'AI 요약'} | ${channel} · Next Curator`
 
     return { title, thumbnail, channel, category, description }
   } catch {
@@ -70,9 +69,7 @@ export async function generateMetadata(
     openGraph: {
       title: og.title,
       description: og.description,
-      images: og.thumbnail
-        ? [{ url: og.thumbnail, width: 1280, height: 720, alt: og.title }]
-        : [],
+      // opengraph-image.tsx 가 자동으로 /result/[sessionId]/opengraph-image 경로에 생성됨
       type: 'article',
       siteName: 'Next Curator',
     },
@@ -80,7 +77,6 @@ export async function generateMetadata(
       card: 'summary_large_image',
       title: og.title,
       description: og.description,
-      images: og.thumbnail ? [og.thumbnail] : [],
     },
   }
 }

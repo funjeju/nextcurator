@@ -1,4 +1,4 @@
-export type Category = 'recipe' | 'english' | 'learning' | 'news' | 'selfdev' | 'travel' | 'story'
+export type Category = 'recipe' | 'english' | 'learning' | 'news' | 'selfdev' | 'travel' | 'story' | 'tips'
 
 export interface SquareMeta {
   tags: string[]
@@ -71,7 +71,16 @@ export interface StorySummary {
   conclusion: string
 }
 
-export type SummaryData = RecipeSummary | EnglishSummary | LearningSummary | NewsSummary | SelfDevSummary | TravelSummary | StorySummary
+export interface TipsSummary {
+  square_meta: SquareMeta
+  topic: string
+  tips: { number: number; title: string; desc: string; timestamp: string; difficulty?: string }[]
+  key_message: string
+  tools: string[]
+  top3: string[]
+}
+
+export type SummaryData = RecipeSummary | EnglishSummary | LearningSummary | NewsSummary | SelfDevSummary | TravelSummary | StorySummary | TipsSummary
 
 export interface SummarizeResponse {
   sessionId: string
