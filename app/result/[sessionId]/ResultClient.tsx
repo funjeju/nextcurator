@@ -282,10 +282,6 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
     }
   }
 
-  const shareCardRef = useRef<HTMLDivElement>(null)
-  const [savingCard, setSavingCard] = useState(false)
-  const [cardCopied, setCardCopied] = useState(false)
-
   // 링크 복사/공유 (OG 카드 프리뷰 생성됨)
   const handleShare = async () => {
     if (!data) return
@@ -312,54 +308,6 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
     }
   }
 
-  // 카드 이미지 캡처 → 클립보드 복사 (카톡 붙여넣기 가능) or 다운로드 폴백
-  const handleSaveCard = async () => {
-    if (!shareCardRef.current || !data) return
-    setSavingCard(true)
-    try {
-      const { default: html2canvas } = await import('html2canvas')
-      const canvas = await html2canvas(shareCardRef.current, {
-        useCORS: true,
-        backgroundColor: '#18181b',
-        scale: 2,
-        onclone: (doc) => {
-          doc.querySelectorAll('link[rel="stylesheet"], style').forEach(el => el.remove())
-        },
-      })
-      const blob = await new Promise<Blob>((res) => canvas.toBlob(b => res(b!), 'image/png'))
-
-      // 1순위: 클립보드에 이미지 복사 → 카톡에서 Ctrl+V / 붙여넣기 가능
-      if (typeof ClipboardItem !== 'undefined' && navigator.clipboard?.write) {
-        try {
-          await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })])
-          setCardCopied(true)
-          setTimeout(() => setCardCopied(false), 3000)
-          return
-        } catch {
-          // 권한 거부 등 → 다음 방법으로
-        }
-      }
-
-      // 2순위: 모바일 공유 시트 (Android 카톡에서 직접 선택)
-      const file = new File([blob], 'nextcurator-card.png', { type: 'image/png' })
-      if (navigator.canShare?.({ files: [file] })) {
-        await navigator.share({ files: [file], title: data.title })
-        return
-      }
-
-      // 3순위: 파일 다운로드
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = 'nextcurator-card.png'
-      a.click()
-      URL.revokeObjectURL(url)
-    } catch (e) {
-      if ((e as Error).name !== 'AbortError') alert('이미지 저장에 실패했습니다.')
-    } finally {
-      setSavingCard(false)
-    }
-  }
 
   if (loadError) {
     return (
@@ -584,38 +532,40 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
           )}
         </div>
 
-        {/* 하단 버튼 영역 */}
-        <div className="flex gap-3 mt-4">
+        {/* 하단 버튼 영역 — 저장하기(flex-1) + 댓글/PDF/공유(아이콘) */}
+        <div className="flex gap-2 mt-4">
           {savedItem ? (
             <button
               onClick={handleToggleVisibility}
               disabled={togglingVisibility}
-              className={`flex-1 h-14 rounded-xl font-bold text-sm transition-all disabled:opacity-50 border ${
+              className={`flex-1 h-12 rounded-xl font-bold text-xs transition-all disabled:opacity-50 border px-3 ${
                 savedItem.isPublic
                   ? 'bg-[#32302e] border-white/10 text-[#a4a09c] hover:bg-red-500/10 hover:border-red-500/30 hover:text-red-400'
                   : 'bg-[#32302e] border-white/10 text-[#a4a09c] hover:bg-green-500/10 hover:border-green-500/30 hover:text-green-400'
               }`}
             >
-              {togglingVisibility ? '변경 중...' : savedItem.isPublic ? '🌍 공개 중 → 비공개로 변경' : '🔒 비공개 → 광장에 공개'}
+              {togglingVisibility ? '변경 중...' : savedItem.isPublic ? '🌍 공개 중' : '🔒 비공개'}
             </button>
           ) : (
             <Button
-              className="flex-1 bg-gradient-to-r from-orange-500 to-pink-500 hover:from-orange-600 hover:to-pink-600 text-white font-bold h-14 text-base border-none"
+              className="flex-1 bg-gradient-to-r from-orange-500 to-pink-500 hover:from-orange-600 hover:to-pink-600 text-white font-bold h-12 text-sm border-none"
               onClick={() => setShowSaveModal(true)}
             >
-              📚 라이브러리에 저장
+              📥 나도 저장
             </Button>
           )}
 
           {/* 댓글 버튼 */}
           <button
             onClick={handleCommentIconClick}
-            className="h-14 px-4 border border-white/10 bg-[#32302e] text-white hover:bg-[#3d3a38] hover:border-white/20 transition-all rounded-xl flex items-center gap-1.5"
+            className="h-12 w-12 border border-white/10 bg-[#32302e] text-white hover:bg-[#3d3a38] hover:border-white/20 transition-all rounded-xl flex items-center justify-center relative"
             title="댓글 보기"
           >
-            <span className="text-lg">💬</span>
+            <span className="text-lg leading-none">💬</span>
             {commentCount > 0 && (
-              <span className="text-xs font-bold text-[#a4a09c]">{commentCount}</span>
+              <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-orange-500 text-white text-[9px] font-bold flex items-center justify-center">
+                {commentCount}
+              </span>
             )}
           </button>
 
@@ -623,69 +573,47 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
           <button
             onClick={handleDownloadPdf}
             disabled={downloading}
-            className="h-14 px-4 border border-white/10 bg-[#32302e] text-white hover:bg-[#3d3a38] hover:border-white/20 transition-all rounded-xl disabled:opacity-50 flex items-center gap-1.5"
+            className="h-12 w-12 border border-white/10 bg-[#32302e] text-white hover:bg-[#3d3a38] hover:border-white/20 transition-all rounded-xl disabled:opacity-50 flex items-center justify-center"
             title="PDF 다운로드"
           >
             {downloading ? (
-              <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
+              <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
               </svg>
             ) : (
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
             )}
           </button>
 
-          {/* 카드 이미지 클립보드 복사 버튼 */}
+          {/* 공유 버튼 — 모바일: 공유 시트 / PC: 링크 복사 */}
           <button
-            onClick={handleSaveCard}
-            disabled={savingCard}
-            className={`h-14 px-4 border rounded-xl disabled:opacity-50 flex items-center gap-1.5 transition-all ${
-              cardCopied
+            onClick={handleShare}
+            disabled={sharing}
+            className={`h-12 w-12 border rounded-xl disabled:opacity-50 flex items-center justify-center transition-all ${
+              shareCopied
                 ? 'border-green-500/40 bg-green-500/10 text-green-400'
                 : 'border-white/10 bg-[#32302e] text-white hover:bg-[#3d3a38] hover:border-white/20'
             }`}
-            title="카드 이미지 클립보드 복사 (카톡에서 붙여넣기 가능)"
-          >
-            {savingCard ? (
-              <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
-              </svg>
-            ) : cardCopied ? (
-              <span className="text-sm font-medium">✅ 복사됨!</span>
-            ) : (
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-              </svg>
-            )}
-          </button>
-
-          {/* 링크 공유 버튼 */}
-          <Button
-            variant="outline"
-            className={`h-14 px-5 border-white/10 bg-[#32302e] text-white hover:bg-[#3d3a38] hover:border-white/20 transition-all disabled:opacity-50 ${shareCopied ? 'border-green-500/40 text-green-400' : ''}`}
-            onClick={handleShare}
-            disabled={sharing}
-            title="링크 공유"
+            title="공유하기"
           >
             {shareCopied ? (
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
               </svg>
             ) : sharing ? (
-              <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
+              <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
               </svg>
             ) : (
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
               </svg>
             )}
-          </Button>
+          </button>
         </div>
 
         {/* 댓글 섹션 */}
@@ -708,77 +636,6 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
       <div style={{ position: 'absolute', left: '-9999px', top: 0, pointerEvents: 'none', zIndex: -1 }}>
         <div ref={pdfRef}>
           {data && <SummaryPdfTemplate data={data} qrDataUrl={qrDataUrl} />}
-        </div>
-      </div>
-
-      {/* 공유용 카드 (캡처 전용, 화면 밖) */}
-      <div style={{ position: 'absolute', left: '-9999px', top: 0, pointerEvents: 'none', zIndex: -1 }}>
-        <div
-          ref={shareCardRef}
-          style={{
-            width: 400,
-            background: '#18181b',
-            borderRadius: 20,
-            overflow: 'hidden',
-            fontFamily: 'sans-serif',
-          }}
-        >
-          {/* 썸네일 */}
-          {data.thumbnail ? (
-            <img
-              src={data.thumbnail}
-              alt={data.title}
-              style={{ width: '100%', aspectRatio: '16/9', objectFit: 'cover', display: 'block' }}
-              crossOrigin="anonymous"
-            />
-          ) : (
-            <div style={{ width: '100%', aspectRatio: '16/9', background: '#27272a', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <span style={{ fontSize: 48, opacity: 0.3 }}>{(data as any).sourceType === 'pdf' ? '📄' : '🌐'}</span>
-            </div>
-          )}
-
-          {/* 정보 */}
-          <div style={{ padding: '14px 16px 8px' }}>
-            {/* 카테고리 + 채널 */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-              <span style={{
-                padding: '3px 10px', borderRadius: 99, fontSize: 11, fontWeight: 700,
-                background: '#27272a', color: '#fb923c', border: '1px solid #fb923c44',
-              }}>
-                {catInfo.icon} {catInfo.label}
-              </span>
-              <span style={{ color: '#71717a', fontSize: 12 }}>{data.channel}</span>
-            </div>
-
-            {/* 제목 */}
-            <p style={{
-              color: '#f4f4f5', fontSize: 15, fontWeight: 700,
-              lineHeight: 1.45, marginBottom: 14,
-              display: '-webkit-box', WebkitLineClamp: 2,
-              WebkitBoxOrient: 'vertical', overflow: 'hidden',
-            }}>
-              {data.title}
-            </p>
-
-            {/* 탭 버튼 행 */}
-            <div style={{ display: 'flex', borderTop: '1px solid #27272a', marginLeft: -16, marginRight: -16, padding: '0 16px' }}>
-              {['기본 요약', '전체 자막', '다시 분석'].map((tab, i) => (
-                <div key={tab} style={{
-                  flex: 1, textAlign: 'center', padding: '10px 0',
-                  fontSize: 12, fontWeight: i === 0 ? 700 : 400,
-                  color: i === 0 ? '#ffffff' : '#71717a',
-                  borderBottom: i === 0 ? '2px solid #fb923c' : '2px solid transparent',
-                }}>
-                  {tab}
-                </div>
-              ))}
-            </div>
-
-            {/* 브랜드 */}
-            <div style={{ textAlign: 'center', padding: '8px 0 4px', color: '#52525b', fontSize: 10 }}>
-              nextcurator.vercel.app
-            </div>
-          </div>
         </div>
       </div>
 

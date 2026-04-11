@@ -99,15 +99,24 @@ export default function FloatingChat({ summaries, source }: FloatingChatProps) {
 
   return (
     <>
-      {/* 플로팅 버튼 */}
+      {/* 플로팅 버튼 — 모바일: 원형 아이콘 / PC: 아이콘 + 텍스트 pill */}
       <button
         onClick={() => setOpen(v => !v)}
-        className={`fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full shadow-2xl flex items-center justify-center text-xl transition-all hover:scale-110 active:scale-95 ${
-          open ? 'bg-[#3d3a38] text-white' : 'bg-orange-500 hover:bg-orange-600 text-white'
+        className={`fixed bottom-6 right-6 z-50 shadow-2xl flex items-center justify-center transition-all hover:scale-105 active:scale-95 ${
+          open
+            ? 'w-14 h-14 rounded-full bg-[#3d3a38] text-white text-xl'
+            : 'h-12 rounded-full bg-orange-500 hover:bg-orange-600 text-white px-4 gap-2'
         }`}
         title={`${contextLabel} AI 어시스턴트`}
       >
-        {open ? '✕' : '💬'}
+        {open ? (
+          <span className="text-xl">✕</span>
+        ) : (
+          <>
+            <span className="text-lg leading-none">💬</span>
+            <span className="hidden md:inline text-sm font-bold whitespace-nowrap">AI 맞춤검색</span>
+          </>
+        )}
       </button>
 
       {/* 채팅 패널 */}

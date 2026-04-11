@@ -69,9 +69,11 @@ export async function generateMetadata(
     openGraph: {
       title: og.title,
       description: og.description,
-      // opengraph-image.tsx 가 자동으로 /result/[sessionId]/opengraph-image 경로에 생성됨
       type: 'article',
       siteName: 'Next Curator',
+      ...(og.thumbnail ? {
+        images: [{ url: og.thumbnail, width: 1280, height: 720, alt: og.title }],
+      } : {}),
     },
     twitter: {
       card: 'summary_large_image',
