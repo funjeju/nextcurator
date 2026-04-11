@@ -64,7 +64,7 @@ function CardGrid({ items, likedIds, likingIds, user, messagingId, onLike, onMes
       {items.map(item => (
         <div key={item.id} className="break-inside-avoid relative group">
           <Link
-            href={`/result/${item.sessionId}`}
+            href={`/result/${item.sessionId}?from=square`}
             onClick={() => incrementViewCount(item.id)}
             className="block rounded-[18px] bg-[#32302e] border border-white/5 overflow-hidden hover:border-white/20 transition-all shadow-md"
           >
@@ -177,7 +177,7 @@ function RecommendationStrip({ category, items, likedIds, likingIds, onLike }: {
         {items.map(item => (
           <Link
             key={item.id}
-            href={`/result/${item.sessionId}`}
+            href={`/result/${item.sessionId}?from=square`}
             onClick={() => incrementViewCount(item.id)}
             className="shrink-0 w-36 rounded-xl overflow-hidden border border-white/5 bg-[#32302e] hover:border-white/20 transition-all group"
           >

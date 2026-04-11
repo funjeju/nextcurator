@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -53,6 +53,8 @@ function timestampToSeconds(ts: string): number {
 
 export default function ResultClient({ sessionId }: { sessionId: string }) {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const fromSquare = searchParams.get('from') === 'square'
   const { user } = useAuth()
   const [data, setData] = useState<SummarizeResponse | null>(null)
   const [loadError, setLoadError] = useState(false)
@@ -623,7 +625,7 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
               className="flex-1 bg-gradient-to-r from-orange-500 to-pink-500 hover:from-orange-600 hover:to-pink-600 text-white font-bold h-12 text-sm border-none"
               onClick={() => setShowSaveModal(true)}
             >
-              📥 나도 저장
+              {fromSquare ? '📥 나도 저장' : '📚 저장하기'}
             </Button>
           )}
 
