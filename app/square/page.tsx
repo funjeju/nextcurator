@@ -32,12 +32,19 @@ const CATEGORY_META: Record<string, { color: string; bg: string; emoji: string }
   tips:     { color: '#fbbf24', bg: '#451a03', emoji: '💡' },
 }
 
-const RECOMMENDATION_INTERVAL = 9  // 카드 N개마다 추천 삽입
-const AD_EVERY_N_RECOMMENDATIONS = 2  // 추천 N번마다 광고 슬롯 1회
+// 추천 카드를 일반 카드와 같은 그리드 아이템으로 취급하기 위한 타입
+type RecSlot = {
+  __rec: true
+  slotId: string
+  category: string
+  items: SavedSummary[]
+}
+type GridItem = SavedSummary | RecSlot
+
+const RECOMMENDATION_INTERVAL = 9  // 카드 N개마다 추천 1개 삽입
 
 type SortType = 'latest' | 'popular' | 'views'
 
-// 좋아요한 항목 기반으로 취향 카테고리 계산
 function getUserTopCategories(likedIds: Set<string>, summaries: SavedSummary[]): string[] {
   const counts: Record<string, number> = {}
   for (const id of likedIds) {
@@ -49,9 +56,9 @@ function getUserTopCategories(likedIds: Set<string>, summaries: SavedSummary[]):
     .map(([cat]) => cat)
 }
 
-// 카드 그리드 세그먼트 컴포넌트
-function CardGrid({ items, likedIds, likingIds, user, messagingId, onLike, onMessage }: {
-  items: SavedSummary[]
+// 일반 요약 카드
+function SummaryCard({ item, likedIds, likingIds, user, messagingId, onLike, onMessage }: {
+  item: SavedSummary
   likedIds: Set<string>
   likingIds: Set<string>
   user: any
@@ -60,152 +67,165 @@ function CardGrid({ items, likedIds, likingIds, user, messagingId, onLike, onMes
   onMessage: (e: React.MouseEvent, item: SavedSummary) => void
 }) {
   return (
-    <div className="columns-2 md:columns-3 lg:columns-4 gap-3 space-y-3">
-      {items.map(item => (
-        <div key={item.id} className="break-inside-avoid relative group">
-          <Link
-            href={`/result/${item.sessionId}?from=square`}
-            onClick={() => incrementViewCount(item.id)}
-            className="block rounded-[18px] bg-[#32302e] border border-white/5 overflow-hidden hover:border-white/20 transition-all shadow-md"
-          >
-            <div className="relative overflow-hidden bg-[#23211f]">
-              <img
-                src={item.thumbnail}
-                alt={item.title}
-                className="w-full object-cover aspect-video group-hover:scale-105 transition-transform duration-500"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
-              <div className="absolute top-2 right-2 px-2 py-0.5 rounded-full bg-black/60 backdrop-blur-sm text-[9px] font-bold text-white border border-white/10">
-                {CATEGORIES.find(c => c.id === item.category)?.label ?? '분석됨'}
-              </div>
-            </div>
-
-            <div className="p-2.5 pb-9">
-              <h3 className="text-[#f4f4f5] text-[11px] font-bold leading-snug line-clamp-2 mb-2">
-                {item.title}
-              </h3>
-              <div className="flex items-center justify-between">
-                <Link
-                  href={`/profile/${item.userId}`}
-                  onClick={e => e.stopPropagation()}
-                  className="flex items-center gap-1 min-w-0 group/profile"
-                >
-                  {item.userPhotoURL ? (
-                    <img src={item.userPhotoURL} alt="" className="w-4 h-4 rounded-full shrink-0 border border-white/10" />
-                  ) : (
-                    <div className="w-4 h-4 rounded-full bg-[#3d3a38] shrink-0 flex items-center justify-center text-[8px] text-white/40">👤</div>
-                  )}
-                  <span className="text-[9px] text-[#75716e] group-hover/profile:text-white truncate transition-colors">
-                    {item.userDisplayName || '익명'}
-                  </span>
-                </Link>
-                <div className="flex items-center gap-1 text-[#75716e] shrink-0">
-                  {item.createdAt && <span className="text-[8px]">{formatRelativeDate(item.createdAt)}</span>}
-                  {(item.viewCount ?? 0) > 0 && <span className="text-[8px]">· 👁{item.viewCount}</span>}
-                </div>
-              </div>
-            </div>
-          </Link>
-
-          <div className="absolute bottom-2 left-2.5 right-2.5 flex items-center justify-between">
-            {user && item.userId !== user.uid ? (
-              <button
-                onClick={(e) => onMessage(e, item)}
-                disabled={messagingId === item.id}
-                className="flex items-center gap-0.5 text-[9px] text-[#75716e] hover:text-blue-400 transition-colors disabled:opacity-50"
-              >✉️</button>
-            ) : <span />}
-            <button
-              onClick={(e) => onLike(e, item)}
-              disabled={likingIds.has(item.id)}
-              className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold transition-all ${
-                likedIds.has(item.id)
-                  ? 'bg-pink-500/20 text-pink-400 border border-pink-500/30'
-                  : 'bg-black/40 text-white/40 border border-white/10 hover:text-pink-400 hover:border-pink-500/30'
-              } disabled:opacity-50`}
-            >
-              <span className="text-[10px]">{likedIds.has(item.id) ? '❤️' : '🤍'}</span>
-              <span>{item.likeCount ?? 0}</span>
-            </button>
+    <div className="break-inside-avoid relative group mb-3">
+      <Link
+        href={`/result/${item.sessionId}?from=square`}
+        onClick={() => incrementViewCount(item.id)}
+        className="block rounded-[18px] bg-[#32302e] border border-white/5 overflow-hidden hover:border-white/20 transition-all shadow-md"
+      >
+        <div className="relative overflow-hidden bg-[#23211f]">
+          <img
+            src={item.thumbnail}
+            alt={item.title}
+            className="w-full object-cover aspect-video group-hover:scale-105 transition-transform duration-500"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+          <div className="absolute top-2 right-2 px-2 py-0.5 rounded-full bg-black/60 backdrop-blur-sm text-[9px] font-bold text-white border border-white/10">
+            {CATEGORIES.find(c => c.id === item.category)?.label ?? '분석됨'}
           </div>
         </div>
-      ))}
-    </div>
-  )
-}
 
-// 인피드 추천 카드 (컴팩트: 썸네일 3개 + 더보기)
-function RecommendationStrip({ category, items, likedIds, likingIds, onLike }: {
-  category: string
-  items: SavedSummary[]
-  likedIds: Set<string>
-  likingIds: Set<string>
-  onLike: (e: React.MouseEvent, item: SavedSummary) => void
-}) {
-  const meta = CATEGORY_META[category] ?? CATEGORY_META.news
-  const catLabel = CATEGORIES.find(c => c.id === category)?.label ?? category
-  const displayItems = items.slice(0, 3)
-
-  if (items.length === 0) return null
-
-  return (
-    <div
-      className="my-4 rounded-2xl border p-3"
-      style={{ borderColor: `${meta.color}33`, background: `${meta.bg}99` }}
-    >
-      {/* 헤더 */}
-      <div className="flex items-center gap-2 mb-2.5">
-        <span className="text-sm leading-none">{meta.emoji}</span>
-        <div className="min-w-0">
-          <p className="text-[11px] font-bold text-white/90 leading-tight">
-            {catLabel} 콘텐츠를 좋아하시는군요
-          </p>
-          <p className="text-[9px] text-white/40">AI가 고른 추천 요약</p>
-        </div>
-      </div>
-
-      {/* 썸네일 3개 그리드 */}
-      <div className="grid grid-cols-3 gap-1.5 mb-2.5">
-        {displayItems.map(item => (
-          <Link
-            key={item.id}
-            href={`/result/${item.sessionId}?from=square`}
-            onClick={() => incrementViewCount(item.id)}
-            className="rounded-lg overflow-hidden border border-white/5 hover:border-white/25 transition-all group"
-          >
-            <div className="relative overflow-hidden bg-[#32302e]">
-              <img
-                src={item.thumbnail}
-                alt={item.title}
-                className="w-full aspect-video object-cover group-hover:scale-105 transition-transform duration-300"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+        <div className="p-2.5 pb-9">
+          <h3 className="text-[#f4f4f5] text-[11px] font-bold leading-snug line-clamp-2 mb-2">
+            {item.title}
+          </h3>
+          <div className="flex items-center justify-between">
+            <Link
+              href={`/profile/${item.userId}`}
+              onClick={e => e.stopPropagation()}
+              className="flex items-center gap-1 min-w-0 group/profile"
+            >
+              {item.userPhotoURL ? (
+                <img src={item.userPhotoURL} alt="" className="w-4 h-4 rounded-full shrink-0 border border-white/10" />
+              ) : (
+                <div className="w-4 h-4 rounded-full bg-[#3d3a38] shrink-0 flex items-center justify-center text-[8px] text-white/40">👤</div>
+              )}
+              <span className="text-[9px] text-[#75716e] group-hover/profile:text-white truncate transition-colors">
+                {item.userDisplayName || '익명'}
+              </span>
+            </Link>
+            <div className="flex items-center gap-1 text-[#75716e] shrink-0">
+              {item.createdAt && <span className="text-[8px]">{formatRelativeDate(item.createdAt)}</span>}
+              {(item.viewCount ?? 0) > 0 && <span className="text-[8px]">· 👁{item.viewCount}</span>}
             </div>
-            <p className="text-[9px] text-white/70 font-medium leading-snug line-clamp-1 px-1.5 pt-1 pb-1.5">
-              {item.title}
-            </p>
-          </Link>
-        ))}
-      </div>
+          </div>
+        </div>
+      </Link>
 
-      {/* 더보기 버튼 — 우하단 */}
-      <div className="flex justify-end">
+      <div className="absolute bottom-2 left-2.5 right-2.5 flex items-center justify-between">
+        {user && item.userId !== user.uid ? (
+          <button
+            onClick={(e) => onMessage(e, item)}
+            disabled={messagingId === item.id}
+            className="flex items-center gap-0.5 text-[9px] text-[#75716e] hover:text-blue-400 transition-colors disabled:opacity-50"
+          >✉️</button>
+        ) : <span />}
         <button
-          className="text-[9px] px-2.5 py-1 rounded-full border transition-colors hover:opacity-80"
-          style={{ borderColor: `${meta.color}55`, color: meta.color }}
+          onClick={(e) => onLike(e, item)}
+          disabled={likingIds.has(item.id)}
+          className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold transition-all ${
+            likedIds.has(item.id)
+              ? 'bg-pink-500/20 text-pink-400 border border-pink-500/30'
+              : 'bg-black/40 text-white/40 border border-white/10 hover:text-pink-400 hover:border-pink-500/30'
+          } disabled:opacity-50`}
         >
-          더보기 →
+          <span className="text-[10px]">{likedIds.has(item.id) ? '❤️' : '🤍'}</span>
+          <span>{item.likeCount ?? 0}</span>
         </button>
       </div>
     </div>
   )
 }
 
-// 광고 슬롯 (나중에 실제 광고로 교체)
-function AdSlot() {
+// 취향 추천 카드 — 일반 카드와 동일한 크기, masonry 그리드 안에 삽입
+function RecommendationCard({ slot }: { slot: RecSlot }) {
+  const meta = CATEGORY_META[slot.category] ?? CATEGORY_META.news
+  const catLabel = CATEGORIES.find(c => c.id === slot.category)?.label ?? slot.category
+  const [t1, t2, t3] = slot.items.slice(0, 3)
+
   return (
-    <div className="my-4 rounded-2xl border border-dashed border-white/10 bg-[#32302e]/30 flex items-center justify-center h-20 text-[#75716e] text-xs">
-      <span className="opacity-40">광고 영역</span>
+    <div
+      className="break-inside-avoid mb-3 rounded-[18px] overflow-hidden border shadow-md"
+      style={{ borderColor: `${meta.color}44`, background: `${meta.bg}dd` }}
+    >
+      {/* 헤더 */}
+      <div className="flex items-center gap-2 px-3 pt-3 pb-2">
+        <span className="text-sm leading-none">{meta.emoji}</span>
+        <div className="min-w-0 flex-1">
+          <p className="text-[10px] font-bold leading-tight" style={{ color: meta.color }}>
+            {catLabel} 취향 추천
+          </p>
+          <p className="text-[9px] text-white/40">AI가 고른 콘텐츠</p>
+        </div>
+      </div>
+
+      {/* 썸네일 영역: 상단 2개 / 하단 좌1 + 우 더보기 */}
+      <div className="px-2.5 pb-2.5 space-y-1">
+        {/* 상단 2개 */}
+        <div className="grid grid-cols-2 gap-1">
+          {[t1, t2].filter(Boolean).map(item => (
+            <Link
+              key={item.id}
+              href={`/result/${item.sessionId}?from=square`}
+              onClick={() => incrementViewCount(item.id)}
+              className="rounded-lg overflow-hidden group"
+              title={item.title}
+            >
+              <div className="relative overflow-hidden bg-[#32302e]">
+                <img
+                  src={item.thumbnail}
+                  alt={item.title}
+                  className="w-full aspect-video object-cover group-hover:scale-105 transition-transform duration-300"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
+              </div>
+              <p className="text-[8px] text-white/60 leading-snug line-clamp-1 px-1 pt-0.5 pb-1">
+                {item.title}
+              </p>
+            </Link>
+          ))}
+        </div>
+
+        {/* 하단: 썸네일 1개 + 더보기 */}
+        <div className="grid grid-cols-2 gap-1 items-stretch">
+          {t3 ? (
+            <Link
+              href={`/result/${t3.sessionId}?from=square`}
+              onClick={() => incrementViewCount(t3.id)}
+              className="rounded-lg overflow-hidden group"
+              title={t3.title}
+            >
+              <div className="relative overflow-hidden bg-[#32302e]">
+                <img
+                  src={t3.thumbnail}
+                  alt={t3.title}
+                  className="w-full aspect-video object-cover group-hover:scale-105 transition-transform duration-300"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
+              </div>
+              <p className="text-[8px] text-white/60 leading-snug line-clamp-1 px-1 pt-0.5 pb-1">
+                {t3.title}
+              </p>
+            </Link>
+          ) : <div />}
+
+          {/* 더보기 버튼 */}
+          <div className="flex items-center justify-center">
+            <button
+              className="w-full h-full min-h-[52px] rounded-lg flex flex-col items-center justify-center gap-1 border transition-colors hover:opacity-80 active:scale-95"
+              style={{
+                borderColor: `${meta.color}44`,
+                background: `${meta.color}11`,
+                color: meta.color,
+              }}
+            >
+              <span className="text-base leading-none">{meta.emoji}</span>
+              <span className="text-[9px] font-bold">더보기</span>
+              <span className="text-[8px] opacity-60">→</span>
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
@@ -221,6 +241,7 @@ export default function SquarePage() {
   const [likedIds, setLikedIds] = useState<Set<string>>(new Set())
   const [likingIds, setLikingIds] = useState<Set<string>>(new Set())
   const [messagingId, setMessagingId] = useState<string | null>(null)
+
   useEffect(() => {
     getPublicSummaries()
       .then(data => { setSummaries(data); setAllSummaries(data) })
@@ -295,13 +316,11 @@ export default function SquarePage() {
       return bT - aT
     })
 
-  // 유저 취향 카테고리 (좋아요 기반)
   const topCategories = useMemo(
     () => getUserTopCategories(likedIds, allSummaries),
     [likedIds, allSummaries]
   )
 
-  // 추천용 카드 풀: 취향 카테고리 중 현재 필드에 없거나 상위 인기 항목
   const recommendationPool = useMemo(() => {
     const pool: Record<string, SavedSummary[]> = {}
     for (const cat of topCategories) {
@@ -313,30 +332,29 @@ export default function SquarePage() {
     return pool
   }, [topCategories, allSummaries, likedIds])
 
-  // 피드 세그먼트 생성: [카드청크, 추천?, 카드청크, 광고?, ...]
-  const segments = useMemo(() => {
-    const chunks: { cards: SavedSummary[]; recCategory?: string; showAd?: boolean }[] = []
+  // 일반 카드 + 추천 카드를 flat 배열로 합성 — masonry가 자연스럽게 흐름
+  const gridItems = useMemo<GridItem[]>(() => {
+    if (topCategories.length === 0) return filtered
+
+    const result: GridItem[] = []
     let recIndex = 0
 
-    for (let i = 0; i < filtered.length; i += RECOMMENDATION_INTERVAL) {
-      const cards = filtered.slice(i, i + RECOMMENDATION_INTERVAL)
-      const isLastChunk = i + RECOMMENDATION_INTERVAL >= filtered.length
+    filtered.forEach((item, i) => {
+      result.push(item)
 
-      // 이 청크 다음에 추천 삽입 여부
-      let recCategory: string | undefined
-      if (!isLastChunk && topCategories.length > 0) {
-        recCategory = topCategories[recIndex % topCategories.length]
-        recIndex++
+      // N개마다 추천 슬롯 1개 끼워 넣기
+      if ((i + 1) % RECOMMENDATION_INTERVAL === 0) {
+        const cat = topCategories[recIndex % topCategories.length]
+        const pool = recommendationPool[cat] ?? []
+        if (pool.length >= 2) {
+          result.push({ __rec: true, slotId: `rec-${cat}-${i}`, category: cat, items: pool })
+          recIndex++
+        }
       }
+    })
 
-      // 광고 슬롯: 추천 N번마다 1회
-      const showAd = !isLastChunk && recIndex > 0 && recIndex % AD_EVERY_N_RECOMMENDATIONS === 0
-
-      chunks.push({ cards, recCategory, showAd })
-    }
-
-    return chunks
-  }, [filtered, topCategories])
+    return result
+  }, [filtered, topCategories, recommendationPool])
 
   return (
     <div className="min-h-screen bg-[#252423] font-sans">
@@ -399,12 +417,14 @@ export default function SquarePage() {
             </Link>
           </div>
         ) : (
-          <div className="space-y-3">
-            {segments.map((seg, segIdx) => (
-              <div key={segIdx}>
-                {/* 카드 그리드 청크 */}
-                <CardGrid
-                  items={seg.cards}
+          <div className="columns-2 md:columns-3 lg:columns-4 gap-3">
+            {gridItems.map(item =>
+              '__rec' in item ? (
+                <RecommendationCard key={item.slotId} slot={item} />
+              ) : (
+                <SummaryCard
+                  key={item.id}
+                  item={item}
                   likedIds={likedIds}
                   likingIds={likingIds}
                   user={user}
@@ -412,22 +432,8 @@ export default function SquarePage() {
                   onLike={handleLike}
                   onMessage={handleMessage}
                 />
-
-                {/* 인피드 추천 */}
-                {seg.recCategory && recommendationPool[seg.recCategory]?.length > 0 && (
-                  <RecommendationStrip
-                    category={seg.recCategory}
-                    items={recommendationPool[seg.recCategory]}
-                    likedIds={likedIds}
-                    likingIds={likingIds}
-                    onLike={handleLike}
-                  />
-                )}
-
-                {/* 광고 슬롯 */}
-                {seg.showAd && <AdSlot />}
-              </div>
-            ))}
+              )
+            )}
           </div>
         )}
       </div>
