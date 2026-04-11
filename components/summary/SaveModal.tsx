@@ -66,7 +66,7 @@ export default function SaveModal({ data, onClose }: { data: any, onClose: () =>
       fetch('/api/embed', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ docId, title: data.title, category: data.category, summary: data.summary }),
+        body: JSON.stringify({ docId, title: data.title, category: data.category, summary: data.summary, contextSummary: data.contextSummary }),
       }).catch(() => {})
       alert('저장되었습니다!')
       onClose()
@@ -106,7 +106,7 @@ export default function SaveModal({ data, onClose }: { data: any, onClose: () =>
       fetch('/api/embed', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ docId: docId2, title: data.title, category: data.category, summary: data.summary }),
+        body: JSON.stringify({ docId: docId2, title: data.title, category: data.category, summary: data.summary, contextSummary: data.contextSummary }),
       }).catch(() => {})
       alert('저장되었습니다!')
       onClose()
@@ -166,7 +166,7 @@ export default function SaveModal({ data, onClose }: { data: any, onClose: () =>
         fetch('/api/embed', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ docId: docId3, title: data.title, category: data.category, summary: data.summary }),
+          body: JSON.stringify({ docId: docId3, title: data.title, category: data.category, summary: data.summary, contextSummary: data.contextSummary }),
         }).catch(() => {})
         alert('저장되었습니다!')
         onClose()

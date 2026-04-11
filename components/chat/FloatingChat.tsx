@@ -140,7 +140,8 @@ export default function FloatingChat({ summaries, source, userId }: FloatingChat
         title: s.title,
         category: s.category,
         tags: s.square_meta?.tags ?? [],
-        shortText: extractShortText(s.category, s.summary),
+        // contextSummary 우선, 없으면 기존 필드 추출로 폴백
+        shortText: s.contextSummary || extractShortText(s.category, s.summary),
       }))
 
       const res = await fetch('/api/chat', {

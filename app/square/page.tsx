@@ -235,6 +235,7 @@ export default function SquarePage() {
   const [likedIds, setLikedIds] = useState<Set<string>>(new Set())
   const [likingIds, setLikingIds] = useState<Set<string>>(new Set())
   const [messagingId, setMessagingId] = useState<string | null>(null)
+  const [searchQuery, setSearchQuery] = useState('')
   const colCount = useColumnCount()
 
   useEffect(() => {
@@ -303,6 +304,13 @@ export default function SquarePage() {
 
   const filtered = summaries
     .filter(s => activeCategory === 'all' || s.category === activeCategory)
+    .filter(s => {
+      if (!searchQuery.trim()) return true
+      const q = searchQuery.toLowerCase()
+      const tags = (s.square_meta?.tags ?? []).join(' ').toLowerCase()
+      const catLabel = (CATEGORIES.find(c => c.id === s.category)?.label ?? '').toLowerCase()
+      return s.title.toLowerCase().includes(q) || tags.includes(q) || catLabel.includes(q)
+    })
     .sort((a, b) => {
       if (sortType === 'popular') return (b.likeCount ?? 0) - (a.likeCount ?? 0)
       if (sortType === 'views')   return (b.viewCount ?? 0) - (a.viewCount ?? 0)
@@ -376,6 +384,26 @@ export default function SquarePage() {
 
       <div className="max-w-7xl mx-auto px-3 pb-12">
 
+        {/* 검색창 */}
+        <div className="relative mb-3">
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            placeholder="제목, 태그, 카테고리로 검색..."
+            className="w-full h-10 pl-9 pr-4 bg-[#32302e] border border-white/10 rounded-xl text-sm text-white placeholder:text-[#75716e] focus:outline-none focus:border-orange-500/50 transition-colors"
+          />
+          <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#75716e]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#75716e] hover:text-white text-xs"
+            >✕</button>
+          )}
+        </div>
+
         {/* 필터 바 */}
         <div className="flex flex-col gap-2 mb-5">
           <div className="flex gap-2 overflow-x-auto scrollbar-none pb-1">
@@ -411,7 +439,9 @@ export default function SquarePage() {
                 </button>
               )
             })}
-            <span className="text-[#75716e] text-xs ml-auto">{filtered.length}개</span>
+            <span className="text-[#75716e] text-xs ml-auto">
+              {searchQuery ? `"${searchQuery}" 결과 ${filtered.length}개` : `${filtered.length}개`}
+            </span>
           </div>
         </div>
 

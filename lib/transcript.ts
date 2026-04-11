@@ -91,7 +91,7 @@ async function getTranscriptViaSupadata(videoId: string): Promise<string> {
     `https://api.supadata.ai/v1/youtube/transcript?videoId=${videoId}&text=false`,
     {
       headers: { 'x-api-key': apiKey },
-      signal: AbortSignal.timeout(30000),
+      signal: AbortSignal.timeout(90000),  // STT 변환 포함 최대 90초
     }
   )
 
@@ -137,7 +137,7 @@ async function getTranscriptViaSocialKit(videoId: string): Promise<string> {
     `https://api.socialkit.dev/youtube/transcript?url=${encodeURIComponent(videoUrl)}`,
     {
       headers: { 'x-access-key': apiKey },
-      signal: AbortSignal.timeout(30000), // STT 변환은 최대 30초
+      signal: AbortSignal.timeout(90000),  // STT 변환은 최대 90초
     }
   )
 

@@ -8,7 +8,7 @@ import { formatRelativeDate } from '@/lib/formatDate'
 import {
   getUserFolders, getSavedSummariesByFolder, deleteSavedSummary, updateSummaryFolder,
   getPendingFriendRequests, acceptFriendRequest, rejectFriendRequest, getFriends,
-  batchUpdateSortOrder, renameFolder, deleteFolder,
+  batchUpdateSortOrder, renameFolder, deleteFolder, createSharedFolder,
   Folder, SavedSummary, FriendRequest,
 } from '@/lib/db'
 import { useAuth } from '@/providers/AuthProvider'
@@ -235,6 +235,7 @@ export default function MyPage() {
   const [dragOverId, setDragOverId] = useState<string | null>(null)
   const [savingOrder, setSavingOrder] = useState(false)
   const [pendingCount, setPendingCount] = useState(0)
+  const [searchQuery, setSearchQuery] = useState('')
 
   // 폴더 메뉴 외부 클릭 시 닫기
   useEffect(() => {
@@ -376,6 +377,29 @@ export default function MyPage() {
     finally { setRenamingId(null); setRenameValue(''); setFolderMenuId(null) }
   }
 
+  // 폴더 공유 링크 생성
+  const handleShareFolder = async (folderId: string, folderName: string) => {
+    const items = allSummaries.filter(s => s.folderId === folderId)
+    if (items.length === 0) { alert('폴더에 저장된 항목이 없습니다.'); return }
+    try {
+      const uid = user?.uid || getLocalUserId()
+      const shareId = await createSharedFolder(
+        uid,
+        user?.displayName || '익명',
+        user?.photoURL || '',
+        folderName,
+        items
+      )
+      const link = `${window.location.origin}/share/${shareId}`
+      await navigator.clipboard.writeText(link)
+      alert('공유 링크가 클립보드에 복사됐습니다!')
+    } catch {
+      alert('공유 링크 생성에 실패했습니다.')
+    } finally {
+      setFolderMenuId(null)
+    }
+  }
+
   // 폴더 삭제
   const handleDeleteFolder = async (folderId: string, folderName: string) => {
     if (!confirm(`"${folderName}" 폴더를 삭제하시겠어요?\n폴더 안 항목들은 모든 저장 항목에서 계속 확인할 수 있습니다.`)) return
@@ -392,6 +416,20 @@ export default function MyPage() {
     } catch { alert('폴더 삭제에 실패했습니다.') }
     finally { setFolderMenuId(null) }
   }
+
+  // 검색 필터링 (제목 + 태그 + 카테고리명)
+  const filteredSummaries = searchQuery.trim()
+    ? summaries.filter(s => {
+        const q = searchQuery.toLowerCase()
+        const catLabel = (CATEGORY_LABEL[s.category] ?? s.category).toLowerCase()
+        const tags = (s.square_meta?.tags ?? []).join(' ').toLowerCase()
+        return (
+          s.title.toLowerCase().includes(q) ||
+          tags.includes(q) ||
+          catLabel.includes(q)
+        )
+      })
+    : summaries
 
   // 폴더 이동 완료 → UI 즉시 반영
   const handleMoved = (summaryId: string, newFolderId: string) => {
@@ -532,6 +570,26 @@ export default function MyPage() {
 
         {/* Content Grid */}
         <main className="flex-1">
+          {/* 검색창 */}
+          <div className="relative mb-5">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              placeholder="제목, 태그, 카테고리로 검색..."
+              className="w-full h-10 pl-9 pr-4 bg-[#32302e] border border-white/10 rounded-xl text-sm text-white placeholder:text-[#75716e] focus:outline-none focus:border-orange-500/50 transition-colors"
+            />
+            <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#75716e]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#75716e] hover:text-white text-xs"
+              >✕</button>
+            )}
+          </div>
+
           {loading ? (
             <div className="flex items-center justify-center py-20">
               <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-orange-500" />
@@ -554,8 +612,20 @@ export default function MyPage() {
                   {savingOrder && <p className="text-[#75716e] text-xs animate-pulse">저장 중...</p>}
                 </div>
               )}
+            {searchQuery && (
+              <p className="text-[#75716e] text-xs mb-3">
+                "{searchQuery}" 검색 결과 {filteredSummaries.length}개
+              </p>
+            )}
+            {filteredSummaries.length === 0 && searchQuery ? (
+              <div className="bg-[#32302e]/50 rounded-[32px] p-12 text-center border border-white/5">
+                <span className="text-3xl mb-3 block">🔍</span>
+                <p className="text-white font-medium mb-1">검색 결과가 없습니다</p>
+                <p className="text-[#75716e] text-sm">AI 챗봇에게 물어보면 더 정확하게 찾을 수 있어요</p>
+              </div>
+            ) : (
             <div className="columns-1 sm:columns-2 lg:columns-3 gap-6 space-y-6">
-              {summaries.map((item, idx) => (
+              {filteredSummaries.map((item, idx) => (
                 <div
                   key={item.id}
                   className={`break-inside-avoid relative group transition-all ${
@@ -701,6 +771,7 @@ export default function MyPage() {
                 </div>
               ))}
             </div>
+            )}  {/* filteredSummaries.length === 0 else */}
             </>
           )}
         </main>

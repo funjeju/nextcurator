@@ -21,7 +21,8 @@ export interface SavedSummary {
   channel?: string
   thumbnail: string
   category: string
-  summary?: any       // AI 요약 내용 (결과 페이지 복원에 필요)
+  summary?: any          // AI 요약 내용 (결과 페이지 복원에 필요)
+  contextSummary?: string // 맥락 요약 200~300자 (검색·임베딩용)
   square_meta?: any
   isPublic: boolean
   createdAt: any
@@ -421,6 +422,112 @@ export async function getFriends(myUid: string): Promise<{ uid: string; displayN
   return profiles
     .filter(Boolean)
     .map(p => ({ uid: p!.uid, displayName: p!.displayName, photoURL: p!.photoURL }))
+}
+
+// ─────────────────────────────────────────────
+// 폴더 공유
+// ─────────────────────────────────────────────
+
+export interface SharedFolder {
+  id: string
+  ownerId: string
+  ownerName: string
+  ownerPhotoURL: string
+  folderName: string
+  // 영상 메타만 저장 (복사 시 필요한 최소 정보)
+  items: Array<{
+    sessionId: string
+    videoId: string
+    title: string
+    thumbnail: string
+    channel: string
+    category: string
+    contextSummary?: string
+    square_meta?: any
+  }>
+  createdAt: any
+}
+
+/** 공유 폴더 생성 → shareId 반환 */
+export async function createSharedFolder(
+  ownerId: string,
+  ownerName: string,
+  ownerPhotoURL: string,
+  folderName: string,
+  summaries: SavedSummary[]
+): Promise<string> {
+  const items = summaries.map(s => ({
+    sessionId: s.sessionId,
+    videoId: s.videoId || '',
+    title: s.title,
+    thumbnail: s.thumbnail || '',
+    channel: s.channel || '',
+    category: s.category,
+    contextSummary: s.contextSummary || '',
+    square_meta: stripUndefined(s.square_meta) ?? null,
+  }))
+  const ref = await addDoc(collection(db, 'shared_folders'), {
+    ownerId,
+    ownerName,
+    ownerPhotoURL,
+    folderName,
+    items,
+    createdAt: serverTimestamp(),
+  })
+  return ref.id
+}
+
+/** 공유 폴더 조회 */
+export async function getSharedFolder(shareId: string): Promise<SharedFolder | null> {
+  const snap = await getDoc(doc(db, 'shared_folders', shareId))
+  if (!snap.exists()) return null
+  return { id: snap.id, ...snap.data() } as SharedFolder
+}
+
+/** 공유 폴더 → 내 라이브러리에 복사 */
+export async function copySharedFolder(
+  shareId: string,
+  recipientId: string,
+  recipientDisplayName: string,
+  recipientPhotoURL: string
+): Promise<{ folderId: string; count: number }> {
+  const shared = await getSharedFolder(shareId)
+  if (!shared) throw new Error('공유 폴더를 찾을 수 없습니다.')
+
+  // 새 폴더 생성
+  const folderRef = await addDoc(collection(db, 'folders'), {
+    userId: recipientId,
+    name: `${shared.folderName} (${shared.ownerName}님 공유)`,
+    createdAt: serverTimestamp(),
+  })
+
+  // 영상 일괄 복사
+  const batch = writeBatch(db)
+  for (const item of shared.items) {
+    const newRef = doc(collection(db, 'saved_summaries'))
+    batch.set(newRef, {
+      userId: recipientId,
+      userDisplayName: recipientDisplayName,
+      userPhotoURL: recipientPhotoURL,
+      folderId: folderRef.id,
+      sessionId: item.sessionId,
+      videoId: item.videoId,
+      title: item.title,
+      thumbnail: item.thumbnail,
+      channel: item.channel,
+      category: item.category,
+      contextSummary: item.contextSummary || '',
+      square_meta: item.square_meta ?? null,
+      summary: null,
+      isPublic: false,
+      likeCount: 0,
+      viewCount: 0,
+      createdAt: serverTimestamp(),
+    })
+  }
+  await batch.commit()
+
+  return { folderId: folderRef.id, count: shared.items.length }
 }
 
 export async function getSavedSummariesByFolder(userId: string, folderId: string): Promise<SavedSummary[]> {

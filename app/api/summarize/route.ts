@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { extractVideoId, getTranscript, getVideoMeta } from '@/lib/transcript'
-import { classifyCategory, generateSummary, generateReportSummary } from '@/lib/claude'
+import { classifyCategory, generateSummary, generateReportSummary, generateContextSummary } from '@/lib/claude'
 import { randomUUID } from 'crypto'
 
 const PROJECT_ID = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID!
@@ -191,9 +191,10 @@ export async function POST(req: NextRequest) {
       const pageTitle = titleMatch?.[1]?.trim() || new URL(url).hostname
 
       const [summary, reportSummary] = await Promise.all([
-        generateSummary(category, pageText),
+        generateSummary(category, pageText, 'web'),
         generateReportSummary(category, pageTitle, pageText).catch(() => ''),
       ])
+      const contextSummary = await generateContextSummary(pageTitle, category, summary).catch(() => '')
 
       const sessionId = randomUUID()
       const result = {
@@ -206,6 +207,7 @@ export async function POST(req: NextRequest) {
         duration: 0,
         category,
         summary,
+        contextSummary,
         transcript: pageText.slice(0, 3000),
         transcriptSource: 'web',
         videoPublishedAt: '',
@@ -274,6 +276,7 @@ export async function POST(req: NextRequest) {
       generateSummary(category, fullContext),
       generateReportSummary(category, videoInfo.title, fullContext).catch(() => ''),
     ])
+    const contextSummary = await generateContextSummary(videoInfo.title, category, summary).catch(() => '')
 
     const sessionId = randomUUID()
     const result = {
@@ -285,6 +288,7 @@ export async function POST(req: NextRequest) {
       duration: 0,
       category,
       summary,
+      contextSummary,
       transcript,
       transcriptSource,
       videoPublishedAt: videoInfo.publishedAt || '',

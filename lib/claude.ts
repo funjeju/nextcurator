@@ -97,12 +97,44 @@ const SUMMARY_PROMPTS: Record<Category, string> = {
 {"square_meta":{"tags":["키워드1","키워드2","키워드3","키워드4","키워드5"],"topic_cluster":"대주제","vibe":"분위기"},"topic":"팁 주제 (예: 집 정리 꿀팁)","tips":[{"number":1,"title":"팁 제목","desc":"팁 설명 1~2문장","timestamp":"MM:SS","difficulty":"쉬움"}],"key_message":"영상을 관통하는 핵심 메시지 한 줄","tools":["필요한 도구나 앱 등 (없으면 빈 배열)"],"top3":["지금 당장 적용할 수 있는 팁 요약 1","지금 당장 적용할 수 있는 팁 요약 2","지금 당장 적용할 수 있는 팁 요약 3"]}`,
 }
 
-export async function generateSummary(category: Category, transcript: string): Promise<SummaryData> {
-  const prompt = SUMMARY_PROMPTS[category]
-  const result = await summaryModel.generateContent(`${prompt}
+/**
+ * 긴 자막을 전체적으로 커버하도록 샘플링
+ * - 6만자 이하: 전체 사용
+ * - 6만자 초과: 앞 40% + 중간 30% + 뒤 30% 균등 분배
+ */
+function sampleTranscript(transcript: string, maxChars = 60000): string {
+  if (transcript.length <= maxChars) return transcript
 
-자막:
-${transcript.slice(0, 8000)}`)
+  const frontChars  = Math.floor(maxChars * 0.40)
+  const middleChars = Math.floor(maxChars * 0.30)
+  const endChars    = Math.floor(maxChars * 0.30)
+
+  const midStart = Math.floor(transcript.length / 2) - Math.floor(middleChars / 2)
+  const endStart = transcript.length - endChars
+
+  const front  = transcript.slice(0, frontChars)
+  const middle = transcript.slice(midStart, midStart + middleChars)
+  const end    = transcript.slice(endStart)
+
+  return [front, '\n...[중략]...\n', middle, '\n...[중략]...\n', end].join('')
+}
+
+export async function generateSummary(
+  category: Category,
+  transcript: string,
+  source: 'youtube' | 'pdf' | 'web' = 'youtube'
+): Promise<SummaryData> {
+  const prompt = SUMMARY_PROMPTS[category]
+  const sampled = sampleTranscript(transcript)  // 기본 6만자
+
+  const sourceNote = source !== 'youtube'
+    ? `\n※ 이 콘텐츠는 ${source === 'pdf' ? 'PDF 문서' : '웹 페이지'}입니다. timestamp 필드는 모두 빈 문자열("")로 채우세요.`
+    : ''
+
+  const result = await summaryModel.generateContent(`${prompt}${sourceNote}
+
+${source === 'youtube' ? '자막' : '내용'}:
+${sampled}`)
 
   const text = result.response.text().trim()
   return extractJSON(text) as SummaryData
@@ -150,9 +182,45 @@ export async function generateReportSummary(
 카테고리: ${categoryHint[category]}
 
 자막/내용:
-${fullContext.slice(0, 6000)}`)
+${sampleTranscript(fullContext, 60000)}`)
 
   return result.response.text().trim()
+}
+
+/**
+ * 맥락 요약 생성 — 200~300자, 검색·임베딩 최적화
+ * 저장 시 1회 생성 후 Firestore에 보관
+ */
+export async function generateContextSummary(
+  title: string,
+  category: Category,
+  summaryData: SummaryData
+): Promise<string> {
+  const categoryHint: Record<Category, string> = {
+    recipe: '요리/레시피',
+    english: '영어 학습',
+    learning: '학습/강의',
+    news: '뉴스/시사',
+    selfdev: '자기계발',
+    travel: '여행',
+    story: '스토리/드라마',
+    tips: '팁/라이프핵',
+  }
+
+  const result = await classifyModel.generateContent(`다음 콘텐츠를 200~300자 이내로 맥락 요약하세요.
+
+규칙:
+- 이 텍스트는 검색과 AI 추천에 사용됩니다
+- 핵심 주제, 다루는 내용, 대상 독자, 실용적 가치를 자연스러운 문장으로 담으세요
+- 제목을 반복하지 말고 내용의 "맥락"을 설명하세요
+- 한국어, 200~300자 이내, 단락 없이 한 문단으로
+
+제목: ${title}
+카테고리: ${categoryHint[category]}
+요약 데이터: ${JSON.stringify(summaryData).slice(0, 2000)}`)
+
+  const text = result.response.text().trim()
+  return text.slice(0, 350)  // 최대 350자 안전 마진
 }
 
 export async function generateQuiz(

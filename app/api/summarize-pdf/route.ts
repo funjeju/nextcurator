@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { classifyCategory, generateSummary, generateReportSummary } from '@/lib/claude'
+import { classifyCategory, generateSummary, generateReportSummary, generateContextSummary } from '@/lib/claude'
 import { randomUUID } from 'crypto'
+import { GoogleGenerativeAI } from '@google/generative-ai'
+
+const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GENERATIVE_AI_API_KEY!)
 
 const PROJECT_ID = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID!
 const API_KEY = process.env.NEXT_PUBLIC_FIREBASE_API_KEY!
@@ -30,34 +33,34 @@ function toFirestoreFields(obj: Record<string, unknown>): Record<string, unknown
   return fields
 }
 
-// PDF 텍스트 추출: Gemini File API 또는 텍스트 레이어 파싱
-async function extractPdfText(buffer: ArrayBuffer, filename: string): Promise<string> {
-  // PDF 바이너리에서 텍스트 레이어 추출 (간단한 파싱)
-  const bytes = new Uint8Array(buffer)
-  const text = new TextDecoder('latin1').decode(bytes)
+/**
+ * Gemini에 PDF를 직접 전달해 텍스트 추출
+ * - 텍스트 기반 PDF, 이미지/스캔 PDF 모두 처리
+ * - 별도 OCR 서비스 불필요
+ */
+async function extractPdfWithGemini(buffer: ArrayBuffer): Promise<string> {
+  const model = genAI.getGenerativeModel({
+    model: 'gemini-2.5-flash',
+    generationConfig: { temperature: 0, maxOutputTokens: 8192 },
+  })
 
-  // PDF 스트림에서 텍스트 추출
-  const extracted: string[] = []
-  const streamRegex = /stream\r?\n([\s\S]*?)\r?\nendstream/g
-  let match
+  const base64 = Buffer.from(buffer).toString('base64')
 
-  while ((match = streamRegex.exec(text)) !== null) {
-    const stream = match[1]
-    // BT/ET 블록에서 텍스트 연산자 추출
-    const textBlocks = stream.match(/\(([^)]{1,200})\)\s*Tj/g)
-    if (textBlocks) {
-      for (const block of textBlocks) {
-        const inner = block.match(/\(([^)]+)\)/)
-        if (inner) extracted.push(inner[1])
-      }
-    }
-  }
+  const result = await model.generateContent([
+    {
+      inlineData: {
+        mimeType: 'application/pdf',
+        data: base64,
+      },
+    },
+    `이 PDF의 모든 텍스트 내용을 그대로 추출해주세요.
+페이지 순서대로 빠짐없이 추출하고, 표나 목록 구조도 가능한 유지해주세요.
+마크다운 형식이나 설명 없이 내용만 출력하세요.`,
+  ])
 
-  const result = extracted.join(' ').replace(/\s+/g, ' ').trim()
-  if (result.length > 200) return result.slice(0, 10000)
-
-  // 텍스트 레이어 없으면 파일명으로 힌트만 제공
-  return `PDF 파일: ${filename}\n[텍스트 레이어를 추출할 수 없습니다. 스캔된 PDF이거나 이미지 기반 PDF일 수 있습니다.]`
+  const text = result.response.text().trim()
+  if (!text || text.length < 50) throw new Error('PDF_EMPTY_CONTENT')
+  return text
 }
 
 export async function POST(req: NextRequest) {
@@ -70,15 +73,18 @@ export async function POST(req: NextRequest) {
     if (!file.name.toLowerCase().endsWith('.pdf')) {
       return NextResponse.json({ error: 'PDF 파일만 업로드할 수 있습니다.' }, { status: 400 })
     }
-    if (file.size > 10 * 1024 * 1024) {
-      return NextResponse.json({ error: 'PDF 파일은 10MB 이하만 가능합니다.' }, { status: 400 })
+    if (file.size > 20 * 1024 * 1024) {
+      return NextResponse.json({ error: 'PDF 파일은 20MB 이하만 가능합니다.' }, { status: 400 })
     }
 
     const buffer = await file.arrayBuffer()
-    const pdfText = await extractPdfText(buffer, file.name)
 
-    if (!pdfText.trim()) {
-      return NextResponse.json({ error: 'PDF에서 텍스트를 추출할 수 없습니다.' }, { status: 422 })
+    let pdfText: string
+    try {
+      pdfText = await extractPdfWithGemini(buffer)
+    } catch (e) {
+      console.error('[PDF] Gemini extraction failed:', e)
+      return NextResponse.json({ error: 'PDF 내용을 읽을 수 없습니다. 손상된 파일이거나 보안이 설정된 PDF일 수 있습니다.' }, { status: 422 })
     }
 
     const title = file.name.replace(/\.pdf$/i, '')
@@ -90,9 +96,10 @@ export async function POST(req: NextRequest) {
     }
 
     const [summary, reportSummary] = await Promise.all([
-      generateSummary(category as any, pdfText),
+      generateSummary(category as any, pdfText, 'pdf'),
       generateReportSummary(category as any, title, pdfText).catch(() => ''),
     ])
+    const contextSummary = await generateContextSummary(title, category as any, summary).catch(() => '')
 
     const sessionId = randomUUID()
     const result = {
@@ -105,6 +112,7 @@ export async function POST(req: NextRequest) {
       duration: 0,
       category,
       summary,
+      contextSummary,
       transcript: pdfText.slice(0, 3000),
       transcriptSource: 'pdf',
       videoPublishedAt: '',

@@ -10,9 +10,11 @@ interface Props {
   sessionId?: string
   commentCounts?: Record<string, number>
   onComment?: (segmentId: string, segmentLabel: string) => void
+  hideTimestamp?: boolean
 }
 
-export default function StorySummary({ data, onSeek, sessionId, commentCounts = {} }: Props) {
+export default function StorySummary({ data, onSeek, sessionId, commentCounts = {}, hideTimestamp }: Props) {
+  const hasTimestamps = !hideTimestamp && data.timeline?.some(t => t.timestamp && t.timestamp !== '00:00')
   return (
     <div className="space-y-6 bg-[#32302e]/80 backdrop-blur-3xl p-6 md:p-8 rounded-[32px] border border-white/5 shadow-2xl mt-4">
 
@@ -45,7 +47,7 @@ export default function StorySummary({ data, onSeek, sessionId, commentCounts = 
       {data.timeline && data.timeline.length > 0 && (
         <div className="space-y-4">
           <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-            <span>⏱️</span> 스토리 타임라인
+            <span>{hasTimestamps ? '⏱️' : '📋'}</span> 스토리 {hasTimestamps ? '타임라인' : '전개'}
           </h3>
           <div className="space-y-3 relative before:absolute before:left-4 before:top-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-white/10 before:to-transparent">
             {data.timeline.map((item, i) => {

@@ -13,6 +13,7 @@ interface Props {
   sessionId?: string
   commentCounts?: Record<string, number>
   onComment?: (segmentId: string, segmentLabel: string) => void
+  hideTimestamp?: boolean
 }
 
 const DIFFICULTY_STYLE: Record<string, string> = {

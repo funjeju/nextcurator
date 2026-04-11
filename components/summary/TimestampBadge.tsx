@@ -8,6 +8,9 @@ interface TimestampBadgeProps {
 }
 
 export default function TimestampBadge({ timestamp, onSeek }: TimestampBadgeProps) {
+  // 빈 문자열이거나 "00:00"이면 PDF/웹 소스 → 숨김
+  if (!timestamp || timestamp === '00:00') return null
+
   return (
     <Badge
       variant="outline"

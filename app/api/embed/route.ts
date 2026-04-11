@@ -39,15 +39,19 @@ function extractEmbedText(title: string, category: string, summary: unknown): st
 
 export async function POST(req: NextRequest) {
   try {
-    const { docId, title, category, summary } = await req.json() as {
+    const { docId, title, category, summary, contextSummary } = await req.json() as {
       docId: string
       title: string
       category: string
       summary: unknown
+      contextSummary?: string
     }
     if (!docId) return NextResponse.json({ error: 'docId required' }, { status: 400 })
 
-    const text = extractEmbedText(title || '', category || '', summary)
+    // contextSummary가 있으면 우선 사용, 없으면 기존 필드 추출로 폴백
+    const text = contextSummary?.trim()
+      ? `${title} ${contextSummary}`
+      : extractEmbedText(title || '', category || '', summary)
     if (!text.trim()) return NextResponse.json({ ok: true, skipped: true })
 
     // Gemini text-embedding-004 호출

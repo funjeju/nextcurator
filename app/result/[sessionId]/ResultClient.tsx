@@ -455,6 +455,7 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
                 sessionId={sessionId}
                 onComment={handleComment}
                 commentCounts={commentCounts}
+                transcriptSource={data.transcriptSource}
               />
               {/* 퀴즈 버튼 — 영어/학습 카테고리만 */}
               {(data.category === 'english' || data.category === 'learning') && (

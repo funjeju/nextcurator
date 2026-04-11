@@ -14,6 +14,7 @@ interface Props {
   sessionId?: string
   commentCounts?: Record<string, number>
   onComment?: (segmentId: string, segmentLabel: string) => void
+  hideTimestamp?: boolean
 }
 
 export default function EnglishSummary({ data, onSeek, sessionId, commentCounts = {} }: Props) {

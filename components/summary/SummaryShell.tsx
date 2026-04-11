@@ -16,12 +16,13 @@ interface Props {
   onSeek: (ts: string) => void
   sessionId?: string
   commentCounts?: Record<string, number>
-  // kept for CommentSection scroll behavior (action bar comment icon)
   onComment?: (segmentId: string, segmentLabel: string) => void
+  transcriptSource?: string  // 'pdf' | 'web' | 'youtube' | ...
 }
 
-export default function SummaryShell({ category, summary, onSeek, sessionId, commentCounts, onComment }: Props) {
-  const sharedProps = { sessionId, commentCounts, onComment }
+export default function SummaryShell({ category, summary, onSeek, sessionId, commentCounts, onComment, transcriptSource }: Props) {
+  const hideTimestamp = transcriptSource === 'pdf' || transcriptSource === 'web'
+  const sharedProps = { sessionId, commentCounts, onComment, hideTimestamp }
   switch (category) {
     case 'recipe':
       return <RecipeSummary data={summary as RecipeSummaryType} onSeek={onSeek} {...sharedProps} />
