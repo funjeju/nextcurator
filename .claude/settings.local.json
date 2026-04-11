@@ -55,7 +55,8 @@
       "Bash(node -e \"require\\('typescript'\\)\")",
       "Bash(node ./node_modules/.bin/tsc --noEmit --skipLibCheck)",
       "Bash(node \"./node_modules/typescript/bin/tsc\" --noEmit --skipLibCheck)",
-      "Bash(cmd /c \"node node_modules/typescript/bin/tsc --noEmit --skipLibCheck 2>&1\")"
+      "Bash(cmd /c \"node node_modules/typescript/bin/tsc --noEmit --skipLibCheck 2>&1\")",
+      "Bash(git push:*)"
     ]
   }
 }
