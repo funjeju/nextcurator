@@ -5,13 +5,6 @@ const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GENERATIVE_AI_API_KEY!)
 
 const embeddingModel = genAI.getGenerativeModel({ model: 'text-embedding-004' })
 
-const chatModel = genAI.getGenerativeModel({
-  model: 'gemini-2.5-flash',
-  generationConfig: {
-    temperature: 0.7,
-    maxOutputTokens: 1024,
-  },
-})
 
 const PROJECT_ID = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID!
 const API_KEY = process.env.NEXT_PUBLIC_FIREBASE_API_KEY!
@@ -207,12 +200,19 @@ ${contextList}
 - [RELATED:...] 태그는 사용자에게 보이지 않으므로 반드시 마지막에 단독으로 붙이세요.`
       : `당신은 NextCurator AI 어시스턴트입니다. 관련 콘텐츠를 찾지 못했습니다. 한국어로 친근하게 안내해주세요.`
 
+    // systemInstruction을 모델 생성 시점에 설정 (SDK가 Content 객체로 올바르게 포매팅)
+    const model = genAI.getGenerativeModel({
+      model: 'gemini-2.5-flash',
+      systemInstruction,
+      generationConfig: { temperature: 0.7, maxOutputTokens: 1024 },
+    })
+
     const history = messages.slice(0, -1).map(m => ({
       role: m.role as 'user' | 'model',
       parts: [{ text: m.content }],
     }))
 
-    const chat = chatModel.startChat({ systemInstruction, history })
+    const chat = model.startChat({ history })
     const result = await chat.sendMessage(query)
     const rawText = result.response.text()
 
