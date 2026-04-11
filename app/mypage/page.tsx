@@ -8,7 +8,7 @@ import { formatRelativeDate } from '@/lib/formatDate'
 import {
   getUserFolders, getSavedSummariesByFolder, deleteSavedSummary, updateSummaryFolder,
   getPendingFriendRequests, acceptFriendRequest, rejectFriendRequest, getFriends,
-  batchUpdateSortOrder,
+  batchUpdateSortOrder, renameFolder, deleteFolder,
   Folder, SavedSummary, FriendRequest,
 } from '@/lib/db'
 import { useAuth } from '@/providers/AuthProvider'
@@ -225,6 +225,9 @@ export default function MyPage() {
   const [summaries, setSummaries] = useState<SavedSummary[]>([])
   const [allSummaries, setAllSummaries] = useState<SavedSummary[]>([])
   const [activeFolder, setActiveFolder] = useState<string>('all')
+  const [folderMenuId, setFolderMenuId] = useState<string | null>(null)
+  const [renamingId, setRenamingId] = useState<string | null>(null)
+  const [renameValue, setRenameValue] = useState('')
   const [loading, setLoading] = useState(true)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [openMoveId, setOpenMoveId] = useState<string | null>(null)
@@ -232,6 +235,14 @@ export default function MyPage() {
   const [dragOverId, setDragOverId] = useState<string | null>(null)
   const [savingOrder, setSavingOrder] = useState(false)
   const [pendingCount, setPendingCount] = useState(0)
+
+  // 폴더 메뉴 외부 클릭 시 닫기
+  useEffect(() => {
+    if (!folderMenuId) return
+    const handler = () => setFolderMenuId(null)
+    document.addEventListener('click', handler)
+    return () => document.removeEventListener('click', handler)
+  }, [folderMenuId])
 
   useEffect(() => {
     const fetchInit = async () => {
@@ -354,6 +365,34 @@ export default function MyPage() {
     }
   }
 
+  // 폴더 이름 변경
+  const handleRenameConfirm = async (folderId: string) => {
+    const name = renameValue.trim()
+    if (!name) return
+    try {
+      await renameFolder(folderId, name)
+      setFolders(prev => prev.map(f => f.id === folderId ? { ...f, name } : f))
+    } catch { alert('이름 변경에 실패했습니다.') }
+    finally { setRenamingId(null); setRenameValue(''); setFolderMenuId(null) }
+  }
+
+  // 폴더 삭제
+  const handleDeleteFolder = async (folderId: string, folderName: string) => {
+    if (!confirm(`"${folderName}" 폴더를 삭제하시겠어요?\n폴더 안 항목들은 모든 저장 항목에서 계속 확인할 수 있습니다.`)) return
+    try {
+      await deleteFolder(folderId)
+      setFolders(prev => prev.filter(f => f.id !== folderId))
+      if (activeFolder === folderId) {
+        setActiveFolder('all')
+        const uid = getLocalUserId()
+        const allItems = await getSavedSummariesByFolder(uid, 'all')
+        setAllSummaries(allItems)
+        setSummaries(allItems)
+      }
+    } catch { alert('폴더 삭제에 실패했습니다.') }
+    finally { setFolderMenuId(null) }
+  }
+
   // 폴더 이동 완료 → UI 즉시 반영
   const handleMoved = (summaryId: string, newFolderId: string) => {
     const update = (list: SavedSummary[]) =>
@@ -428,15 +467,65 @@ export default function MyPage() {
               🌐 모든 저장 항목
             </button>
             {folders.map(f => (
-              <button
-                key={f.id}
-                onClick={() => handleFolderClick(f.id)}
-                className={`text-left px-4 py-3 rounded-xl whitespace-nowrap transition-colors ${
-                  activeFolder === f.id ? 'bg-orange-500 text-white font-bold' : 'bg-[#32302e] text-[#a4a09c] hover:bg-[#3d3a38]'
-                }`}
-              >
-                📁 {f.name}
-              </button>
+              <div key={f.id} className="relative group/folder">
+                {renamingId === f.id ? (
+                  /* 이름 변경 인라인 입력 */
+                  <div className="flex gap-1 px-2 py-1.5">
+                    <input
+                      autoFocus
+                      value={renameValue}
+                      onChange={e => setRenameValue(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') handleRenameConfirm(f.id)
+                        if (e.key === 'Escape') { setRenamingId(null); setFolderMenuId(null) }
+                      }}
+                      className="flex-1 bg-[#1c1a18] border border-orange-500/50 rounded-lg px-2 py-1 text-sm text-white focus:outline-none min-w-0"
+                    />
+                    <button onClick={() => handleRenameConfirm(f.id)} className="text-orange-400 text-xs px-2 py-1 rounded-lg hover:bg-orange-500/10">✓</button>
+                    <button onClick={() => { setRenamingId(null); setFolderMenuId(null) }} className="text-[#75716e] text-xs px-2 py-1 rounded-lg hover:bg-white/5">✕</button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => handleFolderClick(f.id)}
+                    className={`w-full text-left px-4 py-3 rounded-xl whitespace-nowrap transition-colors pr-10 ${
+                      activeFolder === f.id ? 'bg-orange-500 text-white font-bold' : 'bg-[#32302e] text-[#a4a09c] hover:bg-[#3d3a38]'
+                    }`}
+                  >
+                    📁 {f.name}
+                  </button>
+                )}
+
+                {/* ⋯ 메뉴 버튼 */}
+                {renamingId !== f.id && (
+                  <button
+                    onClick={e => { e.stopPropagation(); setFolderMenuId(prev => prev === f.id ? null : f.id) }}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover/folder:opacity-100 w-7 h-7 rounded-lg flex items-center justify-center text-[#75716e] hover:text-white hover:bg-white/10 transition-all"
+                  >
+                    ⋯
+                  </button>
+                )}
+
+                {/* 드롭다운 메뉴 */}
+                {folderMenuId === f.id && renamingId !== f.id && (
+                  <div
+                    className="absolute right-0 top-full mt-1 z-30 bg-[#2a2826] border border-white/10 rounded-xl shadow-xl overflow-hidden min-w-[120px]"
+                    onClick={e => e.stopPropagation()}
+                  >
+                    <button
+                      onClick={() => { setRenamingId(f.id); setRenameValue(f.name); setFolderMenuId(null) }}
+                      className="w-full text-left px-4 py-2.5 text-sm text-[#a4a09c] hover:text-white hover:bg-white/5 transition-colors"
+                    >
+                      ✏️ 이름 변경
+                    </button>
+                    <button
+                      onClick={() => handleDeleteFolder(f.id, f.name)}
+                      className="w-full text-left px-4 py-2.5 text-sm text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-colors"
+                    >
+                      🗑️ 삭제
+                    </button>
+                  </div>
+                )}
+              </div>
             ))}
           </div>
         </aside>

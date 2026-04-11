@@ -79,6 +79,16 @@ export async function createFolder(userId: string, name: string): Promise<Folder
   return { id: docRef.id, userId, name, createdAt: new Date() }
 }
 
+export async function renameFolder(folderId: string, newName: string): Promise<void> {
+  await updateDoc(doc(db, 'folders', folderId), { name: newName })
+}
+
+export async function deleteFolder(folderId: string): Promise<void> {
+  await deleteDoc(doc(db, 'folders', folderId))
+  // 폴더 안 항목들은 folderId를 빈 문자열로 초기화 (모든 저장 항목에서는 계속 보임)
+  // 별도 처리 없이 orphaned 상태로 두면 'all' 쿼리에서는 보임
+}
+
 // Firestore는 undefined 값을 거부 → 재귀적으로 null로 치환
 function stripUndefined(obj: any): any {
   if (obj === undefined) return null
