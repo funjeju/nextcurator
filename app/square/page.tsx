@@ -32,16 +32,37 @@ const CATEGORY_META: Record<string, { color: string; bg: string; emoji: string }
   tips:     { color: '#fbbf24', bg: '#451a03', emoji: '💡' },
 }
 
-// 추천 카드를 일반 카드와 같은 그리드 아이템으로 취급하기 위한 타입
+// 추천·광고 슬롯을 일반 카드와 같은 그리드 아이템으로 취급하기 위한 타입
 type RecSlot = {
   __rec: true
   slotId: string
   category: string
   items: SavedSummary[]
 }
-type GridItem = SavedSummary | RecSlot
+type AdSlotItem = {
+  __ad: true
+  slotId: string
+}
+type GridItem = SavedSummary | RecSlot | AdSlotItem
 
 const RECOMMENDATION_INTERVAL = 9  // 카드 N개마다 추천 1개 삽입
+const AD_INTERVAL = 13              // 카드 N개마다 광고 1개 삽입 (추천과 겹치지 않게 소수)
+
+// 반응형 컬럼 수 — window.innerWidth 기반
+function useColumnCount() {
+  const [cols, setCols] = useState(2)
+  useEffect(() => {
+    const update = () => {
+      if (window.innerWidth >= 1024) setCols(4)
+      else if (window.innerWidth >= 768) setCols(3)
+      else setCols(2)
+    }
+    update()
+    window.addEventListener('resize', update)
+    return () => window.removeEventListener('resize', update)
+  }, [])
+  return cols
+}
 
 type SortType = 'latest' | 'popular' | 'views'
 
@@ -67,7 +88,7 @@ function SummaryCard({ item, likedIds, likingIds, user, messagingId, onLike, onM
   onMessage: (e: React.MouseEvent, item: SavedSummary) => void
 }) {
   return (
-    <div className="break-inside-avoid relative group mb-3">
+    <div className="relative group">
       <Link
         href={`/result/${item.sessionId}?from=square`}
         onClick={() => incrementViewCount(item.id)}
@@ -141,11 +162,11 @@ function SummaryCard({ item, likedIds, likingIds, user, messagingId, onLike, onM
 function RecommendationCard({ slot }: { slot: RecSlot }) {
   const meta = CATEGORY_META[slot.category] ?? CATEGORY_META.news
   const catLabel = CATEGORIES.find(c => c.id === slot.category)?.label ?? slot.category
-  const [t1, t2, t3] = slot.items.slice(0, 3)
+  const thumbs = slot.items.slice(0, 4)
 
   return (
     <div
-      className="break-inside-avoid mb-3 rounded-[18px] overflow-hidden border shadow-md"
+      className="rounded-[18px] overflow-hidden border shadow-md"
       style={{ borderColor: `${meta.color}44`, background: `${meta.bg}dd` }}
     >
       {/* 헤더 */}
@@ -159,73 +180,43 @@ function RecommendationCard({ slot }: { slot: RecSlot }) {
         </div>
       </div>
 
-      {/* 썸네일 영역: 상단 2개 / 하단 좌1 + 우 더보기 */}
-      <div className="px-2.5 pb-2.5 space-y-1">
-        {/* 상단 2개 */}
-        <div className="grid grid-cols-2 gap-1">
-          {[t1, t2].filter(Boolean).map(item => (
-            <Link
-              key={item.id}
-              href={`/result/${item.sessionId}?from=square`}
-              onClick={() => incrementViewCount(item.id)}
-              className="rounded-lg overflow-hidden group"
-              title={item.title}
-            >
-              <div className="relative overflow-hidden bg-[#32302e]">
-                <img
-                  src={item.thumbnail}
-                  alt={item.title}
-                  className="w-full aspect-video object-cover group-hover:scale-105 transition-transform duration-300"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
-              </div>
-              <p className="text-[8px] text-white/60 leading-snug line-clamp-1 px-1 pt-0.5 pb-1">
-                {item.title}
-              </p>
-            </Link>
-          ))}
-        </div>
-
-        {/* 하단: 썸네일 1개 + 더보기 */}
-        <div className="grid grid-cols-2 gap-1 items-stretch">
-          {t3 ? (
-            <Link
-              href={`/result/${t3.sessionId}?from=square`}
-              onClick={() => incrementViewCount(t3.id)}
-              className="rounded-lg overflow-hidden group"
-              title={t3.title}
-            >
-              <div className="relative overflow-hidden bg-[#32302e]">
-                <img
-                  src={t3.thumbnail}
-                  alt={t3.title}
-                  className="w-full aspect-video object-cover group-hover:scale-105 transition-transform duration-300"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
-              </div>
-              <p className="text-[8px] text-white/60 leading-snug line-clamp-1 px-1 pt-0.5 pb-1">
-                {t3.title}
-              </p>
-            </Link>
-          ) : <div />}
-
-          {/* 더보기 버튼 */}
-          <div className="flex items-center justify-center">
-            <button
-              className="w-full h-full min-h-[52px] rounded-lg flex flex-col items-center justify-center gap-1 border transition-colors hover:opacity-80 active:scale-95"
-              style={{
-                borderColor: `${meta.color}44`,
-                background: `${meta.color}11`,
-                color: meta.color,
-              }}
-            >
-              <span className="text-base leading-none">{meta.emoji}</span>
-              <span className="text-[9px] font-bold">더보기</span>
-              <span className="text-[8px] opacity-60">→</span>
-            </button>
-          </div>
-        </div>
+      {/* 썸네일 2×2 */}
+      <div className="px-2.5 pb-2.5 grid grid-cols-2 gap-1">
+        {thumbs.map(item => (
+          <Link
+            key={item.id}
+            href={`/result/${item.sessionId}?from=square`}
+            onClick={() => incrementViewCount(item.id)}
+            className="rounded-lg overflow-hidden group"
+            title={item.title}
+          >
+            <div className="relative overflow-hidden bg-[#32302e]">
+              <img
+                src={item.thumbnail}
+                alt={item.title}
+                className="w-full aspect-video object-cover group-hover:scale-105 transition-transform duration-300"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
+            </div>
+            <p className="text-[8px] text-white/60 leading-snug line-clamp-1 px-1 pt-0.5 pb-1">
+              {item.title}
+            </p>
+          </Link>
+        ))}
       </div>
+    </div>
+  )
+}
+
+// 광고 카드 — 일반 카드 사이즈, 나중에 실제 광고 SDK로 교체
+function AdCard({ slot }: { slot: AdSlotItem }) {
+  return (
+    <div
+      key={slot.slotId}
+      className="rounded-[18px] border border-dashed border-white/10 bg-[#32302e]/40 flex flex-col items-center justify-center gap-2 aspect-[4/3] text-[#75716e]"
+    >
+      <span className="text-2xl opacity-30">📢</span>
+      <span className="text-[9px] opacity-30 tracking-widest uppercase">AD</span>
     </div>
   )
 }
@@ -241,6 +232,7 @@ export default function SquarePage() {
   const [likedIds, setLikedIds] = useState<Set<string>>(new Set())
   const [likingIds, setLikingIds] = useState<Set<string>>(new Set())
   const [messagingId, setMessagingId] = useState<string | null>(null)
+  const colCount = useColumnCount()
 
   useEffect(() => {
     getPublicSummaries()
@@ -327,34 +319,48 @@ export default function SquarePage() {
       pool[cat] = allSummaries
         .filter(s => s.category === cat && !likedIds.has(s.id))
         .sort((a, b) => (b.likeCount ?? 0) - (a.likeCount ?? 0))
-        .slice(0, 8)
+        .slice(0, 4)
     }
     return pool
   }, [topCategories, allSummaries, likedIds])
 
-  // 일반 카드 + 추천 카드를 flat 배열로 합성 — masonry가 자연스럽게 흐름
+  // 일반 카드 + 추천 카드 + 광고 카드를 flat 배열로 합성 — masonry가 자연스럽게 흐름
   const gridItems = useMemo<GridItem[]>(() => {
-    if (topCategories.length === 0) return filtered
-
     const result: GridItem[] = []
     let recIndex = 0
+    let adIndex = 0
 
     filtered.forEach((item, i) => {
       result.push(item)
 
-      // N개마다 추천 슬롯 1개 끼워 넣기
-      if ((i + 1) % RECOMMENDATION_INTERVAL === 0) {
+      const pos = i + 1  // 1-based 위치
+
+      // 추천 슬롯: RECOMMENDATION_INTERVAL 마다
+      if (pos % RECOMMENDATION_INTERVAL === 0 && topCategories.length > 0) {
         const cat = topCategories[recIndex % topCategories.length]
         const pool = recommendationPool[cat] ?? []
-        if (pool.length >= 2) {
-          result.push({ __rec: true, slotId: `rec-${cat}-${i}`, category: cat, items: pool })
+        if (pool.length >= 4) {
+          result.push({ __rec: true, slotId: `rec-${cat}-${pos}`, category: cat, items: pool })
           recIndex++
         }
+      }
+
+      // 광고 슬롯: AD_INTERVAL 마다 (추천과 같은 위치면 다음 칸으로 밀림)
+      if (pos % AD_INTERVAL === 0) {
+        result.push({ __ad: true, slotId: `ad-${adIndex++}` })
       }
     })
 
     return result
   }, [filtered, topCategories, recommendationPool])
+
+  // flat 배열 → N열에 행 우선(좌→우) 순서로 분배
+  // CSS columns는 열 우선이라 추천/광고 카드 위치가 틀어지므로, 직접 분배
+  const columns = useMemo<GridItem[][]>(() => {
+    const cols: GridItem[][] = Array.from({ length: colCount }, () => [])
+    gridItems.forEach((item, i) => cols[i % colCount].push(item))
+    return cols
+  }, [gridItems, colCount])
 
   return (
     <div className="min-h-screen bg-[#252423] font-sans">
@@ -417,23 +423,27 @@ export default function SquarePage() {
             </Link>
           </div>
         ) : (
-          <div className="columns-2 md:columns-3 lg:columns-4 gap-3">
-            {gridItems.map(item =>
-              '__rec' in item ? (
-                <RecommendationCard key={item.slotId} slot={item} />
-              ) : (
-                <SummaryCard
-                  key={item.id}
-                  item={item}
-                  likedIds={likedIds}
-                  likingIds={likingIds}
-                  user={user}
-                  messagingId={messagingId}
-                  onLike={handleLike}
-                  onMessage={handleMessage}
-                />
-              )
-            )}
+          <div className="flex gap-3 items-start">
+            {columns.map((col, ci) => (
+              <div key={ci} className="flex-1 flex flex-col gap-3 min-w-0">
+                {col.map(item => {
+                  if ('__rec' in item) return <RecommendationCard key={item.slotId} slot={item} />
+                  if ('__ad'  in item) return <AdCard key={item.slotId} slot={item} />
+                  return (
+                    <SummaryCard
+                      key={item.id}
+                      item={item}
+                      likedIds={likedIds}
+                      likingIds={likingIds}
+                      user={user}
+                      messagingId={messagingId}
+                      onLike={handleLike}
+                      onMessage={handleMessage}
+                    />
+                  )
+                })}
+              </div>
+            ))}
           </div>
         )}
       </div>
