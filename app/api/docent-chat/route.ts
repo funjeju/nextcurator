@@ -8,8 +8,6 @@ const docentModel = genAI.getGenerativeModel({
   generationConfig: {
     temperature: 0.7,
     maxOutputTokens: 1500,
-    // @ts-expect-error thinkingConfig not yet in types
-    thinkingConfig: { thinkingBudget: 0 },
   },
 })
 
@@ -31,6 +29,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: '메시지가 필요합니다.' }, { status: 400 })
     }
 
+    // summaryContext 크기 제한 (너무 크면 API 오류)
+    const trimmedContext = summaryContext.length > 3000
+      ? summaryContext.slice(0, 3000) + '...(생략)'
+      : summaryContext
+
     const systemInstruction = `당신은 NextCurator의 AI 도슨트입니다.
 도슨트(Docent)는 전시·강연 내용을 관람객에게 깊이 있게 해설해주는 전문 가이드입니다.
 당신은 아래 콘텐츠 요약 내용을 완전히 이해하고 있으며, 사용자가 내용을 더 잘 이해할 수 있도록 돕습니다.
@@ -39,7 +42,7 @@ export async function POST(req: NextRequest) {
 제목: ${title}
 카테고리: ${category}
 요약 내용:
-${summaryContext}
+${trimmedContext}
 ---
 
 역할 및 규칙:
@@ -62,7 +65,8 @@ ${summaryContext}
 
     return NextResponse.json({ text })
   } catch (e) {
-    console.error('[Docent Chat API] error:', e)
-    return NextResponse.json({ error: '오류가 발생했습니다.' }, { status: 500 })
+    const errMsg = e instanceof Error ? e.message : String(e)
+    console.error('[Docent Chat API] error:', errMsg)
+    return NextResponse.json({ error: '오류가 발생했습니다.', detail: errMsg }, { status: 500 })
   }
 }

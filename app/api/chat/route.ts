@@ -10,8 +10,6 @@ const chatModel = genAI.getGenerativeModel({
   generationConfig: {
     temperature: 0.7,
     maxOutputTokens: 1024,
-    // @ts-expect-error thinkingConfig not yet in types
-    thinkingConfig: { thinkingBudget: 0 },
   },
 })
 
@@ -138,9 +136,15 @@ export async function POST(req: NextRequest) {
     const contextLabel = source === 'mypage' ? '사용자의 저장된 콘텐츠' : '스퀘어 공개 콘텐츠'
 
     // ── 1. Firestore에서 콘텐츠 목록 조회 ──────────────
-    const allSummaries = await fetchSummaries(
-      source === 'mypage' && userId ? { userId } : { isPublic: true }
-    )
+    let allSummaries: SummaryDoc[] = []
+    try {
+      allSummaries = await fetchSummaries(
+        source === 'mypage' && userId ? { userId } : { isPublic: true }
+      )
+    } catch (e) {
+      console.warn('[Chat] Firestore fetch failed:', e)
+      // Firestore 실패해도 Gemini는 빈 컨텍스트로 진행
+    }
 
     // ── 2. 벡터 검색 (임베딩 있는 것) + 키워드 매칭 (없는 것) ──
     const withEmbed    = allSummaries.filter(s => s.embedding?.length)
