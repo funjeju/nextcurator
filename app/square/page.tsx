@@ -353,12 +353,19 @@ export default function SquarePage() {
 
       // 추천 슬롯: RECOMMENDATION_INTERVAL 마다
       if (pos % RECOMMENDATION_INTERVAL === 0 && effectiveCats.length > 0) {
-        const cat = effectiveCats[recIndex % effectiveCats.length]
-        const pool = recommendationPool[cat] ?? []
-        if (pool.length >= 4) {
-          result.push({ __rec: true, slotId: `rec-${cat}-${pos}`, category: cat, items: pool, personalized: isPersonalized })
-          recIndex++
+        // pool이 부족한 카테고리는 건너뛰며 순환 (recIndex 고착 방지)
+        let inserted = false
+        for (let attempt = 0; attempt < effectiveCats.length; attempt++) {
+          const cat = effectiveCats[(recIndex + attempt) % effectiveCats.length]
+          const pool = recommendationPool[cat] ?? []
+          if (pool.length >= 2) {
+            result.push({ __rec: true, slotId: `rec-${cat}-${pos}`, category: cat, items: pool, personalized: isPersonalized })
+            recIndex += attempt + 1
+            inserted = true
+            break
+          }
         }
+        if (!inserted) recIndex++  // 모든 카테고리 부족 시에도 다음 순환으로 이동
       }
 
       // 광고 슬롯: AD_INTERVAL 마다 (추천과 같은 위치면 다음 칸으로 밀림)
