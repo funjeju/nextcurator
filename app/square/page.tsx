@@ -335,10 +335,10 @@ export default function SquarePage() {
       pool[cat] = allSummaries
         .filter(s => s.category === cat && !likedIds.has(s.id))
         .sort((a, b) => (b.likeCount ?? 0) - (a.likeCount ?? 0))
-        .slice(0, 4)
+        .slice(0, 4)  // 최대 4개 (2×2 그리드용)
     }
     return pool
-  }, [topCategories, allSummaries, likedIds])  // effectiveCats는 topCategories 파생
+  }, [effectiveCats, allSummaries, likedIds])
 
   // 일반 카드 + 추천 카드 + 광고 카드를 flat 배열로 합성 — masonry가 자연스럽게 흐름
   const gridItems = useMemo<GridItem[]>(() => {

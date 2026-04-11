@@ -556,6 +556,12 @@ export default function MyPage() {
                       ✏️ 이름 변경
                     </button>
                     <button
+                      onClick={() => handleShareFolder(f.id, f.name)}
+                      className="w-full text-left px-4 py-2.5 text-sm text-[#a4a09c] hover:text-white hover:bg-white/5 transition-colors"
+                    >
+                      🔗 공유 링크 복사
+                    </button>
+                    <button
                       onClick={() => handleDeleteFolder(f.id, f.name)}
                       className="w-full text-left px-4 py-2.5 text-sm text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-colors"
                     >
