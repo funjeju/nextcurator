@@ -139,10 +139,17 @@ export async function POST(req: NextRequest) {
       // Firestore 실패해도 Gemini는 빈 컨텍스트로 진행
     }
 
-    // ── 2. 벡터 검색 (임베딩 있는 것) + 키워드 매칭 (없는 것) ──
-    const withEmbed    = allSummaries.filter(s => s.embedding?.length)
-    const withoutEmbed = allSummaries.filter(s => !s.embedding?.length)
+    // ── 2. 키워드 매칭 (전체) + 벡터 검색 (임베딩 있는 것) 병행 ──
+    // 키워드는 고유명사/제목 직접 검색에 강하므로 임베딩 유무와 무관하게 항상 실행
+    const keywordScored = allSummaries
+      .map(s => ({ s, score: keywordScore(query, s.title, s.tags) }))
+      .filter(x => x.score > 0)
+      .sort((a, b) => b.score - a.score)
+    const keywordTop = keywordScored.slice(0, 5).map(x => x.s)
+    const keywordIds = new Set(keywordTop.map(s => s.id))
 
+    // 벡터 검색: 임베딩 있는 것 중에서 키워드 매칭 안 된 나머지를 보완
+    const withEmbed = allSummaries.filter(s => s.embedding?.length && !keywordIds.has(s.id))
     let vectorTop: SummaryDoc[] = []
     if (withEmbed.length > 0) {
       try {
@@ -158,17 +165,10 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const keywordTop = withoutEmbed
-      .map(s => ({ s, score: keywordScore(query, s.title, s.tags) }))
-      .filter(x => x.score > 0)
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 5)
-      .map(x => x.s)
-
-    // 중복 제거 후 최대 10개
-    const seen = new Set(vectorTop.map(s => s.id))
-    const combined = [...vectorTop]
-    for (const s of keywordTop) {
+    // 키워드 우선, 벡터로 보완, 최대 10개
+    const combined = [...keywordTop]
+    const seen = new Set(keywordIds)
+    for (const s of vectorTop) {
       if (!seen.has(s.id)) { combined.push(s); seen.add(s.id) }
     }
     const topSummaries = combined.slice(0, 10)
