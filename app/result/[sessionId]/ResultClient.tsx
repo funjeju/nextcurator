@@ -11,7 +11,9 @@ import SaveModal from '@/components/summary/SaveModal'
 import CommentSection from '@/components/comments/CommentSection'
 import SummaryPdfTemplate from '@/components/pdf/SummaryPdfTemplate'
 import QuizPanel from '@/components/quiz/QuizPanel'
-import type { QuizData } from '@/types/summary'
+import DocentChat from '@/components/chat/DocentChat'
+import WorksheetPanel from '@/components/worksheet/WorksheetPanel'
+import type { QuizData, WorksheetData } from '@/types/summary'
 import Header from '@/components/common/Header'
 import { SummarizeResponse } from '@/types/summary'
 import { useAuth } from '@/providers/AuthProvider'
@@ -78,6 +80,11 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
   // 퀴즈
   const [quiz, setQuiz] = useState<QuizData | null>(null)
   const [quizLoading, setQuizLoading] = useState(false)
+
+  // 워크시트
+  const [worksheet, setWorksheet] = useState<WorksheetData | null>(null)
+  const [worksheetLoading, setWorksheetLoading] = useState(false)
+  const [worksheetLevel, setWorksheetLevel] = useState<'elementary' | 'middle' | 'advanced'>('elementary')
 
   useEffect(() => {
     if (!data?.videoId) return
@@ -282,6 +289,29 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
     }
   }
 
+  const handleGenerateWorksheet = async () => {
+    if (!data || worksheetLoading) return
+    setWorksheetLoading(true)
+    try {
+      const res = await fetch('/api/worksheet', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          transcript: data.transcript ?? '',
+          summary: data.summary,
+          title: data.title,
+          level: worksheetLevel,
+        }),
+      })
+      if (!res.ok) throw new Error('워크시트 생성 실패')
+      setWorksheet(await res.json())
+    } catch {
+      alert('워크시트 생성에 실패했습니다.')
+    } finally {
+      setWorksheetLoading(false)
+    }
+  }
+
   // 링크 복사/공유 (OG 카드 프리뷰 생성됨)
   const handleShare = async () => {
     if (!data) return
@@ -443,6 +473,48 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
                     <>🧠 퀴즈 생성하기</>
                   )}
                 </button>
+              )}
+
+              {/* 워크시트 버튼 — 영어 카테고리만 */}
+              {data.category === 'english' && (
+                <div className="space-y-2">
+                  <div className="flex gap-1.5">
+                    {([
+                      { id: 'elementary', label: '초등' },
+                      { id: 'middle',     label: '중등' },
+                      { id: 'advanced',   label: '고급' },
+                    ] as const).map(lv => (
+                      <button
+                        key={lv.id}
+                        onClick={() => setWorksheetLevel(lv.id)}
+                        className={`flex-1 py-1.5 rounded-xl text-xs font-semibold transition-all border ${
+                          worksheetLevel === lv.id
+                            ? 'bg-orange-500/20 border-orange-500/50 text-orange-400'
+                            : 'bg-[#32302e] border-white/10 text-[#75716e] hover:text-white'
+                        }`}
+                      >
+                        {lv.label}
+                      </button>
+                    ))}
+                  </div>
+                  <button
+                    onClick={handleGenerateWorksheet}
+                    disabled={worksheetLoading}
+                    className="w-full py-3.5 rounded-2xl border border-dashed border-orange-500/40 bg-orange-500/5 hover:bg-orange-500/10 text-orange-400 hover:text-orange-300 font-semibold text-sm transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                  >
+                    {worksheetLoading ? (
+                      <>
+                        <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                        </svg>
+                        워크시트 생성 중...
+                      </>
+                    ) : (
+                      <>📝 워크시트 만들기</>
+                    )}
+                  </button>
+                </div>
               )}
             </div>
           )}
@@ -640,6 +712,13 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
       </div>
 
       {quiz && <QuizPanel quiz={quiz} onClose={() => setQuiz(null)} />}
+      {worksheet && <WorksheetPanel worksheet={worksheet} onClose={() => setWorksheet(null)} />}
+
+      <DocentChat
+        title={data.title}
+        category={data.category}
+        summaryData={data.summary}
+      />
 
       {showSaveModal && (
         <SaveModal

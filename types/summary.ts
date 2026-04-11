@@ -96,6 +96,37 @@ export interface QuizData {
   questions: QuizQuestion[]
 }
 
+export interface VocabItem {
+  word: string
+  meaning: string        // 한국어 뜻
+  pronunciation: string  // /prəˌnʌnsiˈeɪʃən/
+  example: string        // 영어 예문
+  exampleKo: string      // 예문 한국어 번역
+}
+
+export interface WorksheetQuestion {
+  id: number
+  question: string
+  answer: string
+  hint?: string
+  options?: string[]   // matching: 보기 선택지
+}
+
+export interface WorksheetExercise {
+  type: 'matching' | 'fill_blank' | 'translate'
+  title: string
+  instructions: string
+  questions: WorksheetQuestion[]
+}
+
+export interface WorksheetData {
+  title: string
+  level: 'elementary' | 'middle' | 'advanced'
+  levelLabel: string
+  vocabulary: VocabItem[]
+  exercises: WorksheetExercise[]
+}
+
 export interface SummarizeResponse {
   sessionId: string
   videoId: string

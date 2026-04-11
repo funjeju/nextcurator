@@ -8,6 +8,7 @@ import { formatRelativeDate } from '@/lib/formatDate'
 import {
   getUserFolders, getSavedSummariesByFolder, deleteSavedSummary, updateSummaryFolder,
   getPendingFriendRequests, acceptFriendRequest, rejectFriendRequest, getFriends,
+  batchUpdateSortOrder,
   Folder, SavedSummary, FriendRequest,
 } from '@/lib/db'
 import { useAuth } from '@/providers/AuthProvider'
@@ -227,6 +228,9 @@ export default function MyPage() {
   const [loading, setLoading] = useState(true)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [openMoveId, setOpenMoveId] = useState<string | null>(null)
+  const [dragId, setDragId] = useState<string | null>(null)
+  const [dragOverId, setDragOverId] = useState<string | null>(null)
+  const [savingOrder, setSavingOrder] = useState(false)
   const [pendingCount, setPendingCount] = useState(0)
 
   useEffect(() => {
@@ -250,6 +254,75 @@ export default function MyPage() {
     }
     fetchInit()
   }, [user])
+
+  // ── 드래그 순서 변경 (특정 폴더에서만 활성화) ──
+  const canDrag = activeFolder !== 'all'
+
+  const handleDragStart = (e: React.DragEvent, id: string) => {
+    setDragId(id)
+    e.dataTransfer.effectAllowed = 'move'
+  }
+
+  const handleDragOver = (e: React.DragEvent, id: string) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    if (id !== dragOverId) setDragOverId(id)
+  }
+
+  const handleDrop = async (e: React.DragEvent, targetId: string) => {
+    e.preventDefault()
+    if (!dragId || dragId === targetId) { setDragId(null); setDragOverId(null); return }
+
+    const fromIdx = summaries.findIndex(s => s.id === dragId)
+    const toIdx   = summaries.findIndex(s => s.id === targetId)
+    if (fromIdx === -1 || toIdx === -1) return
+
+    const newList = [...summaries]
+    const [moved] = newList.splice(fromIdx, 1)
+    newList.splice(toIdx, 0, moved)
+
+    // 낙관적 업데이트
+    setSummaries(newList)
+    setAllSummaries(prev => {
+      const updated = [...prev]
+      newList.forEach((s, i) => {
+        const idx = updated.findIndex(u => u.id === s.id)
+        if (idx !== -1) updated[idx] = { ...updated[idx], sortOrder: i }
+      })
+      return updated
+    })
+    setDragId(null)
+    setDragOverId(null)
+
+    // Firestore 저장
+    setSavingOrder(true)
+    try {
+      await batchUpdateSortOrder(newList.map((s, i) => ({ id: s.id, sortOrder: i })))
+    } catch {
+      // 실패해도 로컬 순서는 유지 — 다음 로드 시 복구됨
+    } finally {
+      setSavingOrder(false)
+    }
+  }
+
+  const handleDragEnd = () => { setDragId(null); setDragOverId(null) }
+
+  // 모바일용 ↑↓ 이동
+  const moveItem = async (id: string, direction: 'up' | 'down') => {
+    const idx = summaries.findIndex(s => s.id === id)
+    const swapIdx = direction === 'up' ? idx - 1 : idx + 1
+    if (swapIdx < 0 || swapIdx >= summaries.length) return
+
+    const newList = [...summaries]
+    ;[newList[idx], newList[swapIdx]] = [newList[swapIdx], newList[idx]]
+    setSummaries(newList)
+    setSavingOrder(true)
+    try {
+      await batchUpdateSortOrder(newList.map((s, i) => ({ id: s.id, sortOrder: i })))
+    } catch { /* ignore */ } finally {
+      setSavingOrder(false)
+    }
+  }
 
   const handleDelete = async (e: React.MouseEvent, id: string) => {
     e.preventDefault()
@@ -381,12 +454,48 @@ export default function MyPage() {
               <p className="text-[#75716e] text-sm">폴더를 선택하거나 새로운 영상을 저장해 보세요.</p>
             </div>
           ) : (
+            <>
+              {/* 폴더 내 순서 변경 안내 */}
+              {canDrag && (
+                <div className="flex items-center justify-between mb-4">
+                  <p className="text-[#75716e] text-xs flex items-center gap-1.5">
+                    <span className="hidden md:inline">⠿ 드래그로 순서를 변경할 수 있어요</span>
+                    <span className="md:hidden">↑↓ 버튼으로 순서를 변경할 수 있어요</span>
+                  </p>
+                  {savingOrder && <p className="text-[#75716e] text-xs animate-pulse">저장 중...</p>}
+                </div>
+              )}
             <div className="columns-1 sm:columns-2 lg:columns-3 gap-6 space-y-6">
-              {summaries.map(item => (
-                <div key={item.id} className="break-inside-avoid relative group">
+              {summaries.map((item, idx) => (
+                <div
+                  key={item.id}
+                  className={`break-inside-avoid relative group transition-all ${
+                    canDrag ? 'cursor-default' : ''
+                  } ${dragOverId === item.id && dragId !== item.id ? 'ring-2 ring-orange-500 ring-offset-2 ring-offset-[#252423] rounded-[24px]' : ''}`}
+                  draggable={canDrag}
+                  onDragStart={canDrag ? (e) => handleDragStart(e, item.id) : undefined}
+                  onDragOver={canDrag ? (e) => handleDragOver(e, item.id) : undefined}
+                  onDrop={canDrag ? (e) => handleDrop(e, item.id) : undefined}
+                  onDragEnd={canDrag ? handleDragEnd : undefined}
+                >
+                  {/* 드래그 핸들 (PC) */}
+                  {canDrag && (
+                    <div
+                      className="absolute left-2 top-1/2 -translate-y-1/2 z-10 hidden md:flex items-center justify-center w-6 h-10 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing text-[#75716e] hover:text-white"
+                      title="드래그해서 순서 변경"
+                    >
+                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                        <circle cx="9" cy="5" r="1.5"/><circle cx="15" cy="5" r="1.5"/>
+                        <circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/>
+                        <circle cx="9" cy="19" r="1.5"/><circle cx="15" cy="19" r="1.5"/>
+                      </svg>
+                    </div>
+                  )}
+
                   <Link
                     href={`/result/${item.sessionId}`}
-                    className="block rounded-[24px] bg-[#32302e] border border-white/5 overflow-hidden hover:border-white/20 transition-all hover:-translate-y-1 shadow-lg"
+                    className={`block rounded-[24px] bg-[#32302e] border border-white/5 overflow-hidden hover:border-white/20 transition-all hover:-translate-y-1 shadow-lg ${dragId === item.id ? 'opacity-40 scale-95' : ''}`}
+                    onClick={dragId ? (e) => e.preventDefault() : undefined}
                   >
                     <div className="relative overflow-hidden bg-[#23211f]">
                       <img
@@ -473,10 +582,37 @@ export default function MyPage() {
                         </svg>
                       )}
                     </button>
+
+                    {/* 모바일 순서 이동 버튼 */}
+                    {canDrag && (
+                      <div className="flex flex-col gap-0.5 md:hidden">
+                        <button
+                          onClick={(e) => { e.preventDefault(); e.stopPropagation(); moveItem(item.id, 'up') }}
+                          disabled={idx === 0 || savingOrder}
+                          className="p-1.5 rounded-full bg-black/60 backdrop-blur-md border border-white/10 text-white/70 hover:text-orange-400 hover:border-orange-400/50 disabled:opacity-30 transition-colors"
+                          title="위로 이동"
+                        >
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 15l7-7 7 7" />
+                          </svg>
+                        </button>
+                        <button
+                          onClick={(e) => { e.preventDefault(); e.stopPropagation(); moveItem(item.id, 'down') }}
+                          disabled={idx === summaries.length - 1 || savingOrder}
+                          className="p-1.5 rounded-full bg-black/60 backdrop-blur-md border border-white/10 text-white/70 hover:text-orange-400 hover:border-orange-400/50 disabled:opacity-30 transition-colors"
+                          title="아래로 이동"
+                        >
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+                          </svg>
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}
             </div>
+            </>
           )}
         </main>
       </div>

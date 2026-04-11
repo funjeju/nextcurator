@@ -1,5 +1,5 @@
 import { db } from './firebase'
-import { collection, doc, setDoc, getDocs, getDoc, query, where, addDoc, deleteDoc, updateDoc, increment, serverTimestamp } from 'firebase/firestore'
+import { collection, doc, setDoc, getDocs, getDoc, query, where, addDoc, deleteDoc, updateDoc, increment, serverTimestamp, writeBatch } from 'firebase/firestore'
 import { SummaryData } from '@/types/summary'
 
 export interface Folder {
@@ -29,6 +29,7 @@ export interface SavedSummary {
   transcriptSource?: string
   likeCount?: number
   viewCount?: number
+  sortOrder?: number
 }
 
 export interface UserProfile {
@@ -231,6 +232,14 @@ export async function updateSummaryFolder(id: string, folderId: string): Promise
   await updateDoc(doc(db, 'saved_summaries', id), { folderId })
 }
 
+export async function batchUpdateSortOrder(updates: { id: string; sortOrder: number }[]): Promise<void> {
+  const batch = writeBatch(db)
+  for (const { id, sortOrder } of updates) {
+    batch.update(doc(db, 'saved_summaries', id), { sortOrder })
+  }
+  await batch.commit()
+}
+
 export async function getSavedSummaryBySessionId(userId: string, sessionId: string): Promise<SavedSummary | null> {
   const q = query(
     collection(db, 'saved_summaries'),
@@ -414,7 +423,11 @@ export async function getSavedSummariesByFolder(userId: string, folderId: string
   }
   const snapshot = await getDocs(q)
   const summaries = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }) as SavedSummary)
-  // 복합 인덱스 없이 클라이언트에서 정렬
+  // sortOrder가 있으면 그 순서로, 없으면 최신순
+  const hasSortOrder = summaries.some(s => s.sortOrder !== undefined)
+  if (hasSortOrder && folderId !== 'all') {
+    return summaries.sort((a, b) => (a.sortOrder ?? 9999) - (b.sortOrder ?? 9999))
+  }
   return summaries.sort((a, b) => {
     const aTime = a.createdAt?.toMillis?.() ?? a.createdAt?.getTime?.() ?? 0
     const bTime = b.createdAt?.toMillis?.() ?? b.createdAt?.getTime?.() ?? 0
