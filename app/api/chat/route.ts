@@ -2,15 +2,13 @@ import { NextRequest, NextResponse } from 'next/server'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GENERATIVE_AI_API_KEY!)
-
 const embeddingModel = genAI.getGenerativeModel({ model: 'text-embedding-004' })
-
 
 const PROJECT_ID = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID!
 const API_KEY = process.env.NEXT_PUBLIC_FIREBASE_API_KEY!
 const FIRESTORE_BASE = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents`
 
-// ── Firestore REST 파싱 헬퍼 ──────────────────────────
+// ── Firestore REST 파싱 (벡터 검색용) ────────────────
 function fromFirestoreFields(fields: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = {}
   for (const [k, v] of Object.entries(fields)) {
@@ -35,62 +33,46 @@ function fromFirestoreValue(v: Record<string, unknown>): unknown {
   return null
 }
 
-interface SummaryDoc {
-  id: string
-  sessionId: string
-  title: string
-  category: string
-  channel?: string
-  thumbnail?: string
-  tags: string[]
-  summary?: unknown
-  embedding?: number[]
-}
+/** 임베딩 벡터만 Firestore에서 가져오기 (벡터 검색 보완용) */
+async function fetchEmbeddings(
+  filter: { userId?: string; isPublic?: boolean }
+): Promise<Map<string, number[]>> {
+  const map = new Map<string, number[]>()
+  try {
+    const url = `${FIRESTORE_BASE}:runQuery?key=${API_KEY}`
+    const whereClause = filter.userId
+      ? { fieldFilter: { field: { fieldPath: 'userId' }, op: 'EQUAL', value: { stringValue: filter.userId } } }
+      : { fieldFilter: { field: { fieldPath: 'isPublic' }, op: 'EQUAL', value: { booleanValue: true } } }
 
-/** Firestore에서 saved_summaries 조회 (userId 또는 isPublic 필터) */
-async function fetchSummaries(filter: { userId?: string; isPublic?: boolean }): Promise<SummaryDoc[]> {
-  const url = `${FIRESTORE_BASE}:runQuery?key=${API_KEY}`
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        structuredQuery: {
+          from: [{ collectionId: 'saved_summaries' }],
+          where: whereClause,
+          limit: 500,
+        },
+      }),
+    })
+    if (!res.ok) return map
 
-  const whereClause = filter.userId
-    ? { fieldFilter: { field: { fieldPath: 'userId' }, op: 'EQUAL', value: { stringValue: filter.userId } } }
-    : { fieldFilter: { field: { fieldPath: 'isPublic' }, op: 'EQUAL', value: { booleanValue: true } } }
-
-  const body = {
-    structuredQuery: {
-      from: [{ collectionId: 'saved_summaries' }],
-      where: whereClause,
-      limit: 500,
-    },
-  }
-
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  })
-  if (!res.ok) return []
-
-  const results = await res.json()
-  return (results as any[])
-    .filter(r => r.document?.fields)
-    .map(r => {
+    const results = await res.json()
+    for (const r of results as any[]) {
+      if (!r.document?.fields) continue
       const docId = (r.document.name as string).split('/').pop()!
       const d = fromFirestoreFields(r.document.fields) as Record<string, any>
-      return {
-        id: docId,
-        sessionId: d.sessionId ?? '',
-        title: d.title ?? '',
-        category: d.category ?? '',
-        channel: d.channel,
-        thumbnail: d.thumbnail,
-        tags: (d.square_meta as any)?.tags ?? [],
-        summary: d.summary,
-        embedding: Array.isArray(d.embedding) ? d.embedding as number[] : undefined,
-      } satisfies SummaryDoc
-    })
+      if (Array.isArray(d.embedding) && d.embedding.length > 0) {
+        map.set(docId, d.embedding as number[])
+      }
+    }
+  } catch (e) {
+    console.warn('[Chat] fetchEmbeddings failed:', e)
+  }
+  return map
 }
 
-/** 코사인 유사도 (0~1) */
+// ── 유사도 / 키워드 헬퍼 ──────────────────────────────
 function cosineSim(a: number[], b: number[]): number {
   let dot = 0, na = 0, nb = 0
   for (let i = 0; i < a.length; i++) {
@@ -99,7 +81,6 @@ function cosineSim(a: number[], b: number[]): number {
   return dot / (Math.sqrt(na) * Math.sqrt(nb) || 1)
 }
 
-/** 키워드 매칭 점수 (임베딩 없는 구 데이터용) */
 function keywordScore(query: string, title: string, tags: string[]): number {
   const words = query.toLowerCase().split(/\s+/).filter(w => w.length > 1)
   const text = `${title} ${tags.join(' ')}`.toLowerCase()
@@ -111,14 +92,24 @@ const CATEGORY_LABEL: Record<string, string> = {
   selfdev: '자기계발', travel: '여행', story: '스토리', tips: '팁',
 }
 
+// 클라이언트가 보내는 경량 메타 (제목/태그)
+interface SummaryMeta {
+  id: string
+  sessionId: string
+  title: string
+  category: string
+  tags: string[]
+}
+
 interface ChatMessage { role: 'user' | 'model'; content: string }
 
 export async function POST(req: NextRequest) {
   try {
-    const { messages, userId, source }: {
+    const { messages, userId, source, summaryMeta }: {
       messages: ChatMessage[]
       userId?: string
       source: 'mypage' | 'square'
+      summaryMeta: SummaryMeta[]   // 클라이언트가 보낸 경량 인덱스
     } = await req.json()
 
     if (!messages?.length) {
@@ -127,45 +118,39 @@ export async function POST(req: NextRequest) {
 
     const query = messages[messages.length - 1].content
     const contextLabel = source === 'mypage' ? '사용자의 저장된 콘텐츠' : '스퀘어 공개 콘텐츠'
+    const meta = summaryMeta ?? []
 
-    // ── 1. Firestore에서 콘텐츠 목록 조회 ──────────────
-    let allSummaries: SummaryDoc[] = []
-    try {
-      allSummaries = await fetchSummaries(
-        source === 'mypage' && userId ? { userId } : { isPublic: true }
-      )
-    } catch (e) {
-      console.warn('[Chat] Firestore fetch failed:', e)
-      // Firestore 실패해도 Gemini는 빈 컨텍스트로 진행
-    }
-
-    // ── 2. 키워드 매칭 (전체) + 벡터 검색 (임베딩 있는 것) 병행 ──
-    // 키워드는 고유명사/제목 직접 검색에 강하므로 임베딩 유무와 무관하게 항상 실행
-    const keywordScored = allSummaries
+    // ── 1. 키워드 검색 (클라이언트 데이터 → 100% 신뢰) ──
+    const keywordScored = meta
       .map(s => ({ s, score: keywordScore(query, s.title, s.tags) }))
       .filter(x => x.score > 0)
       .sort((a, b) => b.score - a.score)
     const keywordTop = keywordScored.slice(0, 5).map(x => x.s)
     const keywordIds = new Set(keywordTop.map(s => s.id))
 
-    // 벡터 검색: 임베딩 있는 것 중에서 키워드 매칭 안 된 나머지를 보완
-    const withEmbed = allSummaries.filter(s => s.embedding?.length && !keywordIds.has(s.id))
-    let vectorTop: SummaryDoc[] = []
-    if (withEmbed.length > 0) {
+    // ── 2. 벡터 검색 (키워드 미매칭 항목 보완, 서버 Firestore) ──
+    let vectorTop: SummaryMeta[] = []
+    const remaining = meta.filter(s => !keywordIds.has(s.id))
+    if (remaining.length > 0) {
       try {
-        const qResult = await embeddingModel.embedContent(query)
-        const qVec = qResult.embedding.values
-        vectorTop = withEmbed
-          .map(s => ({ s, score: cosineSim(qVec, s.embedding!) }))
-          .sort((a, b) => b.score - a.score)
-          .slice(0, 5)
-          .map(x => x.s)
+        const embeddingMap = await fetchEmbeddings(
+          source === 'mypage' && userId ? { userId } : { isPublic: true }
+        )
+        if (embeddingMap.size > 0) {
+          const qVec = (await embeddingModel.embedContent(query)).embedding.values
+          vectorTop = remaining
+            .filter(s => embeddingMap.has(s.id))
+            .map(s => ({ s, score: cosineSim(qVec, embeddingMap.get(s.id)!) }))
+            .sort((a, b) => b.score - a.score)
+            .slice(0, 5)
+            .map(x => x.s)
+        }
       } catch (e) {
-        console.warn('[Chat] query embedding failed:', e)
+        console.warn('[Chat] vector search failed:', e)
       }
     }
 
-    // 키워드 우선, 벡터로 보완, 최대 10개
+    // ── 3. 키워드 우선 + 벡터 보완, 최대 10개 ──
     const combined = [...keywordTop]
     const seen = new Set(keywordIds)
     for (const s of vectorTop) {
@@ -173,21 +158,19 @@ export async function POST(req: NextRequest) {
     }
     const topSummaries = combined.slice(0, 10)
 
-    // ── 3. 컨텍스트 빌드 → Gemini 호출 ──────────────────
+    // ── 4. Gemini 호출 ──────────────────────────────────
     const contextList = topSummaries.map((s, i) => {
       const cat = CATEGORY_LABEL[s.category] ?? s.category
       const tagStr = s.tags.slice(0, 3).join(', ')
-      const snippet = s.summary ? JSON.stringify(s.summary).slice(0, 200) : ''
       return [
-        `[${i + 1}] ID:${s.id} [${cat}] "${s.title}"${s.channel ? ` (${s.channel})` : ''}`,
+        `[${i + 1}] ID:${s.id} [${cat}] "${s.title}"`,
         tagStr ? `#${tagStr}` : '',
-        snippet,
       ].filter(Boolean).join(' ')
     }).join('\n')
 
     const systemInstruction = contextList
       ? `당신은 NextCurator의 AI 어시스턴트입니다.
-현재 컨텍스트: ${contextLabel} (전체 ${allSummaries.length}개 중 관련 ${topSummaries.length}개 선별)
+현재 컨텍스트: ${contextLabel} (전체 ${meta.length}개 중 관련 ${topSummaries.length}개 선별)
 
 ---관련 콘텐츠---
 ${contextList}
@@ -198,9 +181,8 @@ ${contextList}
 - 관련 콘텐츠를 추천할 때 응답 맨 끝에 "[RELATED:id1,id2]" 형식으로 ID를 붙이세요.
 - 목록에 없는 내용은 "저장된 콘텐츠에서 찾지 못했어요"라고 솔직하게 말하세요.
 - [RELATED:...] 태그는 사용자에게 보이지 않으므로 반드시 마지막에 단독으로 붙이세요.`
-      : `당신은 NextCurator AI 어시스턴트입니다. 관련 콘텐츠를 찾지 못했습니다. 한국어로 친근하게 안내해주세요.`
+      : `당신은 NextCurator AI 어시스턴트입니다. 현재 "${query}"와 관련된 콘텐츠를 찾지 못했습니다. 한국어로 친근하게 안내해주세요.`
 
-    // systemInstruction을 모델 생성 시점에 설정 (SDK가 Content 객체로 올바르게 포매팅)
     const model = genAI.getGenerativeModel({
       model: 'gemini-2.5-flash',
       systemInstruction,

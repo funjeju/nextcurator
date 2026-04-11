@@ -63,6 +63,15 @@ export default function FloatingChat({ summaries, source, userId }: FloatingChat
     setLoading(true)
 
     try {
+      // 경량 메타: 제목/태그만 (키워드 검색 보장용, summary 본문 제외)
+      const summaryMeta = summaries.map(s => ({
+        id: s.id,
+        sessionId: s.sessionId,
+        title: s.title,
+        category: s.category,
+        tags: s.square_meta?.tags ?? [],
+      }))
+
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -70,6 +79,7 @@ export default function FloatingChat({ summaries, source, userId }: FloatingChat
           messages: newMessages.map(m => ({ role: m.role, content: m.content })),
           userId,
           source,
+          summaryMeta,
         }),
       })
 
