@@ -619,7 +619,7 @@ export default function MyPage() {
       </>
       )}
 
-      <FloatingChat summaries={allSummaries} source="mypage" />
+      <FloatingChat summaries={allSummaries} source="mypage" userId={user?.uid || getLocalUserId()} />
     </div>
   )
 }

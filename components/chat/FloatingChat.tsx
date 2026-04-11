@@ -13,6 +13,7 @@ interface ChatMsg {
 interface FloatingChatProps {
   summaries: SavedSummary[]
   source: 'mypage' | 'square'
+  userId?: string  // mypage: 유저 ID (서버사이드 검색용), square: 불필요
 }
 
 const CATEGORY_LABEL: Record<string, string> = {
@@ -25,7 +26,7 @@ const QUICK_QUESTIONS: Record<'mypage' | 'square', string[]> = {
   square: ['초보자용 영어 콘텐츠 추천해줘', '최근 올라온 팁 영상 뭐 있어?', '요리 영상 인기 있는 거 뭐야?'],
 }
 
-export default function FloatingChat({ summaries, source }: FloatingChatProps) {
+export default function FloatingChat({ summaries, source, userId }: FloatingChatProps) {
   const [open, setOpen] = useState(false)
   const [messages, setMessages] = useState<ChatMsg[]>([])
   const [input, setInput] = useState('')
@@ -62,21 +63,12 @@ export default function FloatingChat({ summaries, source }: FloatingChatProps) {
     setLoading(true)
 
     try {
-      const payload = summaries.slice(0, 100).map(s => ({
-        id: s.id,
-        title: s.title,
-        category: s.category,
-        channel: s.channel,
-        summary: s.summary,
-        tags: s.square_meta?.tags ?? [],
-      }))
-
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           messages: newMessages.map(m => ({ role: m.role, content: m.content })),
-          summaries: payload,
+          userId,
           source,
         }),
       })

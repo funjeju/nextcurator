@@ -45,7 +45,7 @@ export default function SaveModal({ data, onClose }: { data: any, onClose: () =>
     try {
       const uid = getLocalUserId()
       if (user) await upsertUserProfile({ uid: user.uid, displayName: user.displayName || '', photoURL: user.photoURL || '' })
-      await withTimeout(saveSummary({
+      const docId = await withTimeout(saveSummary({
         userId: uid,
         userDisplayName: user?.displayName || '',
         userPhotoURL: user?.photoURL || '',
@@ -62,6 +62,12 @@ export default function SaveModal({ data, onClose }: { data: any, onClose: () =>
         transcriptSource: data.transcriptSource,
         isPublic
       }))
+      // 임베딩 생성 (비동기, 실패해도 저장에 영향 없음)
+      fetch('/api/embed', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ docId, title: data.title, category: data.category, summary: data.summary }),
+      }).catch(() => {})
       alert('저장되었습니다!')
       onClose()
     } catch (e) {
@@ -80,7 +86,7 @@ export default function SaveModal({ data, onClose }: { data: any, onClose: () =>
       const newFolder = await withTimeout(createFolder(uid, newFolderName.trim()))
       
       if (user) await upsertUserProfile({ uid: user.uid, displayName: user.displayName || '', photoURL: user.photoURL || '' })
-      await withTimeout(saveSummary({
+      const docId2 = await withTimeout(saveSummary({
         userId: uid,
         userDisplayName: user?.displayName || '',
         userPhotoURL: user?.photoURL || '',
@@ -97,6 +103,11 @@ export default function SaveModal({ data, onClose }: { data: any, onClose: () =>
         transcriptSource: data.transcriptSource,
         isPublic
       }))
+      fetch('/api/embed', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ docId: docId2, title: data.title, category: data.category, summary: data.summary }),
+      }).catch(() => {})
       alert('저장되었습니다!')
       onClose()
     } catch (e) {
@@ -138,7 +149,7 @@ export default function SaveModal({ data, onClose }: { data: any, onClose: () =>
       if (targetFolderId) {
         const uid = getLocalUserId()
         if (user) await upsertUserProfile({ uid: user.uid, displayName: user.displayName || '', photoURL: user.photoURL || '' })
-        await withTimeout(saveSummary({
+        const docId3 = await withTimeout(saveSummary({
           userId: uid,
           userDisplayName: user?.displayName || '',
           userPhotoURL: user?.photoURL || '',
@@ -152,6 +163,11 @@ export default function SaveModal({ data, onClose }: { data: any, onClose: () =>
           transcript: data.transcript,
           isPublic
         }))
+        fetch('/api/embed', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ docId: docId3, title: data.title, category: data.category, summary: data.summary }),
+        }).catch(() => {})
         alert('저장되었습니다!')
         onClose()
       }
