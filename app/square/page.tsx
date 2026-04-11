@@ -38,6 +38,7 @@ type RecSlot = {
   slotId: string
   category: string
   items: SavedSummary[]
+  personalized: boolean  // true: 좋아요 기반 / false: 인기 폴백
 }
 type AdSlotItem = {
   __ad: true
@@ -174,9 +175,11 @@ function RecommendationCard({ slot }: { slot: RecSlot }) {
         <span className="text-sm leading-none">{meta.emoji}</span>
         <div className="min-w-0 flex-1">
           <p className="text-[10px] font-bold leading-tight" style={{ color: meta.color }}>
-            {catLabel} 취향 추천
+            {slot.personalized ? `${catLabel} 취향 추천` : `${catLabel} 인기 콘텐츠`}
           </p>
-          <p className="text-[9px] text-white/40">AI가 고른 콘텐츠</p>
+          <p className="text-[9px] text-white/40">
+            {slot.personalized ? 'AI가 고른 콘텐츠' : '지금 인기있는 콘텐츠'}
+          </p>
         </div>
       </div>
 
@@ -313,16 +316,21 @@ export default function SquarePage() {
     [likedIds, allSummaries]
   )
 
+  // 좋아요 기반 카테고리, 없으면 전체 카테고리 순환 (폴백)
+  const ALL_CATS = Object.keys(CATEGORY_META)
+  const effectiveCats = topCategories.length > 0 ? topCategories : ALL_CATS
+  const isPersonalized = topCategories.length > 0
+
   const recommendationPool = useMemo(() => {
     const pool: Record<string, SavedSummary[]> = {}
-    for (const cat of topCategories) {
+    for (const cat of effectiveCats) {
       pool[cat] = allSummaries
         .filter(s => s.category === cat && !likedIds.has(s.id))
         .sort((a, b) => (b.likeCount ?? 0) - (a.likeCount ?? 0))
         .slice(0, 4)
     }
     return pool
-  }, [topCategories, allSummaries, likedIds])
+  }, [topCategories, allSummaries, likedIds])  // effectiveCats는 topCategories 파생
 
   // 일반 카드 + 추천 카드 + 광고 카드를 flat 배열로 합성 — masonry가 자연스럽게 흐름
   const gridItems = useMemo<GridItem[]>(() => {
@@ -336,11 +344,11 @@ export default function SquarePage() {
       const pos = i + 1  // 1-based 위치
 
       // 추천 슬롯: RECOMMENDATION_INTERVAL 마다
-      if (pos % RECOMMENDATION_INTERVAL === 0 && topCategories.length > 0) {
-        const cat = topCategories[recIndex % topCategories.length]
+      if (pos % RECOMMENDATION_INTERVAL === 0 && effectiveCats.length > 0) {
+        const cat = effectiveCats[recIndex % effectiveCats.length]
         const pool = recommendationPool[cat] ?? []
         if (pool.length >= 4) {
-          result.push({ __rec: true, slotId: `rec-${cat}-${pos}`, category: cat, items: pool })
+          result.push({ __rec: true, slotId: `rec-${cat}-${pos}`, category: cat, items: pool, personalized: isPersonalized })
           recIndex++
         }
       }
@@ -352,7 +360,7 @@ export default function SquarePage() {
     })
 
     return result
-  }, [filtered, topCategories, recommendationPool])
+  }, [filtered, effectiveCats, isPersonalized, recommendationPool])
 
   // flat 배열 → N열에 행 우선(좌→우) 순서로 분배
   // CSS columns는 열 우선이라 추천/광고 카드 위치가 틀어지므로, 직접 분배

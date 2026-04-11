@@ -81,24 +81,25 @@ function cosineSim(a: number[], b: number[]): number {
   return dot / (Math.sqrt(na) * Math.sqrt(nb) || 1)
 }
 
-function keywordScore(query: string, title: string, tags: string[]): number {
-  const words = query.toLowerCase().split(/\s+/).filter(w => w.length > 1)
-  const text = `${title} ${tags.join(' ')}`.toLowerCase()
-  return words.filter(w => text.includes(w)).length
-}
-
 const CATEGORY_LABEL: Record<string, string> = {
   recipe: '요리', english: '영어', learning: '학습', news: '뉴스',
   selfdev: '자기계발', travel: '여행', story: '스토리', tips: '팁',
 }
 
-// 클라이언트가 보내는 경량 메타 (제목/태그)
+function keywordScore(query: string, title: string, tags: string[], category: string, shortText = ''): number {
+  const words = query.toLowerCase().split(/\s+/).filter(w => w.length > 1)
+  const catLabel = CATEGORY_LABEL[category] ?? category
+  const text = `${title} ${tags.join(' ')} ${catLabel} ${shortText}`.toLowerCase()
+  return words.filter(w => text.includes(w)).length
+}
+
 interface SummaryMeta {
   id: string
   sessionId: string
   title: string
   category: string
   tags: string[]
+  shortText?: string  // 카테고리별 핵심 내용 200자
 }
 
 interface ChatMessage { role: 'user' | 'model'; content: string }
@@ -122,7 +123,7 @@ export async function POST(req: NextRequest) {
 
     // ── 1. 키워드 검색 (클라이언트 데이터 → 100% 신뢰) ──
     const keywordScored = meta
-      .map(s => ({ s, score: keywordScore(query, s.title, s.tags) }))
+      .map(s => ({ s, score: keywordScore(query, s.title, s.tags, s.category, s.shortText) }))
       .filter(x => x.score > 0)
       .sort((a, b) => b.score - a.score)
     const keywordTop = keywordScored.slice(0, 5).map(x => x.s)
@@ -164,8 +165,9 @@ export async function POST(req: NextRequest) {
       const tagStr = s.tags.slice(0, 3).join(', ')
       return [
         `[${i + 1}] ID:${s.id} [${cat}] "${s.title}"`,
-        tagStr ? `#${tagStr}` : '',
-      ].filter(Boolean).join(' ')
+        tagStr ? `태그: ${tagStr}` : '',
+        s.shortText ? `내용: ${s.shortText}` : '',
+      ].filter(Boolean).join(' | ')
     }).join('\n')
 
     const systemInstruction = contextList

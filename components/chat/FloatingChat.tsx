@@ -16,6 +16,77 @@ interface FloatingChatProps {
   userId?: string  // mypage: 유저 ID (서버사이드 검색용), square: 불필요
 }
 
+// 카테고리별 summary 객체에서 핵심 텍스트 200자 추출
+function extractShortText(category: string, summary: any): string {
+  if (!summary) return ''
+  try {
+    let parts: string[] = []
+    switch (category) {
+      case 'recipe':
+        parts = [
+          summary.dish_name,
+          summary.key_tips?.slice(0, 2).join(' '),
+          summary.steps?.slice(0, 2).map((s: any) => s.desc).join(' '),
+        ]
+        break
+      case 'english':
+        parts = [
+          summary.song_or_title,
+          summary.expressions?.slice(0, 3).map((e: any) => e.text).join(' '),
+          summary.patterns?.slice(0, 2).join(' '),
+        ]
+        break
+      case 'learning':
+        parts = [
+          summary.subject,
+          summary.concepts?.slice(0, 2).map((c: any) => c.name + ' ' + c.desc).join(' '),
+          summary.key_points?.slice(0, 2).map((k: any) => k.point).join(' '),
+        ]
+        break
+      case 'news':
+        parts = [
+          summary.headline,
+          summary.three_line_summary,
+          summary.five_w?.what,
+        ]
+        break
+      case 'selfdev':
+        parts = [
+          summary.core_message?.text,
+          summary.insights?.slice(0, 2).map((i: any) => i.point).join(' '),
+          summary.checklist?.slice(0, 2).join(' '),
+        ]
+        break
+      case 'travel':
+        parts = [
+          summary.destination,
+          summary.places?.slice(0, 2).map((p: any) => p.name + ' ' + p.desc).join(' '),
+          summary.route,
+        ]
+        break
+      case 'story':
+        parts = [
+          summary.title,
+          summary.genre,
+          summary.conclusion,
+        ]
+        break
+      case 'tips':
+        parts = [
+          summary.topic,
+          summary.key_message,
+          summary.top3?.join(' '),
+        ]
+        break
+      default:
+        parts = [JSON.stringify(summary).slice(0, 200)]
+    }
+    return parts.filter(Boolean).join(' ').slice(0, 200)
+  } catch {
+    return ''
+  }
+}
+
 const CATEGORY_LABEL: Record<string, string> = {
   recipe: '🍳 요리', english: '🔤 영어', learning: '📐 학습', news: '🗞️ 뉴스',
   selfdev: '💪 자기계발', travel: '🧳 여행', story: '🍿 스토리', tips: '💡 팁',
@@ -63,13 +134,13 @@ export default function FloatingChat({ summaries, source, userId }: FloatingChat
     setLoading(true)
 
     try {
-      // 경량 메타: 제목/태그만 (키워드 검색 보장용, summary 본문 제외)
       const summaryMeta = summaries.map(s => ({
         id: s.id,
         sessionId: s.sessionId,
         title: s.title,
         category: s.category,
         tags: s.square_meta?.tags ?? [],
+        shortText: extractShortText(s.category, s.summary),
       }))
 
       const res = await fetch('/api/chat', {
