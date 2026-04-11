@@ -134,7 +134,7 @@ function CardGrid({ items, likedIds, likingIds, user, messagingId, onLike, onMes
   )
 }
 
-// 인피드 추천 스트립
+// 인피드 추천 카드 (컴팩트: 썸네일 3개 + 더보기)
 function RecommendationStrip({ category, items, likedIds, likingIds, onLike }: {
   category: string
   items: SavedSummary[]
@@ -144,69 +144,58 @@ function RecommendationStrip({ category, items, likedIds, likingIds, onLike }: {
 }) {
   const meta = CATEGORY_META[category] ?? CATEGORY_META.news
   const catLabel = CATEGORIES.find(c => c.id === category)?.label ?? category
+  const displayItems = items.slice(0, 3)
 
   if (items.length === 0) return null
 
   return (
     <div
-      className="my-4 rounded-2xl overflow-hidden border"
-      style={{ borderColor: `${meta.color}22`, background: `${meta.bg}88` }}
+      className="my-4 rounded-2xl border p-3"
+      style={{ borderColor: `${meta.color}33`, background: `${meta.bg}99` }}
     >
       {/* 헤더 */}
-      <div className="flex items-center justify-between px-4 py-3">
-        <div className="flex items-center gap-2">
-          <span className="text-base">{meta.emoji}</span>
-          <div>
-            <p className="text-[11px] font-bold text-white/90">
-              {catLabel} 콘텐츠를 좋아하시는군요
-            </p>
-            <p className="text-[9px] text-white/40 mt-0.5">AI가 고른 추천 요약</p>
-          </div>
+      <div className="flex items-center gap-2 mb-2.5">
+        <span className="text-sm leading-none">{meta.emoji}</span>
+        <div className="min-w-0">
+          <p className="text-[11px] font-bold text-white/90 leading-tight">
+            {catLabel} 콘텐츠를 좋아하시는군요
+          </p>
+          <p className="text-[9px] text-white/40">AI가 고른 추천 요약</p>
         </div>
-        <button
-          onClick={() => {}}
-          className="text-[9px] px-2 py-1 rounded-full border transition-colors"
-          style={{ borderColor: `${meta.color}44`, color: meta.color }}
-        >
-          더보기
-        </button>
       </div>
 
-      {/* 가로 스크롤 카드 */}
-      <div className="flex gap-3 overflow-x-auto scrollbar-none px-4 pb-4">
-        {items.map(item => (
+      {/* 썸네일 3개 그리드 */}
+      <div className="grid grid-cols-3 gap-1.5 mb-2.5">
+        {displayItems.map(item => (
           <Link
             key={item.id}
             href={`/result/${item.sessionId}?from=square`}
             onClick={() => incrementViewCount(item.id)}
-            className="shrink-0 w-36 rounded-xl overflow-hidden border border-white/5 bg-[#32302e] hover:border-white/20 transition-all group"
+            className="rounded-lg overflow-hidden border border-white/5 hover:border-white/25 transition-all group"
           >
-            <div className="relative overflow-hidden">
+            <div className="relative overflow-hidden bg-[#32302e]">
               <img
                 src={item.thumbnail}
                 alt={item.title}
                 className="w-full aspect-video object-cover group-hover:scale-105 transition-transform duration-300"
               />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
             </div>
-            <div className="p-2">
-              <p className="text-[10px] text-white/80 font-semibold leading-snug line-clamp-2 mb-1.5">
-                {item.title}
-              </p>
-              <div className="flex items-center justify-between">
-                <span className="text-[8px] text-white/30">{item.channel || item.userDisplayName || '익명'}</span>
-                <button
-                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); onLike(e, item) }}
-                  disabled={likingIds.has(item.id)}
-                  className={`text-[9px] flex items-center gap-0.5 ${likedIds.has(item.id) ? 'text-pink-400' : 'text-white/30 hover:text-pink-400'} transition-colors`}
-                >
-                  {likedIds.has(item.id) ? '❤️' : '🤍'}
-                  <span>{item.likeCount ?? 0}</span>
-                </button>
-              </div>
-            </div>
+            <p className="text-[9px] text-white/70 font-medium leading-snug line-clamp-1 px-1.5 pt-1 pb-1.5">
+              {item.title}
+            </p>
           </Link>
         ))}
+      </div>
+
+      {/* 더보기 버튼 — 우하단 */}
+      <div className="flex justify-end">
+        <button
+          className="text-[9px] px-2.5 py-1 rounded-full border transition-colors hover:opacity-80"
+          style={{ borderColor: `${meta.color}55`, color: meta.color }}
+        >
+          더보기 →
+        </button>
       </div>
     </div>
   )
