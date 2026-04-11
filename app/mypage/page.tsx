@@ -11,6 +11,7 @@ import {
   Folder, SavedSummary, FriendRequest,
 } from '@/lib/db'
 import { useAuth } from '@/providers/AuthProvider'
+import FloatingChat from '@/components/chat/FloatingChat'
 
 const CATEGORY_LABEL: Record<string, string> = {
   recipe: '🍳 요리',
@@ -225,8 +226,6 @@ export default function MyPage() {
   const [activeFolder, setActiveFolder] = useState<string>('all')
   const [loading, setLoading] = useState(true)
   const [deletingId, setDeletingId] = useState<string | null>(null)
-  const [searchQuery, setSearchQuery] = useState('')
-  const [searching, setSearching] = useState(false)
   const [openMoveId, setOpenMoveId] = useState<string | null>(null)
   const [pendingCount, setPendingCount] = useState(0)
 
@@ -251,41 +250,6 @@ export default function MyPage() {
     }
     fetchInit()
   }, [user])
-
-  const handleSearch = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!searchQuery.trim()) { setSummaries(allSummaries); return }
-    setSearching(true)
-    try {
-      const payload = allSummaries.map(s => ({
-        id: s.id,
-        title: s.title,
-        category: s.category,
-        tags: s.square_meta?.tags ?? [],
-        topic_cluster: s.square_meta?.topic_cluster ?? '',
-        vibe: s.square_meta?.vibe ?? '',
-      }))
-      const res = await fetch('/api/search', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: searchQuery, summaries: payload }),
-      })
-      const { results } = await res.json()
-      const ordered = results
-        .map((id: string) => allSummaries.find(s => s.id === id))
-        .filter(Boolean) as SavedSummary[]
-      setSummaries(ordered)
-    } catch {
-      alert('검색에 실패했습니다.')
-    } finally {
-      setSearching(false)
-    }
-  }
-
-  const handleClearSearch = () => {
-    setSearchQuery('')
-    setSummaries(allSummaries)
-  }
 
   const handleDelete = async (e: React.MouseEvent, id: string) => {
     e.preventDefault()
@@ -375,30 +339,6 @@ export default function MyPage() {
 
       {activeTab === 'library' && (
       <>
-      {/* AI 검색 바 */}
-      <div className="max-w-7xl mx-auto px-6 mb-4">
-        <form onSubmit={handleSearch} className="flex gap-2">
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            placeholder="자연어로 검색... (예: 저번에 저장한 동치미 레시피)"
-            className="flex-1 h-11 px-4 bg-[#32302e] border border-white/10 rounded-xl text-sm text-white placeholder:text-[#75716e] focus:outline-none focus:border-orange-500/50 transition-colors"
-          />
-          {searchQuery && (
-            <button type="button" onClick={handleClearSearch} className="h-11 px-3 bg-[#32302e] border border-white/10 rounded-xl text-[#75716e] hover:text-white transition-colors text-sm">
-              ✕
-            </button>
-          )}
-          <button
-            type="submit"
-            disabled={searching || !searchQuery.trim()}
-            className="h-11 px-4 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-xl text-sm disabled:opacity-40 transition-colors whitespace-nowrap"
-          >
-            {searching ? '검색 중...' : '🔍 AI 검색'}
-          </button>
-        </form>
-      </div>
 
       <div className="max-w-7xl mx-auto px-6 pb-12 flex flex-col md:flex-row gap-8">
 
@@ -542,6 +482,8 @@ export default function MyPage() {
       </div>
       </>
       )}
+
+      <FloatingChat summaries={allSummaries} source="mypage" />
     </div>
   )
 }

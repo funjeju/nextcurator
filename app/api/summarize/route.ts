@@ -35,7 +35,6 @@ async function getCachedByVideoId(videoId: string): Promise<Record<string, unkno
           value: { stringValue: videoId },
         },
       },
-      orderBy: [{ field: { fieldPath: 'createdAt' }, direction: 'DESCENDING' }],
       limit: 1,
     },
   }

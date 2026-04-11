@@ -283,31 +283,14 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
   }
 
   const shareCardRef = useRef<HTMLDivElement>(null)
+  const [savingCard, setSavingCard] = useState(false)
 
+  // 링크 복사/공유 (OG 카드 프리뷰 생성됨)
   const handleShare = async () => {
     if (!data) return
     setSharing(true)
     const pageUrl = window.location.href
     try {
-      // 공유 카드 캡처 → 이미지+URL 같이 공유 (카톡에서 이미지 클릭 시 URL 이동)
-      if (shareCardRef.current && navigator.share) {
-        const { default: html2canvas } = await import('html2canvas')
-        const canvas = await html2canvas(shareCardRef.current, {
-          useCORS: true,
-          backgroundColor: '#18181b',
-          scale: 2,
-          onclone: (doc) => {
-            doc.querySelectorAll('link[rel="stylesheet"], style').forEach(el => el.remove())
-          },
-        })
-        const blob = await new Promise<Blob>((res) => canvas.toBlob(b => res(b!), 'image/png'))
-        const file = new File([blob], 'nextcurator.png', { type: 'image/png' })
-        if (navigator.canShare?.({ files: [file] })) {
-          await navigator.share({ files: [file], url: pageUrl, title: data.title })
-          return
-        }
-      }
-      // 파일 공유 불가 → URL만
       if (navigator.share) {
         await navigator.share({ title: data.title, url: pageUrl })
       } else {
@@ -325,6 +308,42 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
       }
     } finally {
       setSharing(false)
+    }
+  }
+
+  // 카드 이미지 저장 (캡처 후 다운로드 or 공유)
+  const handleSaveCard = async () => {
+    if (!shareCardRef.current || !data) return
+    setSavingCard(true)
+    try {
+      const { default: html2canvas } = await import('html2canvas')
+      const canvas = await html2canvas(shareCardRef.current, {
+        useCORS: true,
+        backgroundColor: '#18181b',
+        scale: 2,
+        onclone: (doc) => {
+          doc.querySelectorAll('link[rel="stylesheet"], style').forEach(el => el.remove())
+        },
+      })
+      const blob = await new Promise<Blob>((res) => canvas.toBlob(b => res(b!), 'image/png'))
+      const file = new File([blob], 'nextcurator-card.png', { type: 'image/png' })
+
+      // 모바일: 파일 공유 시트 (카톡 직접 선택 가능)
+      if (navigator.canShare?.({ files: [file] })) {
+        await navigator.share({ files: [file], title: data.title })
+        return
+      }
+      // PC: 이미지 다운로드
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = 'nextcurator-card.png'
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (e) {
+      if ((e as Error).name !== 'AbortError') alert('이미지 저장에 실패했습니다.')
+    } finally {
+      setSavingCard(false)
     }
   }
 
@@ -605,7 +624,26 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
             )}
           </button>
 
-          {/* 공유 버튼 */}
+          {/* 카드 이미지 저장/공유 버튼 */}
+          <button
+            onClick={handleSaveCard}
+            disabled={savingCard}
+            className="h-14 px-4 border border-white/10 bg-[#32302e] text-white hover:bg-[#3d3a38] hover:border-white/20 transition-all rounded-xl disabled:opacity-50 flex items-center gap-1.5"
+            title="카드 이미지 저장"
+          >
+            {savingCard ? (
+              <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+              </svg>
+            ) : (
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+            )}
+          </button>
+
+          {/* 링크 공유 버튼 */}
           <Button
             variant="outline"
             className={`h-14 px-5 border-white/10 bg-[#32302e] text-white hover:bg-[#3d3a38] hover:border-white/20 transition-all disabled:opacity-50 ${shareCopied ? 'border-green-500/40 text-green-400' : ''}`}
