@@ -516,22 +516,21 @@ export async function getFriends(myUid: string): Promise<{ uid: string; displayN
 export async function getVisibleFolders(targetUserId: string, isOwner: boolean = false, isFriend: boolean = false) {
   const foldersRef = collection(db, 'folders')
   
-  // 1. 본인이 자신의 프로필을 보는 경우: 인덱스 없이 userId만으로 모든 폴더 조회 가능 (보안 규칙 통과)
+  // 1. 보안 규칙 엄격 준수: 본인이 아니면 'public' 또는 'friends'를 명시한 쿼리만 허용됨.
   if (isOwner) {
+    // 본인은 인덱스 없이 userId만으로 전체 조회 가능
     const q = query(foldersRef, where('userId', '==', targetUserId))
     const snap = await getDocs(q)
     return snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Folder))
   }
 
-  // 2. 타인(또는 비로그인)이 보는 경우: 보안 규칙상 visibility == 'public'이 쿼리에 포함되어야 함.
-  // 복합 인덱스 없이 작동하기 위해, 먼저 모든 'public' 폴더를 가져온 뒤 메모리에서 해당 유저의 것만 필터링합니다.
+  // 2. 타인은 반드시 visibility 필터가 쿼리에 포함되어야 함 (Permission Denied 방지)
   const q = query(foldersRef, where('visibility', '==', 'public'))
   const snap = await getDocs(q)
-  const publicFolders = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Folder))
+  const allPublic = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Folder))
   
-  const folders = publicFolders.filter(f => f.userId === targetUserId)
+  const folders = allPublic.filter(f => f.userId === targetUserId)
   
-  // 3. 만약 친구라면 추가로 'friends' 상태인 폴더도 가져와야 함 (필요시)
   if (isFriend) {
     const qf = query(foldersRef, where('visibility', '==', 'friends'))
     const snapf = await getDocs(qf)
@@ -699,24 +698,32 @@ export async function copySharedFolder(
 
 export async function getSavedSummariesByFolder(userId: string, folderId: string): Promise<SavedSummary[]> {
   const savedRef = collection(db, 'saved_summaries')
+  
+  // 1. 본인 여부 확인 (Permission Denied 방지용)
+  const isMe = getLocalUserId() === userId
+  
   let q;
-  if (folderId === 'all') {
-    q = query(savedRef, where('userId', '==', userId))
+  if (isMe) {
+    // 본인이면 인덱스 없이 안전하게 전체 또는 폴더별 조회
+    if (folderId === 'all') {
+      q = query(savedRef, where('userId', '==', userId))
+    } else {
+      q = query(savedRef, where('userId', '==', userId), where('folderId', '==', folderId))
+    }
+    const snap = await getDocs(q)
+    return snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as SavedSummary))
   } else {
-    q = query(savedRef, where('userId', '==', userId), where('folderId', '==', folderId))
+    // 타인은 반드시 isPublic == true 가 쿼리에 포함되어야 함
+    const qPublic = query(savedRef, where('isPublic', '==', true))
+    const snap = await getDocs(qPublic)
+    const publicItems = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as SavedSummary))
+    
+    return publicItems.filter(item => {
+      if (item.userId !== userId) return false
+      if (folderId !== 'all' && item.folderId !== folderId) return false
+      return true
+    })
   }
-  const snapshot = await getDocs(q)
-  const summaries = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }) as SavedSummary)
-  // sortOrder가 있으면 그 순서로, 없으면 최신순
-  const hasSortOrder = summaries.some(s => s.sortOrder !== undefined)
-  if (hasSortOrder && folderId !== 'all') {
-    return summaries.sort((a, b) => (a.sortOrder ?? 9999) - (b.sortOrder ?? 9999))
-  }
-  return summaries.sort((a, b) => {
-    const aTime = a.createdAt?.toMillis?.() ?? a.createdAt?.getTime?.() ?? 0
-    const bTime = b.createdAt?.toMillis?.() ?? b.createdAt?.getTime?.() ?? 0
-    return bTime - aTime
-  })
 }
 
 // ─────────────────────────────────────────────
