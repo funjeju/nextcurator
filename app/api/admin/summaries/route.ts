@@ -17,7 +17,7 @@ export async function POST(req: NextRequest) {
     })
 
     // 2. 수동 정렬 (최신순 - summarizedAt 또는 createdAt 기준)
-    const sorted = summaries.sort((a, b) => {
+    const sorted = summaries.sort((a: any, b: any) => {
       const dateA = a.summarizedAt || a.createdAt || ''
       const dateB = b.summarizedAt || b.createdAt || ''
       return dateB.localeCompare(dateA)
