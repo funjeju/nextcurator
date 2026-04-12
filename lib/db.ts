@@ -33,10 +33,25 @@ export interface SavedSummary {
   sortOrder?: number
 }
 
+export type AgeGroup = '10s' | '20s' | '30s' | '40s' | '50s' | '60s+'
+export type Gender = 'male' | 'female' | 'other' | 'prefer_not'
+
 export interface UserProfile {
   uid: string
   displayName: string
   photoURL: string
+  email?: string
+  // 추가 프로필 정보 (온보딩에서 수집)
+  ageGroup?: AgeGroup
+  gender?: Gender
+  interests?: string[]          // 관심 카테고리 (recipe, english, ...)
+  profileCompleted?: boolean    // 온보딩 완료 여부
+  profileCompletedAt?: any      // 완료 시각
+  // 토큰/플랜 시스템
+  tokens?: number               // 보유 토큰 잔액
+  tokensEarnedTotal?: number    // 누적 획득 토큰 (통계용)
+  plan?: 'free' | 'starter' | 'pro'
+  planExpiresAt?: any           // 기간제 플랜 만료일
   updatedAt: any
 }
 
@@ -154,6 +169,53 @@ export async function upsertUserProfile(profile: Omit<UserProfile, 'updatedAt'>)
 export async function getUserProfile(uid: string): Promise<UserProfile | null> {
   const snap = await getDoc(doc(db, 'users', uid))
   return snap.exists() ? (snap.data() as UserProfile) : null
+}
+
+// 온보딩 완료 — 추가 정보 저장 + 신규 가입 보너스 토큰 지급
+export const PROFILE_COMPLETE_TOKENS = 50  // 프로필 완성 보상
+export const SIGNUP_BASE_TOKENS     = 10   // 기본 지급 (신규 가입)
+
+export async function completeUserProfile(
+  uid: string,
+  data: { ageGroup: AgeGroup; gender: Gender; interests: string[] }
+): Promise<{ tokensAwarded: number }> {
+  const existing = await getUserProfile(uid)
+
+  // 이미 완료한 유저는 토큰 중복 지급 방지
+  if (existing?.profileCompleted) return { tokensAwarded: 0 }
+
+  const baseTokens = existing?.tokens ?? SIGNUP_BASE_TOKENS
+  const newTokens  = baseTokens + PROFILE_COMPLETE_TOKENS
+
+  await setDoc(doc(db, 'users', uid), {
+    ...data,
+    profileCompleted: true,
+    profileCompletedAt: serverTimestamp(),
+    tokens: newTokens,
+    tokensEarnedTotal: (existing?.tokensEarnedTotal ?? SIGNUP_BASE_TOKENS) + PROFILE_COMPLETE_TOKENS,
+    plan: existing?.plan ?? 'free',
+    updatedAt: serverTimestamp(),
+  }, { merge: true })
+
+  return { tokensAwarded: PROFILE_COMPLETE_TOKENS }
+}
+
+// 신규 유저 초기 토큰 지급 (첫 로그인 시)
+export async function initNewUserTokens(uid: string, displayName: string, photoURL: string, email: string): Promise<void> {
+  const existing = await getUserProfile(uid)
+  if (existing) return  // 이미 존재하면 스킵
+
+  await setDoc(doc(db, 'users', uid), {
+    uid,
+    displayName,
+    photoURL,
+    email,
+    tokens: SIGNUP_BASE_TOKENS,
+    tokensEarnedTotal: SIGNUP_BASE_TOKENS,
+    plan: 'free',
+    profileCompleted: false,
+    updatedAt: serverTimestamp(),
+  })
 }
 
 export async function getUserPublicSummaries(userId: string): Promise<SavedSummary[]> {

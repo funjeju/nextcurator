@@ -1,4 +1,4 @@
-export type Category = 'recipe' | 'english' | 'learning' | 'news' | 'selfdev' | 'travel' | 'story' | 'tips'
+export type Category = 'recipe' | 'english' | 'learning' | 'news' | 'selfdev' | 'travel' | 'story' | 'tips' | 'voice'
 
 export interface SquareMeta {
   tags: string[]
@@ -80,7 +80,19 @@ export interface TipsSummary {
   top3: string[]
 }
 
-export type SummaryData = RecipeSummary | EnglishSummary | LearningSummary | NewsSummary | SelfDevSummary | TravelSummary | StorySummary | TipsSummary
+export interface VoiceSummary {
+  square_meta: SquareMeta
+  title: string                // AI가 생성한 제목
+  main_topic: string           // 핵심 주제 한 문장
+  duration_estimate: string    // "약 3분", "약 10분"
+  key_points: { point: string; detail?: string }[]
+  action_items: string[]
+  transcript: string           // 전체 전사 텍스트
+  emoji: string                // 대표 이모지 (썸네일용)
+  color_theme: 'blue' | 'green' | 'orange' | 'purple' | 'pink' | 'teal' | 'amber'
+}
+
+export type SummaryData = RecipeSummary | EnglishSummary | LearningSummary | NewsSummary | SelfDevSummary | TravelSummary | StorySummary | TipsSummary | VoiceSummary
 
 export interface QuizQuestion {
   type: 'flashcard' | 'multiple_choice'

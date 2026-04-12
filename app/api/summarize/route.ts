@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { extractVideoId, getTranscript, getVideoMeta } from '@/lib/transcript'
+import { extractVideoId, getTranscript, getVideoMeta, detectTranscriptLang } from '@/lib/transcript'
 import { classifyCategory, generateSummary, generateReportSummary, generateContextSummary } from '@/lib/claude'
 import { randomUUID } from 'crypto'
 
@@ -158,7 +158,13 @@ async function fetchUrlContent(url: string): Promise<string> {
 
 export async function POST(req: NextRequest) {
   try {
-    const { url, category: userCategory } = await req.json()
+    const {
+      url,
+      category: userCategory,
+      summaryLang,           // 'ko' | 'original' — 언어 선택 후 재호출 시 포함
+      cachedTranscript,      // 1차 호출에서 반환된 자막 캐시
+      cachedVideoInfo,       // 1차 호출에서 반환된 영상 정보 캐시
+    } = await req.json()
 
     if (!url) {
       return NextResponse.json({ error: 'URL이 필요합니다.' }, { status: 400 })
@@ -237,25 +243,64 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const videoInfo = await getVideoInfo(videoId)
+    // 2차 호출(언어 선택 후)이면 캐시된 영상 정보 재사용, 아니면 새로 가져옴
+    const videoInfo = cachedVideoInfo
+      ? (cachedVideoInfo as { title: string; channel: string; thumbnail: string; publishedAt: string })
+      : await getVideoInfo(videoId)
 
     let transcript: string = ''
     let transcriptSource: string = ''
-    try {
-      const result = await getTranscript(videoId)
-      transcript = result.text
-      transcriptSource = result.source
-    } catch {
-      console.log('자막 추출 실패: 영상 설명 및 댓글 요약으로 대체합니다. (Video ID:', videoId, ')')
+    let transcriptLang: 'ko' | 'en' | 'other' = 'ko'
+
+    // 캐시된 자막이 있으면 재추출 스킵 (2차 호출 — 언어 선택 후)
+    if (cachedTranscript) {
+      transcript = cachedTranscript
+      transcriptSource = 'cached'
+      transcriptLang = detectTranscriptLang(cachedTranscript)
+    } else {
+      try {
+        const result = await getTranscript(videoId)
+        transcript = result.text
+        transcriptSource = result.source
+        transcriptLang = result.lang
+      } catch {
+        console.log('자막 추출 실패: 영상 설명 및 댓글 요약으로 대체합니다. (Video ID:', videoId, ')')
+      }
     }
+
+    // ── 언어 선택 필요 여부 확인 ──
+    // summaryLang 미지정 + 비한국어 자막 → 프론트에서 선택하도록 early return
+    if (!summaryLang && transcriptLang !== 'ko' && transcript.trim().length > 50) {
+      return NextResponse.json({
+        needsLangChoice: true,
+        detectedLang: transcriptLang,          // 'en' | 'other'
+        cachedTranscript: transcript,           // 재호출 시 재사용
+        cachedVideoInfo: cachedVideoInfo || {   // 영상 정보도 캐시
+          title: videoInfo.title,
+          channel: videoInfo.channel,
+          thumbnail: videoInfo.thumbnail,
+          publishedAt: videoInfo.publishedAt,
+        },
+      })
+    }
+
+    const outputLang: 'ko' | 'original' = summaryLang === 'original' ? 'original' : 'ko'
 
     const [{ description, pinnedComment }] = await Promise.all([
       getVideoMeta(videoId),
     ])
 
     const contextParts = []
-    if (transcript) contextParts.push(`[자막]\n${transcript}`)
-    if (description) contextParts.push(`[영상 설명]\n${description}`)
+    if (transcript) {
+      // 한국어 번역 선택 시 번역 힌트 삽입, 원문 선택 시 그대로
+      const transNote = outputLang === 'ko' && transcriptLang !== 'ko'
+        ? `[언어 안내: 아래 자막은 ${transcriptLang === 'en' ? '영어(English)' : '외국어'}입니다. 내용을 이해하고 한국어로 번역하여 요약해주세요.]\n\n`
+        : ''
+      contextParts.push(`[자막]\n${transNote}${transcript}`)
+    }
+    if (description) {
+      contextParts.push(`[영상 설명]\n${description}`)
+    }
     if (pinnedComment) contextParts.push(`[상위 댓글]\n${pinnedComment}`)
 
     const fullContext = contextParts.join('\n\n')
@@ -273,7 +318,7 @@ export async function POST(req: NextRequest) {
     }
 
     const [summary, reportSummary] = await Promise.all([
-      generateSummary(category, fullContext),
+      generateSummary(category, fullContext, 'youtube', outputLang),
       generateReportSummary(category, videoInfo.title, fullContext).catch(() => ''),
     ])
     const contextSummary = await generateContextSummary(videoInfo.title, category, summary).catch(() => '')

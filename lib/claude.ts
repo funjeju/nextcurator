@@ -95,6 +95,9 @@ const SUMMARY_PROMPTS: Record<Category, string> = {
 각 팁은 번호와 함께 명확한 제목과 실용적인 설명으로 정리하세요. difficulty는 "쉬움"/"보통"/"어려움" 중 하나.
 
 {"square_meta":{"tags":["키워드1","키워드2","키워드3","키워드4","키워드5"],"topic_cluster":"대주제","vibe":"분위기"},"topic":"팁 주제 (예: 집 정리 꿀팁)","tips":[{"number":1,"title":"팁 제목","desc":"팁 설명 1~2문장","timestamp":"MM:SS","difficulty":"쉬움"}],"key_message":"영상을 관통하는 핵심 메시지 한 줄","tools":["필요한 도구나 앱 등 (없으면 빈 배열)"],"top3":["지금 당장 적용할 수 있는 팁 요약 1","지금 당장 적용할 수 있는 팁 요약 2","지금 당장 적용할 수 있는 팁 요약 3"]}`,
+
+  // voice는 별도 API에서 Gemini가 직접 처리하므로 placeholder만 사용
+  voice: '',
 }
 
 /**
@@ -122,7 +125,8 @@ function sampleTranscript(transcript: string, maxChars = 60000): string {
 export async function generateSummary(
   category: Category,
   transcript: string,
-  source: 'youtube' | 'pdf' | 'web' = 'youtube'
+  source: 'youtube' | 'pdf' | 'web' = 'youtube',
+  outputLang: 'ko' | 'original' = 'ko'
 ): Promise<SummaryData> {
   const prompt = SUMMARY_PROMPTS[category]
   const sampled = sampleTranscript(transcript)  // 기본 6만자
@@ -131,7 +135,12 @@ export async function generateSummary(
     ? `\n※ 이 콘텐츠는 ${source === 'pdf' ? 'PDF 문서' : '웹 페이지'}입니다. timestamp 필드는 모두 빈 문자열("")로 채우세요.`
     : ''
 
-  const result = await summaryModel.generateContent(`${prompt}${sourceNote}
+  // 원문 언어 출력 모드: 한국어로 쓰지 않고 원문 언어 그대로 출력
+  const langNote = outputLang === 'original'
+    ? '\n\n[IMPORTANT: Write ALL text values in the original language of the content (e.g. English). Do NOT translate to Korean.]'
+    : ''
+
+  const result = await summaryModel.generateContent(`${prompt}${sourceNote}${langNote}
 
 ${source === 'youtube' ? '자막' : '내용'}:
 ${sampled}`)
@@ -164,6 +173,7 @@ export async function generateReportSummary(
     travel:   '여행 영상',
     story:    '스토리/드라마 영상',
     tips:     '팁/라이프핵 영상',
+    voice:    '음성 녹음 메모',
   }
 
   const result = await reportModel.generateContent(`당신은 전문 콘텐츠 에디터입니다.
@@ -205,6 +215,7 @@ export async function generateContextSummary(
     travel: '여행',
     story: '스토리/드라마',
     tips: '팁/라이프핵',
+    voice: '음성 녹음 메모',
   }
 
   const result = await classifyModel.generateContent(`다음 콘텐츠를 200~300자 이내로 맥락 요약하세요.

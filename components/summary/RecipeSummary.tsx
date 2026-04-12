@@ -83,7 +83,7 @@ export default function RecipeSummary({ data, onSeek, sessionId, commentCounts =
               const segLabel = `${step.step}단계`
               return (
                 <div key={step.step} id={`seg-${segId}`} className="flex gap-3 transition-all rounded-lg p-1 -m-1">
-                  <span className="text-blue-400 font-bold text-sm w-5 shrink-0 mt-0.5">{step.step}</span>
+                  <span className="shrink-0 mt-0.5 px-1.5 py-0.5 rounded-md bg-blue-500/15 text-blue-400 font-bold text-[11px] leading-tight whitespace-nowrap">{step.step}단계</span>
                   <div className="flex flex-col gap-1 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
                       <TimestampBadge timestamp={step.timestamp} onSeek={onSeek} />

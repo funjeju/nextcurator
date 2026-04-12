@@ -1,7 +1,8 @@
 {
   "functions": {
     "app/api/summarize/route.ts":     { "maxDuration": 120 },
-    "app/api/summarize-pdf/route.ts": { "maxDuration": 120 },
+    "app/api/summarize-pdf/route.ts":   { "maxDuration": 120 },
+    "app/api/summarize-voice/route.ts": { "maxDuration": 120 },
     "app/api/embed/route.ts":         { "maxDuration": 30  }
   }
 }

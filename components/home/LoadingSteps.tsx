@@ -27,6 +27,14 @@ const STEPS_URL = [
   { label: '정리 마무리 중...',    weight: 1 },
 ]
 
+const STEPS_VOICE = [
+  { label: '녹음 파일 읽는 중...', weight: 1 },
+  { label: '음성 전사 중...',      weight: 3 },
+  { label: '내용 분석 중...',      weight: 2 },
+  { label: '요약 카드 생성 중...', weight: 2 },
+  { label: '마무리 중...',         weight: 1 },
+]
+
 function buildThresholds(steps: { label: string; weight: number }[]) {
   const total = steps.reduce((s, step) => s + step.weight, 0)
   let acc = 0
@@ -38,11 +46,11 @@ function buildThresholds(steps: { label: string; weight: number }[]) {
 
 interface LoadingStepsProps {
   currentStep: number
-  mode?: 'youtube' | 'pdf' | 'url'
+  mode?: 'youtube' | 'pdf' | 'url' | 'voice'
 }
 
 export default function LoadingSteps({ currentStep, mode = 'youtube' }: LoadingStepsProps) {
-  const STEPS = mode === 'pdf' ? STEPS_PDF : mode === 'url' ? STEPS_URL : STEPS_YOUTUBE
+  const STEPS = mode === 'pdf' ? STEPS_PDF : mode === 'url' ? STEPS_URL : mode === 'voice' ? STEPS_VOICE : STEPS_YOUTUBE
   const STEP_THRESHOLDS = buildThresholds(STEPS)
   const [displayProgress, setDisplayProgress] = useState(0)
 

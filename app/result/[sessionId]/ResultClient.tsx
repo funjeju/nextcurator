@@ -6,12 +6,14 @@ import Link from 'next/link'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import YoutubePlayer from '@/components/player/YoutubePlayer'
+import VoiceControl from '@/components/player/VoiceControl'
 import SummaryShell from '@/components/summary/SummaryShell'
 import SaveModal from '@/components/summary/SaveModal'
 import CommentSection from '@/components/comments/CommentSection'
 import SummaryPdfTemplate from '@/components/pdf/SummaryPdfTemplate'
 import QuizPanel from '@/components/quiz/QuizPanel'
 import DocentChat from '@/components/chat/DocentChat'
+import CreateRoomModal from '@/components/room/CreateRoomModal'
 import WorksheetPanel from '@/components/worksheet/WorksheetPanel'
 import type { QuizData, WorksheetData } from '@/types/summary'
 import Header from '@/components/common/Header'
@@ -61,6 +63,7 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
   const [savedItem, setSavedItem] = useState<SavedSummary | null>(null)
   const playerRef = useRef<YT.Player | null>(null)
   const [showSaveModal, setShowSaveModal] = useState(false)
+  const [showRoomModal, setShowRoomModal] = useState(false)
   const [activeTab, setActiveTab] = useState<'summary' | 'transcript' | 'reanalyze'>('summary')
   const [sharing, setSharing] = useState(false)
   const [shareCopied, setShareCopied] = useState(false)
@@ -630,6 +633,17 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
             </Button>
           )}
 
+          {/* 시청파티 버튼 — YouTube 영상만 */}
+          {data.videoId && (
+            <button
+              onClick={() => setShowRoomModal(true)}
+              className="h-12 w-12 border border-white/10 bg-[#32302e] text-white hover:bg-orange-500/15 hover:border-orange-500/30 hover:text-orange-400 transition-all rounded-xl flex items-center justify-center"
+              title="시청파티 만들기"
+            >
+              <span className="text-lg leading-none">🎬</span>
+            </button>
+          )}
+
           {/* 댓글 버튼 */}
           <button
             onClick={handleCommentIconClick}
@@ -717,11 +731,26 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
       {quiz && <QuizPanel quiz={quiz} onClose={() => setQuiz(null)} />}
       {worksheet && <WorksheetPanel worksheet={worksheet} onClose={() => setWorksheet(null)} />}
 
+      {/* 레시피 음성 제어 — YouTube 영상이 있을 때만 */}
+      {data.category === 'recipe' && data.videoId && (data.summary as any)?.steps?.length > 0 && (
+        <VoiceControl playerRef={playerRef} steps={(data.summary as any).steps} />
+      )}
+
       <DocentChat
         title={data.title}
         category={data.category}
         summaryData={data.summary}
       />
+
+      {showRoomModal && data.videoId && (
+        <CreateRoomModal
+          sessionId={sessionId}
+          videoId={data.videoId}
+          title={data.title}
+          thumbnail={data.thumbnail ?? ''}
+          onClose={() => setShowRoomModal(false)}
+        />
+      )}
 
       {showSaveModal && (
         <SaveModal

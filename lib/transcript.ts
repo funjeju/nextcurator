@@ -53,6 +53,17 @@ export function formatTimestamp(seconds: number): string {
   return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
 }
 
+// 자막 텍스트에서 언어 감지 (타임스탬프·숫자·공백 제거 후 문자 비율로 판단)
+export function detectTranscriptLang(text: string): 'ko' | 'en' | 'other' {
+  const stripped = text.replace(/\[[^\]]*\]|\d+[:.\s]/g, '').replace(/\s+/g, '')
+  if (!stripped) return 'other'
+  const korean = (stripped.match(/[\uAC00-\uD7AF\u1100-\u11FF]/g) || []).length
+  const latin  = (stripped.match(/[A-Za-z]/g) || []).length
+  if (korean / stripped.length > 0.15) return 'ko'
+  if (latin  / stripped.length > 0.4)  return 'en'
+  return 'other'
+}
+
 // ─────────────────────────────────────────────
 // [1단계] Cloudflare Worker (프로덕션 메인)
 // - YouTube IP 차단 우회, 자막 직접 추출
@@ -87,11 +98,46 @@ async function getTranscriptViaSupadata(videoId: string): Promise<string> {
   const apiKey = process.env.SUPADATA_API_KEY
   if (!apiKey) throw new Error('SUPADATA_NOT_CONFIGURED')
 
+  type SupadataResponse = {
+    content?: Array<{ text: string; offset: number; duration: number; lang: string }>
+    lang?: string
+    availableLangs?: string[]
+  }
+
+  const formatContent = (data: SupadataResponse): string =>
+    (data.content ?? [])
+      .map(s => {
+        const ms = s.offset
+        const mm = String(Math.floor(ms / 60000)).padStart(2, '0')
+        const ss = String(Math.floor((ms % 60000) / 1000)).padStart(2, '0')
+        return `[${mm}:${ss}] ${s.text.replace(/\n/g, ' ').trim()}`
+      })
+      .filter(line => line.length > 8)
+      .join('\n')
+
+  // 1차 시도: 한국어 자막 (유튜브 자동번역 포함) — 짧은 타임아웃
+  try {
+    const res = await fetch(
+      `https://api.supadata.ai/v1/youtube/transcript?videoId=${videoId}&text=false&lang=ko`,
+      { headers: { 'x-api-key': apiKey }, signal: AbortSignal.timeout(20000) }
+    )
+    if (res.ok) {
+      const data = await res.json() as SupadataResponse
+      if (data.content && data.content.length > 0) {
+        const text = formatContent(data)
+        if (text.length > 20) return text
+      }
+    }
+  } catch {
+    // 한국어 자막 없음 → 원본 언어로 폴백
+  }
+
+  // 2차 시도: 원본 언어 그대로 (STT 변환 포함)
   const res = await fetch(
     `https://api.supadata.ai/v1/youtube/transcript?videoId=${videoId}&text=false`,
     {
       headers: { 'x-api-key': apiKey },
-      signal: AbortSignal.timeout(90000),  // STT 변환 포함 최대 90초
+      signal: AbortSignal.timeout(90000),
     }
   )
 
@@ -100,25 +146,13 @@ async function getTranscriptViaSupadata(videoId: string): Promise<string> {
     throw new Error(`SUPADATA_${res.status}: ${errText.slice(0, 100)}`)
   }
 
-  const data = await res.json() as {
-    content?: Array<{ text: string; offset: number; duration: number; lang: string }>
-    lang?: string
-    availableLangs?: string[]
-  }
+  const data = await res.json() as SupadataResponse
 
   if (!data.content || data.content.length === 0) {
     throw new Error('SUPADATA_EMPTY_RESPONSE')
   }
 
-  return data.content
-    .map(s => {
-      const ms = s.offset
-      const mm = String(Math.floor(ms / 60000)).padStart(2, '0')
-      const ss = String(Math.floor((ms % 60000) / 1000)).padStart(2, '0')
-      return `[${mm}:${ss}] ${s.text.replace(/\n/g, ' ').trim()}`
-    })
-    .filter(line => line.length > 8)
-    .join('\n')
+  return formatContent(data)
 }
 
 // ─────────────────────────────────────────────
@@ -220,6 +254,7 @@ async function getTranscriptLocal(videoId: string): Promise<string> {
 export interface TranscriptResult {
   text: string
   source: string
+  lang: 'ko' | 'en' | 'other'
 }
 
 export async function getTranscript(videoId: string): Promise<TranscriptResult> {
@@ -258,7 +293,9 @@ export async function getTranscript(videoId: string): Promise<TranscriptResult> 
       console.log(`[Transcript] Trying: ${strategy.name} for ${videoId}`)
       const text = await strategy.fn()
       console.log(`[Transcript] ✅ Success: ${strategy.name}`)
-      return { text, source: strategy.name }
+      const lang = detectTranscriptLang(text)
+      console.log(`[Transcript] 감지 언어: ${lang}`)
+      return { text, source: strategy.name, lang }
     } catch (e) {
       const msg = (e as Error).message
       console.warn(`[Transcript] ❌ Failed (${strategy.name}): ${msg}`)

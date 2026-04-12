@@ -12,6 +12,7 @@ import {
   Folder, SavedSummary, FriendRequest,
 } from '@/lib/db'
 import { useAuth } from '@/providers/AuthProvider'
+import { PROFILE_COMPLETE_TOKENS } from '@/lib/db'
 import FloatingChat from '@/components/chat/FloatingChat'
 
 const CATEGORY_LABEL: Record<string, string> = {
@@ -23,7 +24,10 @@ const CATEGORY_LABEL: Record<string, string> = {
   travel: '🧳 여행',
   story: '🍿 스토리',
   tips: '💡 팁',
+  voice: '🎙 녹음 메모',
 }
+
+const CATEGORY_ORDER = ['recipe', 'english', 'learning', 'news', 'selfdev', 'travel', 'story', 'tips', 'voice']
 
 // ── 폴더 이동 드롭다운 ──
 function FolderMoveDropdown({
@@ -219,7 +223,7 @@ function FriendsTab({ myUid }: { myUid: string }) {
 }
 
 export default function MyPage() {
-  const { user } = useAuth()
+  const { user, userProfile, needsProfile } = useAuth()
   const [activeTab, setActiveTab] = useState<'library' | 'friends'>('library')
   const [folders, setFolders] = useState<Folder[]>([])
   const [summaries, setSummaries] = useState<SavedSummary[]>([])
@@ -236,6 +240,7 @@ export default function MyPage() {
   const [savingOrder, setSavingOrder] = useState(false)
   const [pendingCount, setPendingCount] = useState(0)
   const [searchQuery, setSearchQuery] = useState('')
+  const [viewMode, setViewMode] = useState<'folder' | 'category'>('folder')
 
   // 폴더 메뉴 외부 클릭 시 닫기
   useEffect(() => {
@@ -448,6 +453,40 @@ export default function MyPage() {
     <div className="min-h-screen bg-[#252423] font-sans">
       <Header title="나의 요약 갤러리" />
 
+      {/* 프로필 + 토큰 카드 */}
+      {user && (
+        <div className="max-w-7xl mx-auto px-6 mb-6">
+          <div className="flex items-center gap-4 bg-[#32302e]/60 border border-white/5 rounded-2xl px-5 py-4">
+            {/* 아바타 */}
+            {user.photoURL ? (
+              <img src={user.photoURL} alt="" className="w-11 h-11 rounded-full border border-white/10 shrink-0" />
+            ) : (
+              <div className="w-11 h-11 rounded-full bg-[#3d3a38] flex items-center justify-center text-xl shrink-0">👤</div>
+            )}
+            {/* 이름 + 정보 */}
+            <div className="flex-1 min-w-0">
+              <p className="text-white font-bold text-sm truncate">{user.displayName || '사용자'}</p>
+              <p className="text-[#75716e] text-xs truncate">{user.email}</p>
+            </div>
+            {/* 토큰 잔액 */}
+            <div className="flex items-center gap-3 shrink-0">
+              <div className="flex items-center gap-1.5 bg-[#23211f] border border-white/10 rounded-xl px-3 py-2">
+                <span className="text-base">🪙</span>
+                <span className="text-white font-bold text-sm">{userProfile?.tokens ?? 0}</span>
+                <span className="text-[#75716e] text-xs">토큰</span>
+              </div>
+              {/* 프로필 미완성 유도 */}
+              {needsProfile && (
+                <div className="flex items-center gap-1.5 bg-orange-500/10 border border-orange-500/30 rounded-xl px-3 py-2">
+                  <span className="text-sm">🎁</span>
+                  <span className="text-orange-400 text-xs font-bold">+{PROFILE_COMPLETE_TOKENS} 토큰 받기</span>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 탭 */}
       <div className="max-w-7xl mx-auto px-6 mb-4">
         <div className="flex gap-1 bg-[#32302e]/60 rounded-xl p-1 w-fit">
@@ -576,37 +615,190 @@ export default function MyPage() {
 
         {/* Content Grid */}
         <main className="flex-1">
-          {/* 검색창 */}
-          <div className="relative mb-5">
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              placeholder="제목, 태그, 카테고리로 검색..."
-              className="w-full h-10 pl-9 pr-4 bg-[#32302e] border border-white/10 rounded-xl text-sm text-white placeholder:text-[#75716e] focus:outline-none focus:border-orange-500/50 transition-colors"
-            />
-            <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#75716e]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-            {searchQuery && (
+          {/* 검색창 + 뷰 토글 */}
+          <div className="flex items-center gap-3 mb-5">
+            <div className="relative flex-1">
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                placeholder="제목, 태그, 카테고리로 검색..."
+                className="w-full h-10 pl-9 pr-4 bg-[#32302e] border border-white/10 rounded-xl text-sm text-white placeholder:text-[#75716e] focus:outline-none focus:border-orange-500/50 transition-colors"
+              />
+              <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#75716e]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#75716e] hover:text-white text-xs"
+                >✕</button>
+              )}
+            </div>
+            {/* 뷰 모드 토글 */}
+            <div className="flex gap-0.5 bg-[#32302e] border border-white/10 rounded-xl p-1 shrink-0">
               <button
-                onClick={() => setSearchQuery('')}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#75716e] hover:text-white text-xs"
-              >✕</button>
-            )}
+                onClick={() => setViewMode('folder')}
+                title="폴더별 보기"
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1 ${
+                  viewMode === 'folder' ? 'bg-[#3d3a38] text-white shadow' : 'text-[#75716e] hover:text-[#a4a09c]'
+                }`}
+              >
+                <span>📁</span><span className="hidden sm:inline">폴더별</span>
+              </button>
+              <button
+                onClick={() => setViewMode('category')}
+                title="카테고리별 보기"
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1 ${
+                  viewMode === 'category' ? 'bg-[#3d3a38] text-white shadow' : 'text-[#75716e] hover:text-[#a4a09c]'
+                }`}
+              >
+                <span>🏷</span><span className="hidden sm:inline">카테고리별</span>
+              </button>
+            </div>
           </div>
 
           {loading ? (
             <div className="flex items-center justify-center py-20">
               <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-orange-500" />
             </div>
-          ) : summaries.length === 0 ? (
+          ) : allSummaries.length === 0 ? (
             <div className="bg-[#32302e]/50 rounded-[32px] p-12 text-center border border-white/5">
               <span className="text-4xl mb-4 block">📭</span>
               <h2 className="text-xl text-white font-medium mb-2">저장된 영상이 없습니다</h2>
-              <p className="text-[#75716e] text-sm">폴더를 선택하거나 새로운 영상을 저장해 보세요.</p>
+              <p className="text-[#75716e] text-sm">영상을 요약하면 자동으로 라이브러리에 저장됩니다.</p>
             </div>
+          ) : viewMode === 'category' ? (
+            /* ── 카테고리별 뷰 ── */
+            (() => {
+              const base = searchQuery.trim()
+                ? allSummaries.filter(s => {
+                    const q = searchQuery.toLowerCase()
+                    const catLabel = (CATEGORY_LABEL[s.category] ?? s.category).toLowerCase()
+                    const tags = (s.square_meta?.tags ?? []).join(' ').toLowerCase()
+                    return s.title.toLowerCase().includes(q) || tags.includes(q) || catLabel.includes(q)
+                  })
+                : allSummaries
+
+              const grouped = CATEGORY_ORDER
+                .map(cat => ({ cat, items: base.filter(s => s.category === cat) }))
+                .filter(({ items }) => items.length > 0)
+
+              // 알 수 없는 카테고리 처리
+              const knownCats = new Set(CATEGORY_ORDER)
+              const others = base.filter(s => !knownCats.has(s.category))
+              if (others.length > 0) grouped.push({ cat: 'other', items: others })
+
+              if (grouped.length === 0) return (
+                <div className="bg-[#32302e]/50 rounded-[32px] p-12 text-center border border-white/5">
+                  <span className="text-3xl mb-3 block">🔍</span>
+                  <p className="text-white font-medium mb-1">검색 결과가 없습니다</p>
+                  <p className="text-[#75716e] text-sm">다른 검색어를 시도해보세요</p>
+                </div>
+              )
+
+              return (
+                <div className="flex flex-col gap-10">
+                  {searchQuery && (
+                    <p className="text-[#75716e] text-xs -mb-6">
+                      "{searchQuery}" 검색 결과 {base.length}개
+                    </p>
+                  )}
+                  {grouped.map(({ cat, items }) => (
+                    <section key={cat}>
+                      {/* 섹션 헤더 */}
+                      <div className="flex items-center gap-3 mb-4">
+                        <h3 className="text-white font-bold text-base">
+                          {CATEGORY_LABEL[cat] ?? cat}
+                        </h3>
+                        <span className="px-2 py-0.5 rounded-full bg-[#32302e] border border-white/10 text-[#75716e] text-xs font-medium">
+                          {items.length}개
+                        </span>
+                        <div className="flex-1 h-px bg-white/5" />
+                      </div>
+                      <div className="columns-1 sm:columns-2 lg:columns-3 gap-6 space-y-6">
+                        {items.map((item) => (
+                          <div
+                            key={item.id}
+                            className="break-inside-avoid relative group"
+                          >
+                            <Link
+                              href={`/result/${item.sessionId}`}
+                              className="block rounded-[24px] bg-[#32302e] border border-white/5 overflow-hidden hover:border-white/20 transition-all hover:-translate-y-1 shadow-lg"
+                            >
+                              <div className="relative overflow-hidden bg-[#23211f]">
+                                <img src={item.thumbnail} alt={item.title} className="w-full object-cover aspect-video group-hover:scale-105 transition-transform duration-500" />
+                                <div className="absolute inset-0 bg-black/20 group-hover:bg-transparent transition-colors" />
+                                <div className="absolute top-3 right-3 px-2.5 py-1 rounded-full bg-black/60 backdrop-blur-md text-xs font-medium text-white border border-white/10">
+                                  {CATEGORY_LABEL[item.category] || '분석됨'}
+                                </div>
+                              </div>
+                              <div className="p-5 flex flex-col gap-3">
+                                <p className="text-[#e2e2e2] text-sm font-bold leading-snug group-hover:text-white transition-colors">{item.title}</p>
+                                {item.folderId && folders.find(f => f.id === item.folderId) && (
+                                  <p className="text-[#75716e] text-xs flex items-center gap-1">
+                                    <span>📁</span>
+                                    <span>{folders.find(f => f.id === item.folderId)?.name}</span>
+                                  </p>
+                                )}
+                                {item.createdAt && (
+                                  <p className="text-[#75716e] text-xs">{formatRelativeDate(item.createdAt)}</p>
+                                )}
+                                {item.square_meta?.tags && (
+                                  <div className="flex flex-wrap gap-1.5">
+                                    {item.square_meta.tags.slice(0, 4).map((tag: string, i: number) => (
+                                      <span key={i} className="px-2 py-1 bg-[#23211f] border border-white/5 rounded-md text-[10px] text-[#a4a09c] font-medium lowercase">
+                                        #{tag.replace(/\s+/g, '')}
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            </Link>
+                            {/* 호버 액션 */}
+                            <div className="absolute top-3 left-3 flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <div className="relative">
+                                <button
+                                  onClick={e => { e.preventDefault(); e.stopPropagation(); setOpenMoveId(openMoveId === item.id ? null : item.id) }}
+                                  className="p-1.5 rounded-full bg-black/60 backdrop-blur-md border border-white/10 text-white/70 hover:text-orange-400 hover:border-orange-400/50 transition-colors"
+                                  title="폴더 이동"
+                                >
+                                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" />
+                                  </svg>
+                                </button>
+                                {openMoveId === item.id && (
+                                  <FolderMoveDropdown summaryId={item.id} currentFolderId={item.folderId} folders={folders} onMoved={handleMoved} onClose={() => setOpenMoveId(null)} />
+                                )}
+                              </div>
+                              <button
+                                onClick={e => handleDelete(e, item.id)}
+                                disabled={deletingId === item.id}
+                                className="p-1.5 rounded-full bg-black/60 backdrop-blur-md border border-white/10 text-white/70 hover:text-red-400 hover:border-red-400/50 disabled:opacity-50 transition-colors"
+                                title="삭제"
+                              >
+                                {deletingId === item.id ? (
+                                  <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                                  </svg>
+                                ) : (
+                                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                  </svg>
+                                )}
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </section>
+                  ))}
+                </div>
+              )
+            })()
           ) : (
+            /* ── 폴더별 뷰 (기존) ── */
             <>
               {/* 폴더 내 순서 변경 안내 */}
               {canDrag && (
@@ -618,6 +810,14 @@ export default function MyPage() {
                   {savingOrder && <p className="text-[#75716e] text-xs animate-pulse">저장 중...</p>}
                 </div>
               )}
+              {summaries.length === 0 ? (
+                <div className="bg-[#32302e]/50 rounded-[32px] p-12 text-center border border-white/5">
+                  <span className="text-4xl mb-4 block">📂</span>
+                  <h2 className="text-xl text-white font-medium mb-2">이 폴더는 비어있습니다</h2>
+                  <p className="text-[#75716e] text-sm">항목 카드의 📁 아이콘으로 폴더에 추가하세요.</p>
+                </div>
+              ) : (
+              <>
             {searchQuery && (
               <p className="text-[#75716e] text-xs mb-3">
                 "{searchQuery}" 검색 결과 {filteredSummaries.length}개
@@ -779,7 +979,9 @@ export default function MyPage() {
             </div>
             )}  {/* filteredSummaries.length === 0 else */}
             </>
-          )}
+            )}  {/* summaries.length === 0 else */}
+            </>
+          )}  {/* viewMode folder/category */}
         </main>
       </div>
       </>
