@@ -62,7 +62,14 @@
       "Bash(cmd /c \"cd /d c:\\\\Users\\\\funjeju\\\\Desktop\\\\aiproject\\\\nextcurator && npx tsc --noEmit 2>&1\")",
       "Bash(echo \"EXIT: $?\")",
       "Bash(node_modules/.bin/firebase deploy:*)",
-      "Bash(curl -s \"https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=ew6goHN_fi4&format=json\")"
+      "Bash(curl -s \"https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=ew6goHN_fi4&format=json\")",
+      "Bash(cmd.exe /c \"firebase --version\")",
+      "Bash(cmd.exe /c \"where firebase\")",
+      "Bash(cmd.exe /c \"npx firebase --version\")",
+      "Bash(ls *.json)",
+      "Bash(cmd.exe /c \"npm install -g firebase-tools 2>&1\")",
+      "Bash(firebase --version)",
+      "Bash(firebase login:*)"
     ]
   }
 }
