@@ -98,7 +98,11 @@ export default function RoomClient({ roomId }: { roomId: string }) {
       // 비밀번호 없거나 방장이면 바로 인증
       if (!r.password || r.hostUid === uid) setPwVerified(true)
       setLoading(false)
-    }).catch(() => { setError('방 로드에 실패했습니다.'); setLoading(false) })
+    }).catch((e) => {
+      console.error('[Room] getRoom failed:', e)
+      setError(`방 로드에 실패했습니다. (${(e as Error)?.message || String(e)})`)
+      setLoading(false)
+    })
   }, [roomId, uid])
 
   // ── 실시간 구독 (입장 후) ────────────────────────────────────────────────────

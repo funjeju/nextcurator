@@ -36,8 +36,9 @@ export default function CreateRoomModal({ sessionId, videoId, title, thumbnail, 
       })
       onClose()
       router.push(`/room/${roomId}`)
-    } catch {
-      alert('방 생성에 실패했습니다.')
+    } catch (e) {
+      console.error('[CreateRoom] failed:', e)
+      alert(`방 생성에 실패했습니다.\n${(e as Error)?.message || String(e)}`)
     } finally {
       setCreating(false)
     }
