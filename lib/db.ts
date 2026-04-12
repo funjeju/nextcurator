@@ -498,22 +498,28 @@ export async function getFriends(myUid: string): Promise<{ uid: string; displayN
     .map(p => ({ uid: p!.uid, displayName: p!.displayName, photoURL: p!.photoURL }))
 }
 
-/** 특정 유저의 노출 가능한 폴더 목록 조회 (권한에 따라 필터링) */
-export async function getVisibleFolders(userId: string, isFriend: boolean): Promise<Folder[]> {
+/**
+ * 특정 사용자의 공개 가능한 폴더 목록을 가져옵니다.
+ * - Firestore 보안 규칙 위반을 피하기 위해 쿼리 레벨에서 필터링합니다.
+ */
+export async function getVisibleFolders(userId: string, isFriend: boolean = false) {
   const foldersRef = collection(db, 'folders')
-  // Firestore 쿼리 제약으로 인해, 'private'이 아닌 것들을 가져오거나 클라이언트 필터링
-  // 여기서는 간단히 전체를 가져와서 필터링 (폴더 수가 적으므로 효율적)
-  const q = query(foldersRef, where('userId', '==', userId))
-  const snap = await getDocs(q)
-  const allFolders = snap.docs.map(d => ({ id: d.id, ...d.data() }) as Folder)
   
-  return allFolders.filter(f => {
-    if (f.visibility === 'public') return true
-    if (isFriend && f.visibility === 'friends') return true // 향후 확장성
-    // 현재 요구사항: 비공개 폴더는 아예 안 보이게
-    return f.visibility === 'public' || (isFriend && f.visibility !== 'private') 
-    // 실제로는 'public'만 우선 지원하고 친구면 'private' 아닌 거 다 보여줌
-  }).sort((a, b) => (b.createdAt?.toMillis?.() ?? 0) - (a.createdAt?.toMillis?.() ?? 0))
+  // 1. 기본적으로 해당 유저의 폴더
+  let constraints: any[] = [where('userId', '==', userId)]
+
+  // 2. 권한에 따른 가시성 필터링
+  // 친구라면: public + friends 모두 가능
+  // 비친구라면: public만 가능
+  if (isFriend) {
+    constraints.push(where('visibility', 'in', ['public', 'friends']))
+  } else {
+    constraints.push(where('visibility', '==', 'public'))
+  }
+
+  const q = query(foldersRef, ...constraints)
+  const snap = await getDocs(q)
+  return snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Folder))
 }
 
 /** 폴더 통째로 복제하기 */

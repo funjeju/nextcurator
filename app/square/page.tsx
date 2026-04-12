@@ -91,51 +91,51 @@ function SummaryCard({ item, likedIds, likingIds, user, messagingId, commentCoun
   onMessage: (e: React.MouseEvent, item: SavedSummary) => void
   onDelete: (e: React.MouseEvent, item: SavedSummary) => void
 }) {
+  const router = useRouter()
   return (
-    <div className="relative group">
-      <Link
-        href={`/result/${item.sessionId}?from=square`}
-        onClick={() => incrementViewCount(item.id)}
-        className="block rounded-[18px] bg-[#32302e] border border-white/5 overflow-hidden hover:border-white/20 transition-all shadow-md"
-      >
-        <div className="relative overflow-hidden bg-[#23211f]">
-          <img
-            src={item.thumbnail}
-            alt={item.title}
-            className="w-full object-cover aspect-video group-hover:scale-105 transition-transform duration-500"
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
-          <div className="absolute top-2 right-2 px-2 py-0.5 rounded-full bg-black/60 backdrop-blur-sm text-[9px] font-bold text-white border border-white/10">
-            {CATEGORIES.find(c => c.id === item.category)?.label ?? '분석됨'}
-          </div>
+    <div className="relative group rounded-[18px] bg-[#32302e] border border-white/5 overflow-hidden hover:border-white/20 transition-all shadow-md cursor-pointer"
+      onClick={() => {
+        incrementViewCount(item.id)
+        router.push(`/result/${item.sessionId}?from=square`)
+      }}
+    >
+      <div className="relative overflow-hidden bg-[#23211f]">
+        <img
+          src={item.thumbnail}
+          alt={item.title}
+          className="w-full object-cover aspect-video group-hover:scale-105 transition-transform duration-500"
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+        <div className="absolute top-2 right-2 px-2 py-0.5 rounded-full bg-black/60 backdrop-blur-sm text-[9px] font-bold text-white border border-white/10">
+          {CATEGORIES.find(c => c.id === item.category)?.label ?? '분석됨'}
         </div>
+      </div>
 
-        <div className="p-2.5 pb-9">
-          <h3 className="text-[#f4f4f5] text-[11px] font-bold leading-snug line-clamp-2 mb-2">
-            {item.title}
-          </h3>
-          <div className="flex items-center justify-between">
-            <Link
-              href={`/profile/${item.userId}`}
-              onClick={e => e.stopPropagation()}
-              className="flex items-center gap-1 min-w-0 group/profile"
-            >
-              {item.userPhotoURL ? (
-                <img src={item.userPhotoURL} alt="" className="w-4 h-4 rounded-full shrink-0 border border-white/10" />
-              ) : (
-                <div className="w-4 h-4 rounded-full bg-[#3d3a38] shrink-0 flex items-center justify-center text-[8px] text-white/40">👤</div>
-              )}
-              <span className="text-[9px] text-[#75716e] group-hover/profile:text-white truncate transition-colors">
-                {item.userDisplayName || '익명'}
-              </span>
-            </Link>
-            <div className="flex items-center gap-1 text-[#75716e] shrink-0">
-              {item.createdAt && <span className="text-[8px]">{formatRelativeDate(item.createdAt)}</span>}
-              {(item.viewCount ?? 0) > 0 && <span className="text-[8px]">· 👁{item.viewCount}</span>}
-            </div>
+      <div className="p-2.5 pb-9">
+        <h3 className="text-[#f4f4f5] text-[11px] font-bold leading-snug line-clamp-2 mb-2">
+          {item.title}
+        </h3>
+        <div className="flex items-center justify-between">
+          <Link
+            href={`/profile/${item.userId}`}
+            onClick={e => e.stopPropagation()}
+            className="flex items-center gap-1 min-w-0 group/profile relative z-10"
+          >
+            {item.userPhotoURL ? (
+              <img src={item.userPhotoURL} alt="" className="w-4 h-4 rounded-full shrink-0 border border-white/10" />
+            ) : (
+              <div className="w-4 h-4 rounded-full bg-[#3d3a38] shrink-0 flex items-center justify-center text-[8px] text-white/40">👤</div>
+            )}
+            <span className="text-[9px] text-[#75716e] group-hover/profile:text-white truncate transition-colors">
+              {item.userDisplayName || '익명'}
+            </span>
+          </Link>
+          <div className="flex items-center gap-1 text-[#75716e] shrink-0">
+            {item.createdAt && <span className="text-[8px]">{formatRelativeDate(item.createdAt)}</span>}
+            {(item.viewCount ?? 0) > 0 && <span className="text-[8px]">· 👁{item.viewCount}</span>}
           </div>
         </div>
-      </Link>
+      </div>
 
       <div className="absolute bottom-2 left-2.5 right-2.5 flex items-center justify-between">
         {user && item.userId === user.uid ? (

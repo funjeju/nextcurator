@@ -27,12 +27,34 @@ const summaryModel = genAI.getGenerativeModel({
 
 const VALID_CATEGORIES: Category[] = ['recipe', 'english', 'learning', 'news', 'selfdev', 'travel', 'story', 'tips', 'report']
 
+/**
+ * AI 응답에서 JSON을 견고하게 추출합니다.
+ * - 마크다운 코드 블록 제거
+ * - 마지막 쉼표(Trailing commas) 제거
+ * - 제어 문자 정리
+ */
 function extractJSON(text: string): unknown {
-  // 마크다운 코드블록 제거 후 JSON 추출
-  const stripped = text.replace(/```(?:json)?\n?/g, '').replace(/```/g, '').trim()
-  const match = stripped.match(/\{[\s\S]*\}/)
-  if (!match) throw new Error('No JSON in response')
-  return JSON.parse(match[0])
+  // 1. 마크다운 코드블록 제거
+  let cleaned = text.replace(/```(?:json)?\n?/gi, '').replace(/```/g, '').trim()
+  
+  // 2. JSON 부분만 추출 ({ ... })
+  const match = cleaned.match(/\{[\s\S]*\}/)
+  if (!match) throw new Error('응답에서 JSON 구조를 찾을 수 없습니다.')
+  cleaned = match[0]
+
+  try {
+    return JSON.parse(cleaned)
+  } catch (initialError) {
+    // 3. 일반적인 오타 수정 시도 (Trailing comma 등)
+    try {
+      // 객체나 배열의 마지막 요소 뒤에 붙은 쉼표 제거 (}, ] 앞의 ,)
+      cleaned = cleaned.replace(/,\s*([}\]])/g, '$1')
+      return JSON.parse(cleaned)
+    } catch (e) {
+      console.error('[JSON Parse Error Source]:', text)
+      throw initialError
+    }
+  }
 }
 
 export async function classifyCategory(transcript: string): Promise<{ category: Category; confidence: number }> {

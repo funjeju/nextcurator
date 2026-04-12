@@ -4,10 +4,12 @@ import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Header from '@/components/common/Header'
-import {
+import { 
+  getUserProfile, getUserPublicSummaries, getAllSavedSummariesByUser,
+  getOrCreateConversation, sendFriendRequest, getFriendStatus,
   acceptFriendRequest, rejectFriendRequest, cancelFriendRequest, removeFriend,
-  getVisibleFolders, cloneFolder, getSavedSummariesByFolder, saveSummary,
   UserProfile, SavedSummary, Folder,
+  getVisibleFolders, cloneFolder, getSavedSummariesByFolder, saveSummary,
 } from '@/lib/db'
 import { useAuth } from '@/providers/AuthProvider'
 import { useChat } from '@/providers/ChatProvider'

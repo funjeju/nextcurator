@@ -21,10 +21,15 @@ service cloud.firestore {
       allow delete, update: if request.auth != null && request.auth.uid == resource.data.userId;
     }
 
-    // folders: 본인 폴더만 읽기/쓰기
+    // folders: 본인 폴더 읽기/쓰기, 공개 항목 또는 친구 관계인 경우 읽기 허용
     match /folders/{docId} {
-      allow read, write: if request.auth != null && request.auth.uid == resource.data.userId;
+      allow read: if resource.data.visibility == 'public'
+                  || (request.auth != null && (
+                      request.auth.uid == resource.data.userId ||
+                      exists(/databases/$(database)/documents/friendships/$(request.auth.uid < resource.data.userId ? request.auth.uid + '_' + resource.data.userId : resource.data.userId + '_' + request.auth.uid))
+                  ));
       allow create: if request.auth != null;
+      allow update, delete: if request.auth != null && request.auth.uid == resource.data.userId;
     }
 
     // likes: 본인 좋아요만 생성/삭제, 읽기는 누구나

@@ -9,6 +9,7 @@ import Link from 'next/link'
 
 interface AdminStats {
   totalSummaries: number
+  totalSaved: number
   totalUsers: number
   todaySummaries: number
   recentItems: any[]
