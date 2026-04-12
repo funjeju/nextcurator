@@ -38,9 +38,10 @@ async function getOgData(sessionId: string) {
       travel:  '🧳 여행 AI 요약 | 추천 장소 · 동선 · 실용 정보',
       story:   '🍿 스토리 AI 요약 | 인물 · 타임라인 · 핵심 요약',
       tips:    '💡 팁 AI 요약 | 팁 카드 · Top 3 · 준비물 정리',
+      report:  '📋 보고서 AI 요약 | 목차 · 섹션별 분석 · 핵심 결론',
     }
 
-    const description = `${CATEGORY_FEATURED[category] ?? 'AI 요약'} | ${channel} · Next Curator`
+    const description = `가장 스마트한 유튜브 저장소 · ${CATEGORY_FEATURED[category] ?? 'AI 요약'} | ${channel}`
 
     return { title, thumbnail, channel, category, description }
   } catch {
@@ -70,10 +71,8 @@ export async function generateMetadata(
       title: og.title,
       description: og.description,
       type: 'article',
-      siteName: 'Next Curator',
-      ...(og.thumbnail ? {
-        images: [{ url: og.thumbnail, width: 1280, height: 720, alt: og.title }],
-      } : {}),
+      siteName: 'Next Curator — 가장 스마트한 유튜브 저장소',
+      // images는 opengraph-image.tsx가 자동으로 제공하므로 별도 지정 안 함
     },
     twitter: {
       card: 'summary_large_image',

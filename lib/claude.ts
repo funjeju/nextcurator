@@ -25,7 +25,7 @@ const summaryModel = genAI.getGenerativeModel({
   },
 })
 
-const VALID_CATEGORIES: Category[] = ['recipe', 'english', 'learning', 'news', 'selfdev', 'travel', 'story', 'tips']
+const VALID_CATEGORIES: Category[] = ['recipe', 'english', 'learning', 'news', 'selfdev', 'travel', 'story', 'tips', 'report']
 
 function extractJSON(text: string): unknown {
   // 마크다운 코드블록 제거 후 JSON 추출
@@ -98,6 +98,14 @@ const SUMMARY_PROMPTS: Record<Category, string> = {
 
   // voice는 별도 API에서 Gemini가 직접 처리하므로 placeholder만 사용
   voice: '',
+
+  report: `다음 영상 자막을 분석해서 보고서 형식의 JSON을 만드세요.
+sections는 영상 흐름에 따라 4~7개로 구성하고, 각 섹션은 2~3문장의 서술형 body로 작성하세요.
+timestamp는 해당 섹션이 시작되는 시점(MM:SS 또는 HH:MM:SS)을 기입하세요.
+context_summary는 200~300자 분량의 한국어 맥락 요약입니다.
+conclusion은 한 문장 핵심 결론입니다.
+
+{"square_meta":{"tags":["키워드1","키워드2","키워드3","키워드4","키워드5"],"topic_cluster":"대주제","vibe":"분위기"},"title":"보고서 제목","context_summary":"전체 맥락 200~300자 요약","table_of_contents":["1. 섹션 제목","2. 섹션 제목"],"sections":[{"number":1,"heading":"소제목","timestamp":"MM:SS","body":"서술형 요약 2~3문장"}],"conclusion":"핵심 결론 한 문장"}`,
 }
 
 /**
@@ -174,6 +182,7 @@ export async function generateReportSummary(
     story:    '스토리/드라마 영상',
     tips:     '팁/라이프핵 영상',
     voice:    '음성 녹음 메모',
+    report:   '보고서 형식 정리',
   }
 
   const result = await reportModel.generateContent(`당신은 전문 콘텐츠 에디터입니다.
@@ -216,6 +225,7 @@ export async function generateContextSummary(
     story: '스토리/드라마',
     tips: '팁/라이프핵',
     voice: '음성 녹음 메모',
+    report: '보고서 형식 정리',
   }
 
   const result = await classifyModel.generateContent(`다음 콘텐츠를 200~300자 이내로 맥락 요약하세요.

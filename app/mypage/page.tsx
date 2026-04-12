@@ -25,9 +25,10 @@ const CATEGORY_LABEL: Record<string, string> = {
   story: '🍿 스토리',
   tips: '💡 팁',
   voice: '🎙 녹음 메모',
+  report: '📋 보고서',
 }
 
-const CATEGORY_ORDER = ['recipe', 'english', 'learning', 'news', 'selfdev', 'travel', 'story', 'tips', 'voice']
+const CATEGORY_ORDER = ['recipe', 'english', 'learning', 'news', 'selfdev', 'travel', 'story', 'tips', 'voice', 'report']
 
 // ── 폴더 이동 드롭다운 ──
 function FolderMoveDropdown({
@@ -240,7 +241,9 @@ export default function MyPage() {
   const [savingOrder, setSavingOrder] = useState(false)
   const [pendingCount, setPendingCount] = useState(0)
   const [searchQuery, setSearchQuery] = useState('')
-  const [viewMode, setViewMode] = useState<'folder' | 'category'>('folder')
+  const [selectedCategory, setSelectedCategory] = useState('all')
+  const [catDropdownOpen, setCatDropdownOpen] = useState(false)
+  const catDropdownRef = useRef<HTMLDivElement>(null)
 
   // 폴더 메뉴 외부 클릭 시 닫기
   useEffect(() => {
@@ -249,6 +252,18 @@ export default function MyPage() {
     document.addEventListener('click', handler)
     return () => document.removeEventListener('click', handler)
   }, [folderMenuId])
+
+  // 카테고리 드롭다운 외부 클릭 시 닫기
+  useEffect(() => {
+    if (!catDropdownOpen) return
+    const handler = (e: MouseEvent) => {
+      if (catDropdownRef.current && !catDropdownRef.current.contains(e.target as Node)) {
+        setCatDropdownOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [catDropdownOpen])
 
   useEffect(() => {
     const fetchInit = async () => {
@@ -359,6 +374,7 @@ export default function MyPage() {
 
   const handleFolderClick = async (folderId: string) => {
     setActiveFolder(folderId)
+    setSelectedCategory('all')  // 폴더 바꾸면 카테고리 필터 초기화
     setLoading(true)
     try {
       const uid = getLocalUserId()
@@ -422,9 +438,13 @@ export default function MyPage() {
     finally { setFolderMenuId(null) }
   }
 
-  // 검색 필터링 (제목 + 태그 + 카테고리명)
+  // 카테고리 필터 → 검색 필터 순서로 적용
+  const catFiltered = selectedCategory === 'all'
+    ? summaries
+    : summaries.filter(s => s.category === selectedCategory)
+
   const filteredSummaries = searchQuery.trim()
-    ? summaries.filter(s => {
+    ? catFiltered.filter(s => {
         const q = searchQuery.toLowerCase()
         const catLabel = (CATEGORY_LABEL[s.category] ?? s.category).toLowerCase()
         const tags = (s.square_meta?.tags ?? []).join(' ').toLowerCase()
@@ -434,7 +454,12 @@ export default function MyPage() {
           catLabel.includes(q)
         )
       })
-    : summaries
+    : catFiltered
+
+  // 현재 폴더 범위에서 실제 존재하는 카테고리만 드롭다운에 노출
+  const availableCategories = CATEGORY_ORDER.filter(cat =>
+    summaries.some(s => s.category === cat)
+  )
 
   // 폴더 이동 완료 → UI 즉시 반영
   const handleMoved = (summaryId: string, newFolderId: string) => {
@@ -615,7 +640,7 @@ export default function MyPage() {
 
         {/* Content Grid */}
         <main className="flex-1">
-          {/* 검색창 + 뷰 토글 */}
+          {/* 검색창 + 카테고리 드롭다운 */}
           <div className="flex items-center gap-3 mb-5">
             <div className="relative flex-1">
               <input
@@ -635,26 +660,66 @@ export default function MyPage() {
                 >✕</button>
               )}
             </div>
-            {/* 뷰 모드 토글 */}
-            <div className="flex gap-0.5 bg-[#32302e] border border-white/10 rounded-xl p-1 shrink-0">
+
+            {/* 카테고리 드롭다운 */}
+            <div ref={catDropdownRef} className="relative shrink-0">
               <button
-                onClick={() => setViewMode('folder')}
-                title="폴더별 보기"
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1 ${
-                  viewMode === 'folder' ? 'bg-[#3d3a38] text-white shadow' : 'text-[#75716e] hover:text-[#a4a09c]'
+                onClick={() => setCatDropdownOpen(prev => !prev)}
+                className={`h-10 flex items-center gap-2 px-3 rounded-xl border text-sm font-medium transition-all ${
+                  selectedCategory !== 'all'
+                    ? 'border-orange-500/50 bg-orange-500/10 text-orange-300'
+                    : 'border-white/10 bg-[#32302e] text-[#a4a09c] hover:text-white hover:border-white/20'
                 }`}
               >
-                <span>📁</span><span className="hidden sm:inline">폴더별</span>
+                <span>{selectedCategory === 'all' ? '🏷' : CATEGORY_LABEL[selectedCategory]?.split(' ')[0]}</span>
+                <span className="hidden sm:inline">
+                  {selectedCategory === 'all' ? '전체 카테고리' : CATEGORY_LABEL[selectedCategory]?.split(' ').slice(1).join(' ')}
+                </span>
+                <svg className={`w-3.5 h-3.5 transition-transform ${catDropdownOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
               </button>
-              <button
-                onClick={() => setViewMode('category')}
-                title="카테고리별 보기"
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1 ${
-                  viewMode === 'category' ? 'bg-[#3d3a38] text-white shadow' : 'text-[#75716e] hover:text-[#a4a09c]'
-                }`}
-              >
-                <span>🏷</span><span className="hidden sm:inline">카테고리별</span>
-              </button>
+
+              {catDropdownOpen && (
+                <div className="absolute right-0 top-full mt-1.5 z-40 bg-[#23211f] border border-white/10 rounded-2xl shadow-2xl overflow-hidden min-w-[160px] py-1.5">
+                  {/* 전체 */}
+                  <button
+                    onClick={() => { setSelectedCategory('all'); setCatDropdownOpen(false) }}
+                    className={`w-full text-left px-4 py-2.5 text-sm flex items-center gap-2.5 transition-colors ${
+                      selectedCategory === 'all'
+                        ? 'text-orange-400 bg-orange-500/10'
+                        : 'text-[#a4a09c] hover:text-white hover:bg-white/5'
+                    }`}
+                  >
+                    <span>🌐</span>
+                    <span>전체 카테고리</span>
+                    {selectedCategory === 'all' && <span className="ml-auto text-[10px]">✓</span>}
+                  </button>
+                  <div className="h-px bg-white/5 mx-3 my-1" />
+                  {/* 현재 폴더에 존재하는 카테고리만 */}
+                  {availableCategories.map(cat => (
+                    <button
+                      key={cat}
+                      onClick={() => { setSelectedCategory(cat); setCatDropdownOpen(false) }}
+                      className={`w-full text-left px-4 py-2.5 text-sm flex items-center gap-2.5 transition-colors ${
+                        selectedCategory === cat
+                          ? 'text-orange-400 bg-orange-500/10'
+                          : 'text-[#a4a09c] hover:text-white hover:bg-white/5'
+                      }`}
+                    >
+                      <span>{CATEGORY_LABEL[cat]?.split(' ')[0]}</span>
+                      <span>{CATEGORY_LABEL[cat]?.split(' ').slice(1).join(' ')}</span>
+                      <span className="ml-auto text-[10px] text-[#75716e]">
+                        {summaries.filter(s => s.category === cat).length}
+                      </span>
+                      {selectedCategory === cat && <span className="text-[10px] text-orange-400">✓</span>}
+                    </button>
+                  ))}
+                  {availableCategories.length === 0 && (
+                    <p className="px-4 py-2 text-xs text-[#75716e]">항목이 없습니다</p>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 
@@ -668,320 +733,189 @@ export default function MyPage() {
               <h2 className="text-xl text-white font-medium mb-2">저장된 영상이 없습니다</h2>
               <p className="text-[#75716e] text-sm">영상을 요약하면 자동으로 라이브러리에 저장됩니다.</p>
             </div>
-          ) : viewMode === 'category' ? (
-            /* ── 카테고리별 뷰 ── */
-            (() => {
-              const base = searchQuery.trim()
-                ? allSummaries.filter(s => {
-                    const q = searchQuery.toLowerCase()
-                    const catLabel = (CATEGORY_LABEL[s.category] ?? s.category).toLowerCase()
-                    const tags = (s.square_meta?.tags ?? []).join(' ').toLowerCase()
-                    return s.title.toLowerCase().includes(q) || tags.includes(q) || catLabel.includes(q)
-                  })
-                : allSummaries
+          ) : summaries.length === 0 ? (
+            <div className="bg-[#32302e]/50 rounded-[32px] p-12 text-center border border-white/5">
+              <span className="text-4xl mb-4 block">📂</span>
+              <h2 className="text-xl text-white font-medium mb-2">이 폴더는 비어있습니다</h2>
+              <p className="text-[#75716e] text-sm">카드의 📁 아이콘으로 항목을 폴더에 추가하세요.</p>
+            </div>
+          ) : (
+            <>
+              {/* 드래그 순서 변경 안내 + 필터 상태 */}
+              <div className="flex items-center justify-between mb-4 min-h-[20px]">
+                <p className="text-[#75716e] text-xs flex items-center gap-1.5">
+                  {canDrag && (
+                    <>
+                      <span className="hidden md:inline">⠿ 드래그로 순서를 변경할 수 있어요</span>
+                      <span className="md:hidden">↑↓ 버튼으로 순서를 변경할 수 있어요</span>
+                    </>
+                  )}
+                  {(selectedCategory !== 'all' || searchQuery) && (
+                    <span className="flex items-center gap-1 flex-wrap">
+                      {selectedCategory !== 'all' && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-orange-500/10 border border-orange-500/20 text-orange-400 text-[10px]">
+                          {CATEGORY_LABEL[selectedCategory]}
+                          <button onClick={() => setSelectedCategory('all')} className="hover:text-white ml-0.5">✕</button>
+                        </span>
+                      )}
+                      {searchQuery && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-[#a4a09c] text-[10px]">
+                          "{searchQuery}"
+                          <button onClick={() => setSearchQuery('')} className="hover:text-white ml-0.5">✕</button>
+                        </span>
+                      )}
+                      <span className="text-[#75716e]">· {filteredSummaries.length}개</span>
+                    </span>
+                  )}
+                </p>
+                {savingOrder && <p className="text-[#75716e] text-xs animate-pulse">저장 중...</p>}
+              </div>
 
-              const grouped = CATEGORY_ORDER
-                .map(cat => ({ cat, items: base.filter(s => s.category === cat) }))
-                .filter(({ items }) => items.length > 0)
-
-              // 알 수 없는 카테고리 처리
-              const knownCats = new Set(CATEGORY_ORDER)
-              const others = base.filter(s => !knownCats.has(s.category))
-              if (others.length > 0) grouped.push({ cat: 'other', items: others })
-
-              if (grouped.length === 0) return (
+              {filteredSummaries.length === 0 ? (
                 <div className="bg-[#32302e]/50 rounded-[32px] p-12 text-center border border-white/5">
                   <span className="text-3xl mb-3 block">🔍</span>
-                  <p className="text-white font-medium mb-1">검색 결과가 없습니다</p>
-                  <p className="text-[#75716e] text-sm">다른 검색어를 시도해보세요</p>
-                </div>
-              )
-
-              return (
-                <div className="flex flex-col gap-10">
-                  {searchQuery && (
-                    <p className="text-[#75716e] text-xs -mb-6">
-                      "{searchQuery}" 검색 결과 {base.length}개
-                    </p>
-                  )}
-                  {grouped.map(({ cat, items }) => (
-                    <section key={cat}>
-                      {/* 섹션 헤더 */}
-                      <div className="flex items-center gap-3 mb-4">
-                        <h3 className="text-white font-bold text-base">
-                          {CATEGORY_LABEL[cat] ?? cat}
-                        </h3>
-                        <span className="px-2 py-0.5 rounded-full bg-[#32302e] border border-white/10 text-[#75716e] text-xs font-medium">
-                          {items.length}개
-                        </span>
-                        <div className="flex-1 h-px bg-white/5" />
-                      </div>
-                      <div className="columns-1 sm:columns-2 lg:columns-3 gap-6 space-y-6">
-                        {items.map((item) => (
-                          <div
-                            key={item.id}
-                            className="break-inside-avoid relative group"
-                          >
-                            <Link
-                              href={`/result/${item.sessionId}`}
-                              className="block rounded-[24px] bg-[#32302e] border border-white/5 overflow-hidden hover:border-white/20 transition-all hover:-translate-y-1 shadow-lg"
-                            >
-                              <div className="relative overflow-hidden bg-[#23211f]">
-                                <img src={item.thumbnail} alt={item.title} className="w-full object-cover aspect-video group-hover:scale-105 transition-transform duration-500" />
-                                <div className="absolute inset-0 bg-black/20 group-hover:bg-transparent transition-colors" />
-                                <div className="absolute top-3 right-3 px-2.5 py-1 rounded-full bg-black/60 backdrop-blur-md text-xs font-medium text-white border border-white/10">
-                                  {CATEGORY_LABEL[item.category] || '분석됨'}
-                                </div>
-                              </div>
-                              <div className="p-5 flex flex-col gap-3">
-                                <p className="text-[#e2e2e2] text-sm font-bold leading-snug group-hover:text-white transition-colors">{item.title}</p>
-                                {item.folderId && folders.find(f => f.id === item.folderId) && (
-                                  <p className="text-[#75716e] text-xs flex items-center gap-1">
-                                    <span>📁</span>
-                                    <span>{folders.find(f => f.id === item.folderId)?.name}</span>
-                                  </p>
-                                )}
-                                {item.createdAt && (
-                                  <p className="text-[#75716e] text-xs">{formatRelativeDate(item.createdAt)}</p>
-                                )}
-                                {item.square_meta?.tags && (
-                                  <div className="flex flex-wrap gap-1.5">
-                                    {item.square_meta.tags.slice(0, 4).map((tag: string, i: number) => (
-                                      <span key={i} className="px-2 py-1 bg-[#23211f] border border-white/5 rounded-md text-[10px] text-[#a4a09c] font-medium lowercase">
-                                        #{tag.replace(/\s+/g, '')}
-                                      </span>
-                                    ))}
-                                  </div>
-                                )}
-                              </div>
-                            </Link>
-                            {/* 호버 액션 */}
-                            <div className="absolute top-3 left-3 flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                              <div className="relative">
-                                <button
-                                  onClick={e => { e.preventDefault(); e.stopPropagation(); setOpenMoveId(openMoveId === item.id ? null : item.id) }}
-                                  className="p-1.5 rounded-full bg-black/60 backdrop-blur-md border border-white/10 text-white/70 hover:text-orange-400 hover:border-orange-400/50 transition-colors"
-                                  title="폴더 이동"
-                                >
-                                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" />
-                                  </svg>
-                                </button>
-                                {openMoveId === item.id && (
-                                  <FolderMoveDropdown summaryId={item.id} currentFolderId={item.folderId} folders={folders} onMoved={handleMoved} onClose={() => setOpenMoveId(null)} />
-                                )}
-                              </div>
-                              <button
-                                onClick={e => handleDelete(e, item.id)}
-                                disabled={deletingId === item.id}
-                                className="p-1.5 rounded-full bg-black/60 backdrop-blur-md border border-white/10 text-white/70 hover:text-red-400 hover:border-red-400/50 disabled:opacity-50 transition-colors"
-                                title="삭제"
-                              >
-                                {deletingId === item.id ? (
-                                  <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
-                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
-                                  </svg>
-                                ) : (
-                                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                  </svg>
-                                )}
-                              </button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </section>
-                  ))}
-                </div>
-              )
-            })()
-          ) : (
-            /* ── 폴더별 뷰 (기존) ── */
-            <>
-              {/* 폴더 내 순서 변경 안내 */}
-              {canDrag && (
-                <div className="flex items-center justify-between mb-4">
-                  <p className="text-[#75716e] text-xs flex items-center gap-1.5">
-                    <span className="hidden md:inline">⠿ 드래그로 순서를 변경할 수 있어요</span>
-                    <span className="md:hidden">↑↓ 버튼으로 순서를 변경할 수 있어요</span>
-                  </p>
-                  {savingOrder && <p className="text-[#75716e] text-xs animate-pulse">저장 중...</p>}
-                </div>
-              )}
-              {summaries.length === 0 ? (
-                <div className="bg-[#32302e]/50 rounded-[32px] p-12 text-center border border-white/5">
-                  <span className="text-4xl mb-4 block">📂</span>
-                  <h2 className="text-xl text-white font-medium mb-2">이 폴더는 비어있습니다</h2>
-                  <p className="text-[#75716e] text-sm">항목 카드의 📁 아이콘으로 폴더에 추가하세요.</p>
+                  <p className="text-white font-medium mb-1">결과가 없습니다</p>
+                  <p className="text-[#75716e] text-sm">다른 카테고리나 검색어를 시도해보세요</p>
                 </div>
               ) : (
-              <>
-            {searchQuery && (
-              <p className="text-[#75716e] text-xs mb-3">
-                "{searchQuery}" 검색 결과 {filteredSummaries.length}개
-              </p>
-            )}
-            {filteredSummaries.length === 0 && searchQuery ? (
-              <div className="bg-[#32302e]/50 rounded-[32px] p-12 text-center border border-white/5">
-                <span className="text-3xl mb-3 block">🔍</span>
-                <p className="text-white font-medium mb-1">검색 결과가 없습니다</p>
-                <p className="text-[#75716e] text-sm">AI 챗봇에게 물어보면 더 정확하게 찾을 수 있어요</p>
-              </div>
-            ) : (
-            <div className="columns-1 sm:columns-2 lg:columns-3 gap-6 space-y-6">
-              {filteredSummaries.map((item, idx) => (
-                <div
-                  key={item.id}
-                  className={`break-inside-avoid relative group transition-all ${
-                    canDrag ? 'cursor-default' : ''
-                  } ${dragOverId === item.id && dragId !== item.id ? 'ring-2 ring-orange-500 ring-offset-2 ring-offset-[#252423] rounded-[24px]' : ''}`}
-                  draggable={canDrag}
-                  onDragStart={canDrag ? (e) => handleDragStart(e, item.id) : undefined}
-                  onDragOver={canDrag ? (e) => handleDragOver(e, item.id) : undefined}
-                  onDrop={canDrag ? (e) => handleDrop(e, item.id) : undefined}
-                  onDragEnd={canDrag ? handleDragEnd : undefined}
-                >
-                  {/* 드래그 핸들 (PC) */}
-                  {canDrag && (
+                <div className="columns-1 sm:columns-2 lg:columns-3 gap-6 space-y-6">
+                  {filteredSummaries.map((item, idx) => (
                     <div
-                      className="absolute left-2 top-1/2 -translate-y-1/2 z-10 hidden md:flex items-center justify-center w-6 h-10 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing text-[#75716e] hover:text-white"
-                      title="드래그해서 순서 변경"
+                      key={item.id}
+                      className={`break-inside-avoid relative group transition-all ${
+                        canDrag ? 'cursor-default' : ''
+                      } ${dragOverId === item.id && dragId !== item.id ? 'ring-2 ring-orange-500 ring-offset-2 ring-offset-[#252423] rounded-[24px]' : ''}`}
+                      draggable={canDrag}
+                      onDragStart={canDrag ? (e) => handleDragStart(e, item.id) : undefined}
+                      onDragOver={canDrag ? (e) => handleDragOver(e, item.id) : undefined}
+                      onDrop={canDrag ? (e) => handleDrop(e, item.id) : undefined}
+                      onDragEnd={canDrag ? handleDragEnd : undefined}
                     >
-                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                        <circle cx="9" cy="5" r="1.5"/><circle cx="15" cy="5" r="1.5"/>
-                        <circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/>
-                        <circle cx="9" cy="19" r="1.5"/><circle cx="15" cy="19" r="1.5"/>
-                      </svg>
-                    </div>
-                  )}
-
-                  <Link
-                    href={`/result/${item.sessionId}`}
-                    className={`block rounded-[24px] bg-[#32302e] border border-white/5 overflow-hidden hover:border-white/20 transition-all hover:-translate-y-1 shadow-lg ${dragId === item.id ? 'opacity-40 scale-95' : ''}`}
-                    onClick={dragId ? (e) => e.preventDefault() : undefined}
-                  >
-                    <div className="relative overflow-hidden bg-[#23211f]">
-                      <img
-                        src={item.thumbnail}
-                        alt={item.title}
-                        className="w-full object-cover aspect-video group-hover:scale-105 transition-transform duration-500"
-                      />
-                      <div className="absolute inset-0 bg-black/20 group-hover:bg-transparent transition-colors" />
-                      <div className="absolute top-3 right-3 px-2.5 py-1 rounded-full bg-black/60 backdrop-blur-md text-xs font-medium text-white border border-white/10">
-                        {CATEGORY_LABEL[item.category] || '분석됨'}
-                      </div>
-                    </div>
-
-                    <div className="p-5 flex flex-col gap-3">
-                      <p className="text-[#e2e2e2] text-sm font-bold leading-snug group-hover:text-white transition-colors">
-                        {item.title}
-                      </p>
-                      {/* 폴더 위치 표시 */}
-                      {item.folderId && folders.find(f => f.id === item.folderId) && (
-                        <p className="text-[#75716e] text-xs flex items-center gap-1">
-                          <span>📁</span>
-                          <span>{folders.find(f => f.id === item.folderId)?.name}</span>
-                        </p>
-                      )}
-                      {item.createdAt && (
-                        <p className="text-[#75716e] text-xs">{formatRelativeDate(item.createdAt)}</p>
-                      )}
-                      {item.square_meta?.tags && (
-                        <div className="flex flex-wrap gap-1.5">
-                          {item.square_meta.tags.slice(0, 4).map((tag: string, i: number) => (
-                            <span key={i} className="px-2 py-1 bg-[#23211f] border border-white/5 rounded-md text-[10px] text-[#a4a09c] font-medium lowercase">
-                              #{tag.replace(/\s+/g, '')}
-                            </span>
-                          ))}
+                      {/* 드래그 핸들 (PC) */}
+                      {canDrag && (
+                        <div
+                          className="absolute left-2 top-1/2 -translate-y-1/2 z-10 hidden md:flex items-center justify-center w-6 h-10 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing text-[#75716e] hover:text-white"
+                          title="드래그해서 순서 변경"
+                        >
+                          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                            <circle cx="9" cy="5" r="1.5"/><circle cx="15" cy="5" r="1.5"/>
+                            <circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/>
+                            <circle cx="9" cy="19" r="1.5"/><circle cx="15" cy="19" r="1.5"/>
+                          </svg>
                         </div>
                       )}
-                    </div>
-                  </Link>
 
-                  {/* 호버 액션 버튼들 */}
-                  <div className="absolute top-3 left-3 flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
-
-                    {/* 폴더 이동 버튼 */}
-                    <div className="relative">
-                      <button
-                        onClick={(e) => {
-                          e.preventDefault()
-                          e.stopPropagation()
-                          setOpenMoveId(openMoveId === item.id ? null : item.id)
-                        }}
-                        className="p-1.5 rounded-full bg-black/60 backdrop-blur-md border border-white/10 text-white/70 hover:text-orange-400 hover:border-orange-400/50 transition-colors"
-                        title="폴더 이동"
+                      <Link
+                        href={`/result/${item.sessionId}`}
+                        className={`block rounded-[24px] bg-[#32302e] border border-white/5 overflow-hidden hover:border-white/20 transition-all hover:-translate-y-1 shadow-lg ${dragId === item.id ? 'opacity-40 scale-95' : ''}`}
+                        onClick={dragId ? (e) => e.preventDefault() : undefined}
                       >
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" />
-                        </svg>
-                      </button>
-                      {openMoveId === item.id && (
-                        <FolderMoveDropdown
-                          summaryId={item.id}
-                          currentFolderId={item.folderId}
-                          folders={folders}
-                          onMoved={handleMoved}
-                          onClose={() => setOpenMoveId(null)}
-                        />
-                      )}
-                    </div>
+                        <div className="relative overflow-hidden bg-[#23211f]">
+                          <img
+                            src={item.thumbnail}
+                            alt={item.title}
+                            className="w-full object-cover aspect-video group-hover:scale-105 transition-transform duration-500"
+                          />
+                          <div className="absolute inset-0 bg-black/20 group-hover:bg-transparent transition-colors" />
+                          <div className="absolute top-3 right-3 px-2.5 py-1 rounded-full bg-black/60 backdrop-blur-md text-xs font-medium text-white border border-white/10">
+                            {CATEGORY_LABEL[item.category] || '분석됨'}
+                          </div>
+                        </div>
+                        <div className="p-5 flex flex-col gap-3">
+                          <p className="text-[#e2e2e2] text-sm font-bold leading-snug group-hover:text-white transition-colors">
+                            {item.title}
+                          </p>
+                          {activeFolder === 'all' && item.folderId && folders.find(f => f.id === item.folderId) && (
+                            <p className="text-[#75716e] text-xs flex items-center gap-1">
+                              <span>📁</span>
+                              <span>{folders.find(f => f.id === item.folderId)?.name}</span>
+                            </p>
+                          )}
+                          {item.createdAt && (
+                            <p className="text-[#75716e] text-xs">{formatRelativeDate(item.createdAt)}</p>
+                          )}
+                          {item.square_meta?.tags && (
+                            <div className="flex flex-wrap gap-1.5">
+                              {item.square_meta.tags.slice(0, 4).map((tag: string, i: number) => (
+                                <span key={i} className="px-2 py-1 bg-[#23211f] border border-white/5 rounded-md text-[10px] text-[#a4a09c] font-medium lowercase">
+                                  #{tag.replace(/\s+/g, '')}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </Link>
 
-                    {/* 삭제 버튼 */}
-                    <button
-                      onClick={(e) => handleDelete(e, item.id)}
-                      disabled={deletingId === item.id}
-                      className="p-1.5 rounded-full bg-black/60 backdrop-blur-md border border-white/10 text-white/70 hover:text-red-400 hover:border-red-400/50 disabled:opacity-50 transition-colors"
-                      title="삭제"
-                    >
-                      {deletingId === item.id ? (
-                        <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
-                        </svg>
-                      ) : (
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                      )}
-                    </button>
-
-                    {/* 모바일 순서 이동 버튼 */}
-                    {canDrag && (
-                      <div className="flex flex-col gap-0.5 md:hidden">
+                      {/* 호버 액션 버튼들 */}
+                      <div className="absolute top-3 left-3 flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="relative">
+                          <button
+                            onClick={(e) => { e.preventDefault(); e.stopPropagation(); setOpenMoveId(openMoveId === item.id ? null : item.id) }}
+                            className="p-1.5 rounded-full bg-black/60 backdrop-blur-md border border-white/10 text-white/70 hover:text-orange-400 hover:border-orange-400/50 transition-colors"
+                            title="폴더 이동"
+                          >
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" />
+                            </svg>
+                          </button>
+                          {openMoveId === item.id && (
+                            <FolderMoveDropdown
+                              summaryId={item.id}
+                              currentFolderId={item.folderId}
+                              folders={folders}
+                              onMoved={handleMoved}
+                              onClose={() => setOpenMoveId(null)}
+                            />
+                          )}
+                        </div>
                         <button
-                          onClick={(e) => { e.preventDefault(); e.stopPropagation(); moveItem(item.id, 'up') }}
-                          disabled={idx === 0 || savingOrder}
-                          className="p-1.5 rounded-full bg-black/60 backdrop-blur-md border border-white/10 text-white/70 hover:text-orange-400 hover:border-orange-400/50 disabled:opacity-30 transition-colors"
-                          title="위로 이동"
+                          onClick={(e) => handleDelete(e, item.id)}
+                          disabled={deletingId === item.id}
+                          className="p-1.5 rounded-full bg-black/60 backdrop-blur-md border border-white/10 text-white/70 hover:text-red-400 hover:border-red-400/50 disabled:opacity-50 transition-colors"
+                          title="삭제"
                         >
-                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 15l7-7 7 7" />
-                          </svg>
+                          {deletingId === item.id ? (
+                            <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                            </svg>
+                          ) : (
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          )}
                         </button>
-                        <button
-                          onClick={(e) => { e.preventDefault(); e.stopPropagation(); moveItem(item.id, 'down') }}
-                          disabled={idx === summaries.length - 1 || savingOrder}
-                          className="p-1.5 rounded-full bg-black/60 backdrop-blur-md border border-white/10 text-white/70 hover:text-orange-400 hover:border-orange-400/50 disabled:opacity-30 transition-colors"
-                          title="아래로 이동"
-                        >
-                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
-                          </svg>
-                        </button>
+                        {canDrag && (
+                          <div className="flex flex-col gap-0.5 md:hidden">
+                            <button
+                              onClick={(e) => { e.preventDefault(); e.stopPropagation(); moveItem(item.id, 'up') }}
+                              disabled={idx === 0 || savingOrder}
+                              className="p-1.5 rounded-full bg-black/60 backdrop-blur-md border border-white/10 text-white/70 hover:text-orange-400 hover:border-orange-400/50 disabled:opacity-30 transition-colors"
+                              title="위로 이동"
+                            >
+                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 15l7-7 7 7" />
+                              </svg>
+                            </button>
+                            <button
+                              onClick={(e) => { e.preventDefault(); e.stopPropagation(); moveItem(item.id, 'down') }}
+                              disabled={idx === summaries.length - 1 || savingOrder}
+                              className="p-1.5 rounded-full bg-black/60 backdrop-blur-md border border-white/10 text-white/70 hover:text-orange-400 hover:border-orange-400/50 disabled:opacity-30 transition-colors"
+                              title="아래로 이동"
+                            >
+                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+                              </svg>
+                            </button>
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </div>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-            )}  {/* filteredSummaries.length === 0 else */}
+              )}
             </>
-            )}  {/* summaries.length === 0 else */}
-            </>
-          )}  {/* viewMode folder/category */}
+          )}
         </main>
       </div>
       </>

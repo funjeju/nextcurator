@@ -317,15 +317,18 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
     }
   }
 
-  // 링크 복사/공유 (OG 카드 프리뷰 생성됨)
+  // 링크 복사/공유 — 모바일은 네이티브 공유 시트, PC는 클립보드 복사
   const handleShare = async () => {
     if (!data) return
     setSharing(true)
     const pageUrl = window.location.href
+    const isMobile = typeof navigator !== 'undefined' && navigator.maxTouchPoints > 0
     try {
-      if (navigator.share) {
+      if (isMobile && navigator.share) {
+        // 모바일: 네이티브 공유 시트 (URL만 전달 — 이미지 제외)
         await navigator.share({ title: data.title, url: pageUrl })
       } else {
+        // PC: 클립보드 복사
         await navigator.clipboard.writeText(pageUrl)
         setShareCopied(true)
         setTimeout(() => setShareCopied(false), 2000)
@@ -686,7 +689,7 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
                 ? 'border-green-500/40 bg-green-500/10 text-green-400'
                 : 'border-white/10 bg-[#32302e] text-white hover:bg-[#3d3a38] hover:border-white/20'
             }`}
-            title="공유하기"
+            title={shareCopied ? '링크 복사됨!' : '링크 공유 / 복사'}
           >
             {shareCopied ? (
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

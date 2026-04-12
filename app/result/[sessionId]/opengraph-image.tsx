@@ -15,7 +15,8 @@ const CATEGORY_META: Record<string, { label: string; color: string; bg: string; 
   selfdev: { label: '자기계발', color: '#34d399', bg: '#064e3b', emoji: '💪', featuredText: '핵심 메시지 · 인사이트 · 실천 체크리스트' },
   travel:  { label: '여행',    color: '#22d3ee', bg: '#083344', emoji: '🧳', featuredText: '추천 장소 · 동선 · 실용 정보' },
   story:   { label: '스토리',  color: '#f472b6', bg: '#4a044e', emoji: '🍿', featuredText: '인물 · 타임라인 · 핵심 요약' },
-  tips:    { label: '팁',     color: '#fbbf24', bg: '#451a03', emoji: '💡', featuredText: '팁 카드 · Top 3 · 준비물 정리' },
+  tips:    { label: '팁',      color: '#fbbf24', bg: '#451a03', emoji: '💡', featuredText: '팁 카드 · Top 3 · 준비물 정리' },
+  report:  { label: '보고서',  color: '#818cf8', bg: '#1e1b4b', emoji: '📋', featuredText: '목차 · 섹션별 분석 · 핵심 결론' },
 }
 
 async function getOgData(sessionId: string) {
@@ -221,8 +222,10 @@ export default async function OgImage(
                 📄 전체 자막 보기
               </div>
             </div>
-            <div style={{ fontSize: 11, color: '#52525b', display: 'flex' }}>
-              nextcurator.vercel.app
+            <div style={{ fontSize: 11, color: '#52525b', display: 'flex', gap: 8 }}>
+              <span>가장 스마트한 유튜브 저장소</span>
+              <span>·</span>
+              <span>nextcurator.vercel.app</span>
             </div>
           </div>
         </div>

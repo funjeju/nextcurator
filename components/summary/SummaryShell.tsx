@@ -1,6 +1,6 @@
 'use client'
 
-import { Category, SummaryData, RecipeSummary as RecipeSummaryType, EnglishSummary as EnglishSummaryType, LearningSummary as LearningSummaryType, NewsSummary as NewsSummaryType, SelfDevSummary as SelfDevSummaryType, TravelSummary as TravelSummaryType, StorySummary as StorySummaryType, TipsSummary as TipsSummaryType, VoiceSummary as VoiceSummaryType } from '@/types/summary'
+import { Category, SummaryData, RecipeSummary as RecipeSummaryType, EnglishSummary as EnglishSummaryType, LearningSummary as LearningSummaryType, NewsSummary as NewsSummaryType, SelfDevSummary as SelfDevSummaryType, TravelSummary as TravelSummaryType, StorySummary as StorySummaryType, TipsSummary as TipsSummaryType, VoiceSummary as VoiceSummaryType, ReportSummary as ReportSummaryType } from '@/types/summary'
 import RecipeSummary from './RecipeSummary'
 import EnglishSummary from './EnglishSummary'
 import LearningSummary from './LearningSummary'
@@ -10,6 +10,7 @@ import TravelSummary from './TravelSummary'
 import StorySummary from './StorySummary'
 import TipsSummary from './TipsSummary'
 import VoiceSummary from './VoiceSummary'
+import ReportSummary from './ReportSummary'
 
 interface Props {
   category: Category
@@ -43,5 +44,7 @@ export default function SummaryShell({ category, summary, onSeek, sessionId, com
       return <TipsSummary data={summary as TipsSummaryType} onSeek={onSeek} {...sharedProps} />
     case 'voice':
       return <VoiceSummary data={summary as VoiceSummaryType} />
+    case 'report':
+      return <ReportSummary data={summary as ReportSummaryType} onSeek={onSeek} {...sharedProps} />
   }
 }

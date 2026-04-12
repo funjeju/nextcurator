@@ -1,4 +1,4 @@
-export type Category = 'recipe' | 'english' | 'learning' | 'news' | 'selfdev' | 'travel' | 'story' | 'tips' | 'voice'
+export type Category = 'recipe' | 'english' | 'learning' | 'news' | 'selfdev' | 'travel' | 'story' | 'tips' | 'voice' | 'report'
 
 export interface SquareMeta {
   tags: string[]
@@ -92,7 +92,16 @@ export interface VoiceSummary {
   color_theme: 'blue' | 'green' | 'orange' | 'purple' | 'pink' | 'teal' | 'amber'
 }
 
-export type SummaryData = RecipeSummary | EnglishSummary | LearningSummary | NewsSummary | SelfDevSummary | TravelSummary | StorySummary | TipsSummary | VoiceSummary
+export interface ReportSummary {
+  square_meta: SquareMeta
+  title: string
+  context_summary: string
+  table_of_contents: string[]
+  sections: { number: number; heading: string; timestamp: string; body: string }[]
+  conclusion: string
+}
+
+export type SummaryData = RecipeSummary | EnglishSummary | LearningSummary | NewsSummary | SelfDevSummary | TravelSummary | StorySummary | TipsSummary | VoiceSummary | ReportSummary
 
 export interface QuizQuestion {
   type: 'flashcard' | 'multiple_choice'

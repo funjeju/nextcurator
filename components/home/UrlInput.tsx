@@ -19,6 +19,7 @@ const CATEGORIES = [
   { id: 'travel',  icon: '🧳', label: '여행' },
   { id: 'story',   icon: '🍿', label: '스토리' },
   { id: 'tips',    icon: '💡', label: '팁' },
+  { id: 'report',  icon: '📋', label: '보고서' },
 ]
 
 const GUEST_STORAGE_KEY = 'nextcurator_guest_usage'

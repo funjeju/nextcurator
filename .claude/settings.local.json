@@ -59,7 +59,9 @@
       "Bash(git push:*)",
       "Bash(git add:*)",
       "Bash(git commit -m ':*)",
-      "Bash(cmd /c \"cd /d c:\\\\Users\\\\funjeju\\\\Desktop\\\\aiproject\\\\nextcurator && npx tsc --noEmit 2>&1\")"
+      "Bash(cmd /c \"cd /d c:\\\\Users\\\\funjeju\\\\Desktop\\\\aiproject\\\\nextcurator && npx tsc --noEmit 2>&1\")",
+      "Bash(echo \"EXIT: $?\")",
+      "Bash(node_modules/.bin/firebase deploy:*)"
     ]
   }
 }

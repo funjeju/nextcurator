@@ -29,3 +29,27 @@ export async function addComment(data: Omit<Comment, 'id' | 'createdAt'>): Promi
 export async function deleteComment(commentId: string): Promise<void> {
   await deleteDoc(doc(db, 'comments', commentId))
 }
+
+/** sessionId 배열에 대한 댓글 수 일괄 조회 (스퀘어 카드용)
+ *  30개씩 배치 in-query로 처리 — 불필요한 문서 내용은 무시하고 sessionId만 카운트
+ */
+export async function getCommentCountsBySessionIds(sessionIds: string[]): Promise<Record<string, number>> {
+  if (!sessionIds.length) return {}
+  const counts: Record<string, number> = {}
+  for (const sid of sessionIds) counts[sid] = 0
+
+  const unique = [...new Set(sessionIds)]
+  for (let i = 0; i < unique.length; i += 30) {
+    const batch = unique.slice(i, i + 30)
+    try {
+      const snap = await getDocs(
+        query(collection(db, 'comments'), where('sessionId', 'in', batch))
+      )
+      snap.docs.forEach(d => {
+        const sid = d.data().sessionId as string
+        counts[sid] = (counts[sid] ?? 0) + 1
+      })
+    } catch { /* 권한 문제 등 무시 */ }
+  }
+  return counts
+}

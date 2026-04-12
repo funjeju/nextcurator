@@ -4,6 +4,7 @@ import { useEffect, useState, useMemo } from 'react'
 import Link from 'next/link'
 import Header from '@/components/common/Header'
 import { getPublicSummaries, toggleLike, getUserLikedIds, incrementViewCount, getOrCreateConversation, SavedSummary } from '@/lib/db'
+import { getCommentCountsBySessionIds } from '@/lib/comments'
 import { useAuth } from '@/providers/AuthProvider'
 import { formatRelativeDate } from '@/lib/formatDate'
 import { useRouter } from 'next/navigation'
@@ -79,12 +80,13 @@ function getUserTopCategories(likedIds: Set<string>, summaries: SavedSummary[]):
 }
 
 // 일반 요약 카드
-function SummaryCard({ item, likedIds, likingIds, user, messagingId, onLike, onMessage }: {
+function SummaryCard({ item, likedIds, likingIds, user, messagingId, commentCount, onLike, onMessage }: {
   item: SavedSummary
   likedIds: Set<string>
   likingIds: Set<string>
   user: any
   messagingId: string | null
+  commentCount: number
   onLike: (e: React.MouseEvent, item: SavedSummary) => void
   onMessage: (e: React.MouseEvent, item: SavedSummary) => void
 }) {
@@ -142,18 +144,36 @@ function SummaryCard({ item, likedIds, likingIds, user, messagingId, onLike, onM
             className="flex items-center gap-0.5 text-[9px] text-[#75716e] hover:text-blue-400 transition-colors disabled:opacity-50"
           >✉️</button>
         ) : <span />}
-        <button
-          onClick={(e) => onLike(e, item)}
-          disabled={likingIds.has(item.id)}
-          className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold transition-all ${
-            likedIds.has(item.id)
-              ? 'bg-pink-500/20 text-pink-400 border border-pink-500/30'
-              : 'bg-black/40 text-white/40 border border-white/10 hover:text-pink-400 hover:border-pink-500/30'
-          } disabled:opacity-50`}
-        >
-          <span className="text-[10px]">{likedIds.has(item.id) ? '❤️' : '🤍'}</span>
-          <span>{item.likeCount ?? 0}</span>
-        </button>
+
+        {/* 댓글 + 좋아요 */}
+        <div className="flex items-center gap-1">
+          {/* 댓글 말풍선 */}
+          <Link
+            href={`/result/${item.sessionId}?from=square#comments`}
+            onClick={e => e.stopPropagation()}
+            className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] bg-black/40 text-white/40 border border-white/10 hover:text-blue-400 hover:border-blue-500/30 transition-all"
+          >
+            <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+            </svg>
+            <span>{commentCount}</span>
+          </Link>
+
+          {/* 좋아요 */}
+          <button
+            onClick={(e) => onLike(e, item)}
+            disabled={likingIds.has(item.id)}
+            className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold transition-all ${
+              likedIds.has(item.id)
+                ? 'bg-pink-500/20 text-pink-400 border border-pink-500/30'
+                : 'bg-black/40 text-white/40 border border-white/10 hover:text-pink-400 hover:border-pink-500/30'
+            } disabled:opacity-50`}
+          >
+            <span className="text-[10px]">{likedIds.has(item.id) ? '❤️' : '🤍'}</span>
+            <span>{item.likeCount ?? 0}</span>
+          </button>
+        </div>
       </div>
     </div>
   )
@@ -236,11 +256,20 @@ export default function SquarePage() {
   const [likingIds, setLikingIds] = useState<Set<string>>(new Set())
   const [messagingId, setMessagingId] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
+  const [commentCounts, setCommentCounts] = useState<Record<string, number>>({})
   const colCount = useColumnCount()
 
   useEffect(() => {
     getPublicSummaries()
-      .then(data => { setSummaries(data); setAllSummaries(data) })
+      .then(data => {
+        setSummaries(data)
+        setAllSummaries(data)
+        // 댓글 수 비동기 로드 (카드 렌더링 차단 안 함)
+        const sessionIds = [...new Set(data.map(s => s.sessionId))]
+        getCommentCountsBySessionIds(sessionIds)
+          .then(setCommentCounts)
+          .catch(() => {})
+      })
       .catch(e => console.error('Failed to load square data:', e))
       .finally(() => setLoading(false))
   }, [])
@@ -482,6 +511,7 @@ export default function SquarePage() {
                       likingIds={likingIds}
                       user={user}
                       messagingId={messagingId}
+                      commentCount={commentCounts[item.sessionId] ?? 0}
                       onLike={handleLike}
                       onMessage={handleMessage}
                     />
