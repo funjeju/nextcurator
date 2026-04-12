@@ -291,6 +291,10 @@ export async function POST(req: NextRequest) {
     ])
 
     const contextParts = []
+
+    // 제목+채널은 항상 포함 — fullContext가 절대 빈값이 되지 않도록 보장
+    contextParts.push(`[영상 제목]\n${videoInfo.title}\n[채널]\n${videoInfo.channel}`)
+
     if (transcript) {
       // 한국어 번역 선택 시 번역 힌트 삽입, 원문 선택 시 그대로
       const transNote = outputLang === 'ko' && transcriptLang !== 'ko'
@@ -305,10 +309,9 @@ export async function POST(req: NextRequest) {
 
     const fullContext = contextParts.join('\n\n')
 
-    if (!fullContext.trim()) {
-      return NextResponse.json({
-        error: '자막, 영상 설명, 댓글 중 어떠한 텍스트 데이터도 수집할 수 없어 요약이 불가능합니다.'
-      }, { status: 422 })
+    // 자막·설명 모두 없을 때 (제목만으로 요약) — 로그로 트래킹
+    if (!transcript && !description) {
+      console.warn(`[Summarize] ⚠️ No transcript or description for ${videoId} — summarizing from title only`)
     }
 
     let category = userCategory

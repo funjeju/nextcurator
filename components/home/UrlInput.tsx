@@ -52,12 +52,21 @@ export default function UrlInput() {
   const [recordingSeconds, setRecordingSeconds] = useState(0)
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const abortControllerRef = useRef<AbortController | null>(null)
   const [error, setError] = useState('')
   const [step, setStep] = useState(0)
   const [modal, setModal] = useState<ModalType>(null)
   const [langChoiceData, setLangChoiceData] = useState<LangChoiceData | null>(null)
   const [checkingDuration, setCheckingDuration] = useState(false)
   const router = useRouter()
+
+  const handleCancel = () => {
+    abortControllerRef.current?.abort()
+    abortControllerRef.current = null
+    setLoading(false)
+    setStep(0)
+    setError('')
+  }
 
   // 파일 처리 (PDF / 오디오 통합)
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -86,6 +95,9 @@ export default function UrlInput() {
     setLoading(true)
     setStep(1)
 
+    const controller = new AbortController()
+    abortControllerRef.current = controller
+
     try {
       const formData = new FormData()
       formData.append('file', file)
@@ -93,7 +105,7 @@ export default function UrlInput() {
 
       setStep(3)
       const endpoint = isAudio ? '/api/summarize-voice' : '/api/summarize-pdf'
-      const res = await fetch(endpoint, { method: 'POST', body: formData })
+      const res = await fetch(endpoint, { method: 'POST', body: formData, signal: controller.signal })
       setStep(4)
       if (!res.ok) { const d = await res.json(); throw new Error(d.error || '처리 실패') }
       const data = await res.json()
@@ -102,6 +114,7 @@ export default function UrlInput() {
       sessionStorage.setItem(`summary_${data.sessionId}`, JSON.stringify(data))
       router.push(`/result/${data.sessionId}`)
     } catch (err) {
+      if ((err as Error).name === 'AbortError') return  // 취소 — 이미 handleCancel에서 상태 초기화
       setError(err instanceof Error ? err.message : '처리 중 오류가 발생했습니다.')
       setLoading(false)
       setStep(0)
@@ -165,12 +178,17 @@ export default function UrlInput() {
     setLoadingMode(isYoutube ? 'youtube' : 'url')
     setLoading(true)
     setStep(1)
+
+    const controller = new AbortController()
+    abortControllerRef.current = controller
+
     try {
       setStep(2)
       const res = await fetch('/api/summarize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url, category: selectedCategory === 'auto' ? undefined : selectedCategory }),
+        signal: controller.signal,
       })
       if (!res.ok) { const d = await res.json(); throw new Error(d.error || '오류가 발생했습니다.') }
       const data = await res.json()
@@ -187,6 +205,7 @@ export default function UrlInput() {
       setStep(4)
       finalizeSummary(data)
     } catch (err) {
+      if ((err as Error).name === 'AbortError') return
       setError(err instanceof Error ? err.message : '오류가 발생했습니다.')
       setLoading(false)
       setStep(0)
@@ -199,6 +218,10 @@ export default function UrlInput() {
     setModal(null)
     setLoading(true)
     setStep(3)
+
+    const controller = new AbortController()
+    abortControllerRef.current = controller
+
     try {
       setStep(4)
       const res = await fetch('/api/summarize', {
@@ -211,12 +234,14 @@ export default function UrlInput() {
           cachedTranscript: langChoiceData.cachedTranscript,
           cachedVideoInfo: langChoiceData.cachedVideoInfo,
         }),
+        signal: controller.signal,
       })
       if (!res.ok) { const d = await res.json(); throw new Error(d.error || '오류가 발생했습니다.') }
       setStep(5)
       const data = await res.json()
       finalizeSummary(data)
     } catch (err) {
+      if ((err as Error).name === 'AbortError') return
       setError(err instanceof Error ? err.message : '오류가 발생했습니다.')
       setLoading(false)
       setStep(0)
@@ -253,7 +278,7 @@ export default function UrlInput() {
     setModal('guest_info')
   }
 
-  if (loading) return <LoadingSteps currentStep={step} mode={loadingMode} />
+  if (loading) return <LoadingSteps currentStep={step} mode={loadingMode} onCancel={handleCancel} />
 
   return (
     <>

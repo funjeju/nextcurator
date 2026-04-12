@@ -171,7 +171,7 @@ async function getTranscriptViaSocialKit(videoId: string): Promise<string> {
     `https://api.socialkit.dev/youtube/transcript?url=${encodeURIComponent(videoUrl)}`,
     {
       headers: { 'x-access-key': apiKey },
-      signal: AbortSignal.timeout(90000),  // STT 변환은 최대 90초
+      signal: AbortSignal.timeout(45000),  // STT 변환 최대 45초 (전체 함수 120초 제한 고려)
     }
   )
 

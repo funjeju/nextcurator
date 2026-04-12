@@ -47,9 +47,10 @@ function buildThresholds(steps: { label: string; weight: number }[]) {
 interface LoadingStepsProps {
   currentStep: number
   mode?: 'youtube' | 'pdf' | 'url' | 'voice'
+  onCancel?: () => void
 }
 
-export default function LoadingSteps({ currentStep, mode = 'youtube' }: LoadingStepsProps) {
+export default function LoadingSteps({ currentStep, mode = 'youtube', onCancel }: LoadingStepsProps) {
   const STEPS = mode === 'pdf' ? STEPS_PDF : mode === 'url' ? STEPS_URL : mode === 'voice' ? STEPS_VOICE : STEPS_YOUTUBE
   const STEP_THRESHOLDS = buildThresholds(STEPS)
   const [displayProgress, setDisplayProgress] = useState(0)
@@ -108,6 +109,15 @@ export default function LoadingSteps({ currentStep, mode = 'youtube' }: LoadingS
           {Math.round(displayProgress)}%
         </p>
       </div>
+
+      {onCancel && (
+        <button
+          onClick={onCancel}
+          className="w-full h-10 rounded-xl border border-white/10 bg-[#32302e] text-[#75716e] text-sm hover:bg-[#3d3a38] hover:text-white hover:border-white/20 transition-all"
+        >
+          취소
+        </button>
+      )}
     </div>
   )
 }

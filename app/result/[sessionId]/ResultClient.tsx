@@ -34,6 +34,7 @@ const CATEGORY_INFO: Record<string, { label: string; icon: string; color: string
   travel:  { label: '여행',    icon: '🧳', color: 'text-cyan-400 border-cyan-400' },
   story:   { label: '스토리',  icon: '🍿', color: 'text-pink-400 border-pink-400' },
   tips:    { label: '팁',      icon: '💡', color: 'text-yellow-400 border-yellow-400' },
+  report:  { label: '보고서',  icon: '📋', color: 'text-indigo-400 border-indigo-400' },
 }
 const DEFAULT_CATEGORY_INFO = { label: '분석됨', icon: '✨', color: 'text-zinc-400 border-zinc-400' }
 
@@ -46,6 +47,7 @@ const RE_ANALYZE_CATEGORIES = [
   { id: 'travel',  icon: '🧳', label: '여행' },
   { id: 'story',   icon: '🍿', label: '스토리' },
   { id: 'tips',    icon: '💡', label: '팁' },
+  { id: 'report',  icon: '📋', label: '보고서' },
 ]
 
 function timestampToSeconds(ts: string): number {

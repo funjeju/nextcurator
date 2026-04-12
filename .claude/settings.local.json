@@ -61,7 +61,8 @@
       "Bash(git commit -m ':*)",
       "Bash(cmd /c \"cd /d c:\\\\Users\\\\funjeju\\\\Desktop\\\\aiproject\\\\nextcurator && npx tsc --noEmit 2>&1\")",
       "Bash(echo \"EXIT: $?\")",
-      "Bash(node_modules/.bin/firebase deploy:*)"
+      "Bash(node_modules/.bin/firebase deploy:*)",
+      "Bash(curl -s \"https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=ew6goHN_fi4&format=json\")"
     ]
   }
 }
