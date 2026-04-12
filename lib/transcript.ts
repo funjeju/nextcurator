@@ -73,7 +73,7 @@ async function getTranscriptViaCloudflare(videoId: string): Promise<string> {
   if (!workerUrl) throw new Error('CLOUDFLARE_WORKER_NOT_CONFIGURED')
 
   const res = await fetch(`${workerUrl}?videoId=${videoId}`, {
-    signal: AbortSignal.timeout(15000),
+    signal: AbortSignal.timeout(45000), // Worker 내부 폴백(STT 등)을 충분히 기다림
   })
 
   if (!res.ok) {
@@ -94,7 +94,12 @@ async function getTranscriptViaCloudflare(videoId: string): Promise<string> {
 // [2단계] Supadata API (CF Worker 실패 시 폴백)
 // - 자동생성 자막 포함 폭넓은 커버리지
 // ─────────────────────────────────────────────
-async function getTranscriptViaSupadata(videoId: string): Promise<string> {
+// 한국어 자막 품질 검증 — 세그먼트 수 & 길이 모두 충족해야 통과
+// 30분 영상에 2~3줄짜리 깨진 자막이 통과되는 문제 방지
+const MIN_KO_SEGMENTS = 10
+const MIN_KO_CHARS = 200
+
+async function getTranscriptViaSupadata(videoId: string, skipKorean = false): Promise<string> {
   const apiKey = process.env.SUPADATA_API_KEY
   if (!apiKey) throw new Error('SUPADATA_NOT_CONFIGURED')
 
@@ -115,29 +120,32 @@ async function getTranscriptViaSupadata(videoId: string): Promise<string> {
       .filter(line => line.length > 8)
       .join('\n')
 
-  // 1차 시도: 한국어 자막 (유튜브 자동번역 포함) — 짧은 타임아웃
-  try {
-    const res = await fetch(
-      `https://api.supadata.ai/v1/youtube/transcript?videoId=${videoId}&text=false&lang=ko`,
-      { headers: { 'x-api-key': apiKey }, signal: AbortSignal.timeout(20000) }
-    )
-    if (res.ok) {
-      const data = await res.json() as SupadataResponse
-      if (data.content && data.content.length > 0) {
-        const text = formatContent(data)
-        if (text.length > 20) return text
+  // 1차 시도: 한국어 자막 (skipKorean=true 이면 건너뜀)
+  if (!skipKorean) {
+    try {
+      const res = await fetch(
+        `https://api.supadata.ai/v1/youtube/transcript?videoId=${videoId}&text=false&lang=ko`,
+        { headers: { 'x-api-key': apiKey }, signal: AbortSignal.timeout(20000) }
+      )
+      if (res.ok) {
+        const data = await res.json() as SupadataResponse
+        if (data.content && data.content.length >= MIN_KO_SEGMENTS) {
+          const text = formatContent(data)
+          if (text.length >= MIN_KO_CHARS) return text
+          console.warn(`[Transcript] Korean subtitle too short (${data.content.length} segs, ${text.length} chars) — falling back to auto`)
+        }
       }
+    } catch {
+      // 한국어 자막 없음 → 원본 언어로 폴백
     }
-  } catch {
-    // 한국어 자막 없음 → 원본 언어로 폴백
   }
 
-  // 2차 시도: 원본 언어 그대로 (STT 변환 포함)
+  // 2차 시도: 원본 언어 그대로 (자동 자막 포함)
   const res = await fetch(
     `https://api.supadata.ai/v1/youtube/transcript?videoId=${videoId}&text=false`,
     {
       headers: { 'x-api-key': apiKey },
-      signal: AbortSignal.timeout(90000),
+      signal: AbortSignal.timeout(60000),
     }
   )
 
@@ -171,7 +179,7 @@ async function getTranscriptViaSocialKit(videoId: string): Promise<string> {
     `https://api.socialkit.dev/youtube/transcript?url=${encodeURIComponent(videoUrl)}`,
     {
       headers: { 'x-access-key': apiKey },
-      signal: AbortSignal.timeout(45000),  // STT 변환 최대 45초 (전체 함수 120초 제한 고려)
+      signal: AbortSignal.timeout(90000),  // STT 변환 시간을 충분히 확보
     }
   )
 
@@ -257,10 +265,15 @@ export interface TranscriptResult {
   lang: 'ko' | 'en' | 'other'
 }
 
-export async function getTranscript(videoId: string): Promise<TranscriptResult> {
+export async function getTranscript(
+  videoId: string,
+  options?: { skipKoreanSubtitle?: boolean }
+): Promise<TranscriptResult> {
+  const skipKorean = options?.skipKoreanSubtitle ?? false
   const strategies: Array<{ name: string; fn: () => Promise<string> }> = []
 
-  if (process.env.CLOUDFLARE_WORKER_URL) {
+  if (process.env.CLOUDFLARE_WORKER_URL && !skipKorean) {
+    // Cloudflare Worker는 언어 제어가 없으므로 skipKorean 시 건너뜀
     strategies.push({
       name: 'Cloudflare Worker',
       fn: () => getTranscriptViaCloudflare(videoId),
@@ -269,8 +282,8 @@ export async function getTranscript(videoId: string): Promise<TranscriptResult> 
 
   if (process.env.SUPADATA_API_KEY) {
     strategies.push({
-      name: 'Supadata',
-      fn: () => getTranscriptViaSupadata(videoId),
+      name: skipKorean ? 'Supadata (자동자막)' : 'Supadata',
+      fn: () => getTranscriptViaSupadata(videoId, skipKorean),
     })
   }
 

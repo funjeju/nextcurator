@@ -86,5 +86,41 @@ export default async function ResultPage(
   { params }: { params: Promise<{ sessionId: string }> }
 ) {
   const { sessionId } = await params
-  return <ResultClient sessionId={sessionId} />
+  const og = await getOgData(sessionId)
+
+  // JSON-LD 구조화 데이터 (SEO 핵심)
+  const jsonLd = og ? {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "headline": og.title,
+    "description": og.description,
+    "image": og.thumbnail,
+    "author": {
+      "@type": "Organization",
+      "name": "Next Curator"
+    },
+    "publisher": {
+      "@type": "Organization",
+      "name": "Next Curator"
+    },
+    "mainEntity": {
+      "@type": "VideoObject",
+      "name": og.title,
+      "description": og.description,
+      "thumbnailUrl": og.thumbnail,
+      "uploadDate": "2026-04-12T00:00:00Z", // 실제 날짜 데이터 필요 시 고도화 가능
+    }
+  } : null
+
+  return (
+    <>
+      {jsonLd && (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        />
+      )}
+      <ResultClient sessionId={sessionId} />
+    </>
+  )
 }

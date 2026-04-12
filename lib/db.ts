@@ -6,6 +6,12 @@ export interface Folder {
   id: string
   userId: string
   name: string
+  visibility?: 'private' | 'public'
+  clonedFrom?: {
+    userId: string
+    displayName: string
+    originalFolderId: string
+  }
   createdAt: any
 }
 
@@ -52,6 +58,7 @@ export interface UserProfile {
   tokensEarnedTotal?: number    // 누적 획득 토큰 (통계용)
   plan?: 'free' | 'starter' | 'pro'
   planExpiresAt?: any           // 기간제 플랜 만료일
+  role?: 'admin' | 'user'       // 관리자 권한 여부
   updatedAt: any
 }
 
@@ -90,6 +97,7 @@ export async function createFolder(userId: string, name: string): Promise<Folder
   const docRef = await addDoc(foldersRef, {
     userId,
     name,
+    visibility: 'private', // 기본값은 비공개
     createdAt: serverTimestamp()
   })
   return { id: docRef.id, userId, name, createdAt: new Date() }
@@ -97,6 +105,10 @@ export async function createFolder(userId: string, name: string): Promise<Folder
 
 export async function renameFolder(folderId: string, newName: string): Promise<void> {
   await updateDoc(doc(db, 'folders', folderId), { name: newName })
+}
+
+export async function updateFolderVisibility(folderId: string, visibility: 'private' | 'public'): Promise<void> {
+  await updateDoc(doc(db, 'folders', folderId), { visibility })
 }
 
 export async function deleteFolder(folderId: string): Promise<void> {
@@ -486,6 +498,71 @@ export async function getFriends(myUid: string): Promise<{ uid: string; displayN
     .map(p => ({ uid: p!.uid, displayName: p!.displayName, photoURL: p!.photoURL }))
 }
 
+/** 특정 유저의 노출 가능한 폴더 목록 조회 (권한에 따라 필터링) */
+export async function getVisibleFolders(userId: string, isFriend: boolean): Promise<Folder[]> {
+  const foldersRef = collection(db, 'folders')
+  // Firestore 쿼리 제약으로 인해, 'private'이 아닌 것들을 가져오거나 클라이언트 필터링
+  // 여기서는 간단히 전체를 가져와서 필터링 (폴더 수가 적으므로 효율적)
+  const q = query(foldersRef, where('userId', '==', userId))
+  const snap = await getDocs(q)
+  const allFolders = snap.docs.map(d => ({ id: d.id, ...d.data() }) as Folder)
+  
+  return allFolders.filter(f => {
+    if (f.visibility === 'public') return true
+    if (isFriend && f.visibility === 'friends') return true // 향후 확장성
+    // 현재 요구사항: 비공개 폴더는 아예 안 보이게
+    return f.visibility === 'public' || (isFriend && f.visibility !== 'private') 
+    // 실제로는 'public'만 우선 지원하고 친구면 'private' 아닌 거 다 보여줌
+  }).sort((a, b) => (b.createdAt?.toMillis?.() ?? 0) - (a.createdAt?.toMillis?.() ?? 0))
+}
+
+/** 폴더 통째로 복제하기 */
+export async function cloneFolder(
+  originalFolderId: string,
+  originalOwnerName: string,
+  originalOwnerId: string,
+  newName: string,
+  myUid: string,
+  myProfile: { displayName: string, photoURL: string }
+): Promise<string> {
+  // 1. 새 폴더 생성
+  const folderRef = await addDoc(collection(db, 'folders'), {
+    userId: myUid,
+    name: newName,
+    visibility: 'private',
+    clonedFrom: {
+      userId: originalOwnerId,
+      displayName: originalOwnerName,
+      originalFolderId: originalFolderId
+    },
+    createdAt: serverTimestamp()
+  })
+
+  // 2. 영상 목록 가져오기
+  const summaries = await getSavedSummariesByFolder(originalOwnerId, originalFolderId)
+
+  // 3. 일괄 복사
+  const batch = writeBatch(db)
+  for (const item of summaries) {
+    const newRef = doc(collection(db, 'saved_summaries'))
+    batch.set(newRef, {
+      ...item,
+      id: newRef.id, // 새 ID 생성
+      userId: myUid,
+      userDisplayName: myProfile.displayName,
+      userPhotoURL: myProfile.photoURL,
+      folderId: folderRef.id,
+      isPublic: false, // 복제본은 기본적으로 비공개
+      createdAt: serverTimestamp(),
+      likeCount: 0,
+      viewCount: 0
+    })
+  }
+  await batch.commit()
+
+  return folderRef.id
+}
+
 // ─────────────────────────────────────────────
 // 폴더 공유
 // ─────────────────────────────────────────────
@@ -611,5 +688,34 @@ export async function getSavedSummariesByFolder(userId: string, folderId: string
     const aTime = a.createdAt?.toMillis?.() ?? a.createdAt?.getTime?.() ?? 0
     const bTime = b.createdAt?.toMillis?.() ?? b.createdAt?.getTime?.() ?? 0
     return bTime - aTime
+  })
+}
+
+// ─────────────────────────────────────────────
+// Real-time Subscriptions (onSnapshot)
+// ─────────────────────────────────────────────
+import { onSnapshot } from 'firebase/firestore'
+
+export function subscribeFolders(userId: string, callback: (folders: Folder[]) => void) {
+  const q = query(collection(db, 'folders'), where('userId', '==', userId))
+  return onSnapshot(q, (snap) => {
+    const folders = snap.docs.map(d => ({ id: d.id, ...d.data() }) as Folder)
+    callback(folders.sort((a, b) => (b.createdAt?.toMillis?.() ?? 0) - (a.createdAt?.toMillis?.() ?? 0)))
+  })
+}
+
+export function subscribeMessages(cid: string, callback: (messages: Message[]) => void) {
+  const q = query(collection(db, 'conversations', cid, 'messages'))
+  return onSnapshot(q, (snap) => {
+    const msgs = snap.docs.map(d => ({ id: d.id, ...d.data() }) as Message)
+    callback(msgs.sort((a, b) => (a.createdAt?.toMillis?.() ?? 0) - (b.createdAt?.toMillis?.() ?? 0)))
+  })
+}
+
+export function subscribeConversations(uid: string, callback: (conversations: Conversation[]) => void) {
+  const q = query(collection(db, 'conversations'), where('participants', 'array-contains', uid))
+  return onSnapshot(q, (snap) => {
+    const items = snap.docs.map(d => ({ id: d.id, ...d.data() }) as Conversation)
+    callback(items.sort((a, b) => (b.lastAt?.toMillis?.() ?? 0) - (a.lastAt?.toMillis?.() ?? 0)))
   })
 }

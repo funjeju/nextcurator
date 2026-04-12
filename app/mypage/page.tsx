@@ -9,6 +9,7 @@ import {
   getUserFolders, getSavedSummariesByFolder, deleteSavedSummary, updateSummaryFolder,
   getPendingFriendRequests, acceptFriendRequest, rejectFriendRequest, getFriends,
   batchUpdateSortOrder, renameFolder, deleteFolder, createSharedFolder,
+  updateFolderVisibility, cloneFolder,
   Folder, SavedSummary, FriendRequest,
 } from '@/lib/db'
 import { useAuth } from '@/providers/AuthProvider'
@@ -388,14 +389,18 @@ export default function MyPage() {
   }
 
   // 폴더 이름 변경
-  const handleRenameConfirm = async (folderId: string) => {
-    const name = renameValue.trim()
-    if (!name) return
-    try {
-      await renameFolder(folderId, name)
-      setFolders(prev => prev.map(f => f.id === folderId ? { ...f, name } : f))
-    } catch { alert('이름 변경에 실패했습니다.') }
-    finally { setRenamingId(null); setRenameValue(''); setFolderMenuId(null) }
+  const handleRenameConfirm = async (id: string) => {
+    if (!renameValue.trim()) return
+    await renameFolder(id, renameValue.trim())
+    setFolders(prev => prev.map(f => f.id === id ? { ...f, name: renameValue.trim() } : f))
+    setRenamingId(null)
+    setFolderMenuId(null)
+  }
+
+  const handleToggleVisibility = async (f: Folder) => {
+    const next = f.visibility === 'public' ? 'private' : 'public'
+    await updateFolderVisibility(f.id, next)
+    setFolders(prev => prev.map(item => item.id === f.id ? { ...item, visibility: next } : item))
   }
 
   // 폴더 공유 링크 생성
@@ -587,21 +592,43 @@ export default function MyPage() {
                     <button onClick={() => { setRenamingId(null); setFolderMenuId(null) }} className="text-[#75716e] text-xs px-2 py-1 rounded-lg hover:bg-white/5">✕</button>
                   </div>
                 ) : (
-                  <button
-                    onClick={() => handleFolderClick(f.id)}
-                    className={`w-full text-left px-4 py-3 rounded-xl whitespace-nowrap transition-colors pr-10 ${
-                      activeFolder === f.id ? 'bg-orange-500 text-white font-bold' : 'bg-[#32302e] text-[#a4a09c] hover:bg-[#3d3a38]'
-                    }`}
-                  >
-                    📁 {f.name}
-                  </button>
+                  <div className="relative group/folder">
+                    <button
+                      onClick={() => handleFolderClick(f.id)}
+                      className={`w-full text-left px-4 py-3 rounded-xl whitespace-nowrap transition-all pr-16 ${
+                        activeFolder === f.id 
+                          ? 'bg-orange-500 text-white font-bold' 
+                          : f.clonedFrom 
+                            ? 'bg-orange-500/5 border border-orange-500/20 text-[#e2e2e2] hover:bg-orange-500/10'
+                            : 'bg-[#32302e] text-[#a4a09c] hover:bg-[#3d3a38]'
+                      }`}
+                    >
+                      <span className="flex items-center gap-2">
+                        <span>{f.clonedFrom ? '✨' : '📁'}</span>
+                        <span className="truncate">{f.name}</span>
+                      </span>
+                    </button>
+
+                    {/* 공개 범위 토글 (본인 폴더인 경우) */}
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleToggleVisibility(f) }}
+                      className={`absolute right-10 top-1/2 -translate-y-1/2 w-7 h-7 rounded-lg flex items-center justify-center transition-all ${
+                        f.visibility === 'public' 
+                          ? 'text-orange-400 hover:bg-orange-500/10' 
+                          : 'text-[#75716e] hover:bg-white/10'
+                      }`}
+                      title={f.visibility === 'public' ? '친구/전체 공개 중' : '나만 보기(비공개)'}
+                    >
+                      {f.visibility === 'public' ? '🔓' : '🔒'}
+                    </button>
+                  </div>
                 )}
 
                 {/* ⋯ 메뉴 버튼 */}
                 {renamingId !== f.id && (
                   <button
                     onClick={e => { e.stopPropagation(); setFolderMenuId(prev => prev === f.id ? null : f.id) }}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover/folder:opacity-100 w-7 h-7 rounded-lg flex items-center justify-center text-[#75716e] hover:text-white hover:bg-white/10 transition-all"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover/folder:opacity-100 w-7 h-7 rounded-lg flex items-center justify-center text-[#75716e] hover:text-white hover:bg-white/10 transition-all z-10"
                   >
                     ⋯
                   </button>

@@ -3,6 +3,8 @@ import { extractVideoId, getTranscript, getVideoMeta, detectTranscriptLang } fro
 import { classifyCategory, generateSummary, generateReportSummary, generateContextSummary } from '@/lib/claude'
 import { randomUUID } from 'crypto'
 
+export const maxDuration = 120
+
 const PROJECT_ID = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID!
 const API_KEY = process.env.NEXT_PUBLIC_FIREBASE_API_KEY!
 const FIRESTORE_BASE = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents`
@@ -164,6 +166,7 @@ export async function POST(req: NextRequest) {
       summaryLang,           // 'ko' | 'original' — 언어 선택 후 재호출 시 포함
       cachedTranscript,      // 1차 호출에서 반환된 자막 캐시
       cachedVideoInfo,       // 1차 호출에서 반환된 영상 정보 캐시
+      forceAutoCaption,      // true: 한국어 자막 건너뛰고 자동자막으로 추출
     } = await req.json()
 
     if (!url) {
@@ -259,7 +262,7 @@ export async function POST(req: NextRequest) {
       transcriptLang = detectTranscriptLang(cachedTranscript)
     } else {
       try {
-        const result = await getTranscript(videoId)
+        const result = await getTranscript(videoId, { skipKoreanSubtitle: !!forceAutoCaption })
         transcript = result.text
         transcriptSource = result.source
         transcriptLang = result.lang

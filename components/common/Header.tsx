@@ -16,26 +16,37 @@ export default function Header({ title = '🎬 Next Curator' }: { title?: string
     return () => clearInterval(interval)
   }, [user])
 
+  const handleNav = (e: React.MouseEvent<HTMLAnchorElement>) => {
+    if (typeof window !== 'undefined' && (window as any).__NEXT_CURATOR_UNSAVED__) {
+      if (!confirm('저장하지 않고 이동하시겠습니까? 분석 내용은 사라집니다.')) {
+        e.preventDefault()
+      }
+    }
+  }
+
   return (
     <div className="sticky top-0 z-50 bg-[#252423]/90 backdrop-blur-xl border-b border-white/5 py-2.5 px-4 md:px-8 mb-6">
       <div className="max-w-7xl mx-auto flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <Link href="/" className="text-sm font-bold tracking-tight text-white hover:opacity-80 transition-opacity whitespace-nowrap">
+          <Link href="/" onClick={handleNav} className="text-sm font-bold tracking-tight text-white hover:opacity-80 transition-opacity whitespace-nowrap">
             {title}
           </Link>
           <nav className="hidden md:flex items-center gap-4 text-sm font-medium">
-            <Link href="/mypage" className="text-[#a4a09c] hover:text-white transition-colors">My Page</Link>
-            <Link href="/square" className="text-[#a4a09c] hover:text-white transition-colors">Square</Link>
+            <Link href="/mypage" onClick={handleNav} className="text-[#a4a09c] hover:text-white transition-colors">My Page</Link>
+            <Link href="/square" onClick={handleNav} className="text-[#a4a09c] hover:text-white transition-colors">Square</Link>
+            {user?.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL && (
+              <Link href="/admin" onClick={handleNav} className="text-orange-400 hover:text-orange-300 transition-colors">Admin</Link>
+            )}
           </nav>
         </div>
 
         <div className="flex items-center gap-1.5">
-          <Link href="/mypage" className="md:hidden text-[11px] text-[#a4a09c] hover:text-white whitespace-nowrap px-1.5 py-1 rounded-md hover:bg-white/5 transition-colors">My</Link>
-          <Link href="/square" className="md:hidden text-[11px] text-[#a4a09c] hover:text-white whitespace-nowrap px-1.5 py-1 rounded-md hover:bg-white/5 transition-colors">Square</Link>
+          <Link href="/mypage" onClick={handleNav} className="md:hidden text-[11px] text-[#a4a09c] hover:text-white whitespace-nowrap px-1.5 py-1 rounded-md hover:bg-white/5 transition-colors">My</Link>
+          <Link href="/square" onClick={handleNav} className="md:hidden text-[11px] text-[#a4a09c] hover:text-white whitespace-nowrap px-1.5 py-1 rounded-md hover:bg-white/5 transition-colors">Square</Link>
 
           {user ? (
             <div className="flex items-center gap-1.5 ml-1 pl-1.5 border-l border-white/10 md:border-none md:ml-0 md:pl-0">
-              <Link href="/messages" className="relative text-[#a4a09c] hover:text-white transition-colors p-1">
+              <Link href="/messages" onClick={handleNav} className="relative text-[#a4a09c] hover:text-white transition-colors p-1">
                 <span className="text-sm">✉️</span>
                 {unread > 0 && (
                   <span className="absolute top-0 right-0 bg-orange-500 text-white text-[7px] font-bold w-3 h-3 rounded-full flex items-center justify-center">

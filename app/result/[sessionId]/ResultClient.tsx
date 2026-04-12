@@ -219,6 +219,48 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
       .catch(() => {})
   }, [data, user])
 
+  // 미저장 이탈 방지 경고 (브라우저 새로고침/닫기)
+  useEffect(() => {
+    const isUnsaved = !!data && !savedItem
+    
+    // 헤더 연동을 위한 전역 플래그 설정
+    if (typeof window !== 'undefined') {
+      (window as any).__NEXT_CURATOR_UNSAVED__ = isUnsaved
+    }
+
+    if (!isUnsaved) return
+
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault()
+      e.returnValue = '저장하지 않고 이동하시겠습니까? 분석 내용은 사라집니다.'
+      return e.returnValue
+    }
+
+    // 뒤로가기(popstate) 감지 로직 추가
+    const handlePopState = (e: PopStateEvent) => {
+      if (isUnsaved) {
+        if (!confirm('저장하지 않고 이동하시겠습니까? 분석 내용은 사라집니다.')) {
+          // 이동 취소: 현재 URL 유지
+          window.history.pushState(null, '', window.location.href)
+        }
+      }
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    window.addEventListener('popstate', handlePopState)
+    
+    // 초기 히스토리 상태 추가 (popstate 트리거용)
+    window.history.pushState(null, '', window.location.href)
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+      window.removeEventListener('popstate', handlePopState)
+      if (typeof window !== 'undefined') {
+        (window as any).__NEXT_CURATOR_UNSAVED__ = false
+      }
+    }
+  }, [data, savedItem])
+
   const handlePlayerReady = useCallback((player: YT.Player) => { playerRef.current = player }, [])
   const handleSeek = useCallback((ts: string) => {
     if (playerRef.current) {
@@ -537,7 +579,7 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
                 const lines = data.transcript.split('\n')
                 const parsed: { ts: string; text: string }[] = []
                 for (const line of lines) {
-                  const m = line.match(/^\[(\d{2}:\d{2})\]\s(.*)/)
+                  const m = line.match(/^\[([\d:]+)\]\s(.*)/)
                   if (m) parsed.push({ ts: m[1], text: m[2].trim() })
                 }
 

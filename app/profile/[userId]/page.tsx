@@ -5,12 +5,12 @@ import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Header from '@/components/common/Header'
 import {
-  getUserProfile, getUserPublicSummaries, getAllSavedSummariesByUser,
-  getOrCreateConversation, sendFriendRequest, getFriendStatus,
   acceptFriendRequest, rejectFriendRequest, cancelFriendRequest, removeFriend,
-  UserProfile, SavedSummary,
+  getVisibleFolders, cloneFolder, getSavedSummariesByFolder, saveSummary,
+  UserProfile, SavedSummary, Folder,
 } from '@/lib/db'
 import { useAuth } from '@/providers/AuthProvider'
+import { useChat } from '@/providers/ChatProvider'
 import { formatRelativeDate } from '@/lib/formatDate'
 
 const CATEGORY_LABEL: Record<string, string> = {
@@ -24,14 +24,21 @@ type FriendStatus = 'none' | 'pending_sent' | 'pending_received' | 'friends'
 export default function ProfilePage() {
   const { userId } = useParams<{ userId: string }>()
   const { user } = useAuth()
+  const { openChat } = useChat()
   const router = useRouter()
 
   const [profile, setProfile] = useState<UserProfile | null>(null)
-  const [summaries, setSummaries] = useState<SavedSummary[]>([])
+  const [folders, setFolders] = useState<Folder[]>([])
   const [loading, setLoading] = useState(true)
   const [friendStatus, setFriendStatus] = useState<FriendStatus>('none')
   const [friendLoading, setFriendLoading] = useState(false)
   const [messaging, setMessaging] = useState(false)
+
+  // 폴더 모달용 상태
+  const [selectedFolder, setSelectedFolder] = useState<Folder | null>(null)
+  const [folderItems, setFolderItems] = useState<SavedSummary[]>([])
+  const [itemsLoading, setItemsLoading] = useState(false)
+  const [cloning, setCloning] = useState(false)
 
   const isMyProfile = user?.uid === userId
 
@@ -46,12 +53,10 @@ export default function ProfilePage() {
         setProfile(p)
         setFriendStatus(status)
 
-        // 친구면 전체 큐레이션, 아니면 공개만
+        // 친구 여부에 따라 폴더 목록 가져오기
         const isFriend = status === 'friends'
-        const s = isFriend
-          ? await getAllSavedSummariesByUser(userId)
-          : await getUserPublicSummaries(userId)
-        setSummaries(s)
+        const f = await getVisibleFolders(userId, isFriend)
+        setFolders(f)
       } catch (e) {
         console.error(e)
       } finally {
@@ -60,6 +65,65 @@ export default function ProfilePage() {
     }
     load()
   }, [userId, user, isMyProfile])
+
+  // 폴더 오픈 핸들러
+  const handleOpenFolder = async (f: Folder) => {
+    setSelectedFolder(f)
+    setItemsLoading(true)
+    try {
+      const items = await getSavedSummariesByFolder(userId, f.id)
+      setFolderItems(items)
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setItemsLoading(false)
+    }
+  }
+
+  // 폴더 복제(Clone) 핸들러
+  const handleCloneFolder = async () => {
+    if (!user || !selectedFolder) return
+    const newName = prompt('복제할 폴더 이름을 입력해주세요:', `${selectedFolder.name} (from ${profile?.displayName})`)
+    if (!newName) return
+
+    setCloning(true)
+    try {
+      await cloneFolder(
+        selectedFolder.id,
+        profile?.displayName || '익명',
+        userId,
+        newName,
+        user.uid,
+        { displayName: user.displayName || '익명', photoURL: user.photoURL || '' }
+      )
+      alert('폴더가 성공적으로 복제되었습니다! 마이페이지에서 확인해보세요.')
+    } catch (e) {
+      console.error(e)
+      alert('복제 중 오류가 발생했습니다.')
+    } finally {
+      setCloning(false)
+    }
+  }
+
+  // 개별 영상 저장 핸들러
+  const handleSaveItem = async (item: SavedSummary) => {
+    if (!user) { alert('로그인이 필요합니다.'); return }
+    try {
+      await saveSummary({
+        ...item,
+        userId: user.uid,
+        userDisplayName: user.displayName || '익명',
+        userPhotoURL: user.photoURL || '',
+        folderId: 'all', // 기본 폴더
+        isPublic: false,
+        createdAt: null, // 서버에서 재생성
+      })
+      alert('나의 라이브러리에 저장되었습니다.')
+    } catch (e) {
+      console.error(e)
+      alert('저장 실패')
+    }
+  }
 
   const handleFriendAction = async () => {
     if (!user) { alert('로그인이 필요합니다.'); return }
@@ -85,8 +149,10 @@ export default function ProfilePage() {
         const s = await getUserPublicSummaries(userId)
         setSummaries(s)
       }
-    } catch { alert('오류가 발생했습니다.') }
-    finally { setFriendLoading(false) }
+    } catch (e: any) {
+      console.error('[FriendAction Error]', e)
+      alert(`오류가 발생했습니다: ${e.message || '잠시 후 다시 시도해주세요.'}`)
+    } finally { setFriendLoading(false) }
   }
 
   const handleReject = async () => {
@@ -95,8 +161,10 @@ export default function ProfilePage() {
     try {
       await rejectFriendRequest(userId, user.uid)
       setFriendStatus('none')
-    } catch { alert('오류가 발생했습니다.') }
-    finally { setFriendLoading(false) }
+    } catch (e: any) {
+      console.error('[RejectFriend Error]', e)
+      alert('오류가 발생했습니다.')
+    } finally { setFriendLoading(false) }
   }
 
   const handleMessage = async () => {
@@ -109,9 +177,15 @@ export default function ProfilePage() {
         userId,
         { displayName: profile?.displayName || '익명', photoURL: profile?.photoURL || '' }
       )
-      router.push(`/messages/${cid}`)
-    } catch { alert('오류가 발생했습니다.') }
-    finally { setMessaging(false) }
+      openChat(cid, { 
+        uid: userId, 
+        displayName: profile?.displayName || '익명', 
+        photoURL: profile?.photoURL || '' 
+      })
+    } catch (e: any) {
+      console.error('[MessageAction Error]', e)
+      alert('오류가 발생했습니다.')
+    } finally { setMessaging(false) }
   }
 
   const friendButtonConfig = {
@@ -143,7 +217,7 @@ export default function ProfilePage() {
               <div className="text-center">
                 <h1 className="text-xl font-bold text-white">{profile?.displayName || '익명'}</h1>
                 <p className="text-[#75716e] text-sm mt-1">
-                  {friendStatus === 'friends' ? `큐레이션 ${summaries.length}개` : `공개 요약 ${summaries.length}개`}
+                  공개된 폴더 {folders.length}개
                 </p>
                 {friendStatus === 'friends' && (
                   <span className="inline-block mt-1 text-[10px] px-2 py-0.5 rounded-full bg-orange-500/15 text-orange-400 border border-orange-500/30">
@@ -201,45 +275,90 @@ export default function ProfilePage() {
               </div>
             )}
 
-            {/* 요약 목록 */}
-            {summaries.length === 0 ? (
-              <div className="text-center py-16 text-[#75716e]">
-                {friendStatus === 'friends' ? '저장된 큐레이션이 없습니다.' : '공개된 요약이 없습니다.'}
+            {/* 폴더 목록 그리드 */}
+            {folders.length === 0 ? (
+              <div className="text-center py-20 text-[#75716e]">
+                공개된 폴더가 없습니다.
               </div>
             ) : (
-              <>
-                {friendStatus === 'friends' && (
-                  <p className="text-[10px] text-[#75716e] mb-3 px-1">전체 큐레이션 — 비공개 포함</p>
-                )}
-                <div className="columns-2 gap-3 space-y-3">
-                  {summaries.map(item => (
-                    <Link
-                      key={item.id}
-                      href={`/result/${item.sessionId}`}
-                      className="break-inside-avoid block rounded-[18px] bg-[#32302e] border border-white/5 overflow-hidden hover:border-white/20 transition-all"
-                    >
-                      <div className="relative overflow-hidden bg-[#23211f]">
-                        <img src={item.thumbnail} alt={item.title} className="w-full object-cover aspect-video" />
-                        <div className="absolute top-2 right-2 flex items-center gap-1">
-                          {!item.isPublic && (
-                            <span className="px-1.5 py-0.5 rounded-full bg-black/70 text-[8px] text-white/50">🔒</span>
-                          )}
-                          <span className="px-2 py-0.5 rounded-full bg-black/60 text-[9px] font-bold text-white">
-                            {CATEGORY_LABEL[item.category] ?? '분석됨'}
-                          </span>
-                        </div>
+              <div className="grid grid-cols-2 gap-4">
+                {folders.map(f => (
+                  <button
+                    key={f.id}
+                    onClick={() => handleOpenFolder(f)}
+                    className="group relative flex flex-col gap-3 p-4 rounded-3xl bg-[#32302e] border border-white/5 hover:border-orange-500/40 transition-all text-left"
+                  >
+                    <div className="w-full aspect-[4/3] rounded-2xl bg-[#252423] flex items-center justify-center text-4xl shadow-inner group-hover:scale-[1.02] transition-transform">
+                      {f.clonedFrom ? '✨' : '📁'}
+                    </div>
+                    <div>
+                      <h3 className="text-white font-bold truncate">{f.name}</h3>
+                      <p className="text-[#75716e] text-xs mt-1">큐레이션 보기 →</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Folder Modal */}
+            {selectedFolder && (
+              <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+                <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setSelectedFolder(null)} />
+                <div className="relative w-full max-w-2xl max-h-[85vh] bg-[#252423] rounded-[32px] overflow-hidden flex flex-col shadow-2xl border border-white/10 slide-up">
+                  {/* 모달 헤더 */}
+                  <div className="flex items-center justify-between px-6 py-5 border-b border-white/5 bg-[#2a2826]">
+                    <div className="flex items-center gap-3">
+                      <span className="text-2xl text-orange-500">📁</span>
+                      <h2 className="text-xl font-bold text-white truncate max-w-[300px]">{selectedFolder.name}</h2>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      {!isMyProfile && user && (
+                        <button
+                          onClick={handleCloneFolder}
+                          disabled={cloning}
+                          className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold rounded-full transition-all disabled:opacity-50"
+                        >
+                          {cloning ? '복제 중...' : '✨ 폴더 전체 복제'}
+                        </button>
+                      )}
+                      <button onClick={() => setSelectedFolder(null)} className="text-[#75716e] hover:text-white p-1">✕</button>
+                    </div>
+                  </div>
+
+                  {/* 모달 바디 - 영상 목록 */}
+                  <div className="flex-1 overflow-y-auto p-6">
+                    {itemsLoading ? (
+                      <div className="flex justify-center py-20">
+                        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-orange-500" />
                       </div>
-                      <div className="p-2.5">
-                        <p className="text-[#f4f4f5] text-[11px] font-bold leading-snug line-clamp-2 mb-1">{item.title}</p>
-                        <div className="flex items-center gap-2 text-[#75716e] text-[9px]">
-                          {item.createdAt && <span>{formatRelativeDate(item.createdAt)}</span>}
-                          <span>❤️ {item.likeCount ?? 0}</span>
-                        </div>
+                    ) : folderItems.length === 0 ? (
+                      <p className="text-center text-[#75716e] py-20">폴더가 비어있습니다.</p>
+                    ) : (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        {folderItems.map(item => (
+                          <div key={item.id} className="group flex flex-col rounded-2xl bg-[#32302e] border border-white/5 overflow-hidden border-transparent hover:border-orange-500/30 transition-all">
+                            <Link href={`/result/${item.sessionId}`} className="relative aspect-video overflow-hidden">
+                              <img src={item.thumbnail} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                              <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-3">
+                                <span className="text-white text-[10px] font-medium">내용 자세히 보기 →</span>
+                              </div>
+                            </Link>
+                            <div className="p-3 space-y-2">
+                              <p className="text-white text-xs font-bold line-clamp-2 leading-tight">{item.title}</p>
+                              <button
+                                onClick={() => handleSaveItem(item)}
+                                className="w-full py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-[#a4a09c] hover:text-white text-[10px] font-medium transition-all"
+                              >
+                                내 라이브러리에 저장
+                              </button>
+                            </div>
+                          </div>
+                        ))}
                       </div>
-                    </Link>
-                  ))}
+                    )}
+                  </div>
                 </div>
-              </>
+              </div>
             )}
           </>
         )}
