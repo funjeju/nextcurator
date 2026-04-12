@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import Link from 'next/link'
 import Header from '@/components/common/Header'
-import { getPublicSummaries, toggleLike, getUserLikedIds, incrementViewCount, getOrCreateConversation, SavedSummary } from '@/lib/db'
+import { getPublicSummaries, toggleLike, getUserLikedIds, incrementViewCount, getOrCreateConversation, updateSummaryVisibility, SavedSummary } from '@/lib/db'
 import { getCommentCountsBySessionIds } from '@/lib/comments'
 import { useAuth } from '@/providers/AuthProvider'
 import { formatRelativeDate } from '@/lib/formatDate'
@@ -80,7 +80,7 @@ function getUserTopCategories(likedIds: Set<string>, summaries: SavedSummary[]):
 }
 
 // 일반 요약 카드
-function SummaryCard({ item, likedIds, likingIds, user, messagingId, commentCount, onLike, onMessage }: {
+function SummaryCard({ item, likedIds, likingIds, user, messagingId, commentCount, onLike, onMessage, onDelete }: {
   item: SavedSummary
   likedIds: Set<string>
   likingIds: Set<string>
@@ -89,6 +89,7 @@ function SummaryCard({ item, likedIds, likingIds, user, messagingId, commentCoun
   commentCount: number
   onLike: (e: React.MouseEvent, item: SavedSummary) => void
   onMessage: (e: React.MouseEvent, item: SavedSummary) => void
+  onDelete: (e: React.MouseEvent, item: SavedSummary) => void
 }) {
   return (
     <div className="relative group">
@@ -137,7 +138,17 @@ function SummaryCard({ item, likedIds, likingIds, user, messagingId, commentCoun
       </Link>
 
       <div className="absolute bottom-2 left-2.5 right-2.5 flex items-center justify-between">
-        {user && item.userId !== user.uid ? (
+        {user && item.userId === user.uid ? (
+          <button
+            onClick={(e) => onDelete(e, item)}
+            className="flex items-center gap-0.5 text-[9px] text-[#75716e] hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
+            title="삭제"
+          >
+            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+          </button>
+        ) : user && item.userId !== user.uid ? (
           <button
             onClick={(e) => onMessage(e, item)}
             disabled={messagingId === item.id}
@@ -295,6 +306,19 @@ export default function SquarePage() {
       router.push(`/messages/${cid}`)
     } catch { alert('오류가 발생했습니다.') }
     finally { setMessagingId(null) }
+  }
+
+  const handleDelete = async (e: React.MouseEvent, item: SavedSummary) => {
+    e.preventDefault(); e.stopPropagation()
+    if (!user || user.uid !== item.userId) return
+    if (!confirm(`스퀘어에서 이 카드를 내립니다.\n내 마이페이지에는 그대로 유지됩니다.`)) return
+    try {
+      await updateSummaryVisibility(item.id, false)
+      setSummaries(prev => prev.filter(s => s.id !== item.id))
+      setAllSummaries(prev => prev.filter(s => s.id !== item.id))
+    } catch {
+      alert('삭제에 실패했습니다.')
+    }
   }
 
   const handleLike = async (e: React.MouseEvent, item: SavedSummary) => {
@@ -514,6 +538,7 @@ export default function SquarePage() {
                       commentCount={commentCounts[item.sessionId] ?? 0}
                       onLike={handleLike}
                       onMessage={handleMessage}
+                      onDelete={handleDelete}
                     />
                   )
                 })}
