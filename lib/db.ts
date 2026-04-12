@@ -179,8 +179,19 @@ export async function upsertUserProfile(profile: Omit<UserProfile, 'updatedAt'>)
 }
 
 export async function getUserProfile(uid: string): Promise<UserProfile | null> {
-  const snap = await getDoc(doc(db, 'users', uid))
-  return snap.exists() ? (snap.data() as UserProfile) : null
+  // 1. UID로 직접 조회 시도
+  const docRef = doc(db, 'users', uid)
+  const snap = await getDoc(docRef)
+  if (snap.exists()) return { uid: snap.id, ...snap.data() } as UserProfile
+
+  // 2. 만약 uid가 이메일 형식이라면 이메일로 검색 시도 (ID 체계 유연화)
+  if (uid.includes('@')) {
+    const q = query(collection(db, 'users'), where('email', '==', uid))
+    const s = await getDocs(q)
+    if (!s.empty) return { uid: s.docs[0].id, ...s.docs[0].data() } as UserProfile
+  }
+
+  return null
 }
 
 // 온보딩 완료 — 추가 정보 저장 + 신규 가입 보너스 토큰 지급
@@ -505,21 +516,21 @@ export async function getFriends(myUid: string): Promise<{ uid: string; displayN
 export async function getVisibleFolders(userId: string, isFriend: boolean = false) {
   const foldersRef = collection(db, 'folders')
   
-  // 1. 기본적으로 해당 유저의 폴더
-  let constraints: any[] = [where('userId', '==', userId)]
-
-  // 2. 권한에 따른 가시성 필터링
-  // 친구라면: public + friends 모두 가능
-  // 비친구라면: public만 가능
-  if (isFriend) {
-    constraints.push(where('visibility', 'in', ['public', 'friends']))
-  } else {
-    constraints.push(where('visibility', '==', 'public'))
-  }
-
-  const q = query(foldersRef, ...constraints)
+  // 1. 인덱스 누락으로 인한 쿼리 실패를 방지하기 위해, 오직 userId로만 먼저 가져옵니다. (Index-Free Filtering)
+  const q = query(foldersRef, where('userId', '==', userId))
   const snap = await getDocs(q)
-  return snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Folder))
+  const allFolders = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Folder))
+
+  // 2. 메모리에서 권한에 따라 필터링 (폴더 개수가 수만 개가 아니므로 이 방식이 빌드 에러 없이 가장 안전합니다.)
+  return allFolders.filter(f => {
+    if (isFriend) {
+      // 친구라면: 전체공개(public) 또는 친구공개(friends) 모두 노출
+      return f.visibility === 'public' || f.visibility === 'friends'
+    } else {
+      // 비친구(또는 비로그인): 오직 전체공개(public)만 노출
+      return f.visibility === 'public'
+    }
+  })
 }
 
 /** 폴더 통째로 복제하기 */
