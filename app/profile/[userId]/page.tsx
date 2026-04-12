@@ -140,16 +140,16 @@ export default function ProfilePage() {
       } else if (friendStatus === 'pending_received') {
         await acceptFriendRequest(userId, user.uid)
         setFriendStatus('friends')
-        // 전체 큐레이션으로 갱신
-        const s = await getAllSavedSummariesByUser(userId)
-        setSummaries(s)
+        // 폴더 목록 갱신 (권한에 맞게)
+        const f = await getVisibleFolders(userId, true)
+        setFolders(f)
       } else if (friendStatus === 'friends') {
         if (!confirm('친구를 삭제하시겠습니까?')) return
         await removeFriend(user.uid, userId)
         setFriendStatus('none')
-        // 공개 요약만으로 갱신
-        const s = await getUserPublicSummaries(userId)
-        setSummaries(s)
+        // 폴더 목록 갱신 (공개 전용으로)
+        const f = await getVisibleFolders(userId, false)
+        setFolders(f)
       }
     } catch (e: any) {
       console.error('[FriendAction Error]', e)
