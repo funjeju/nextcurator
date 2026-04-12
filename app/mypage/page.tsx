@@ -398,7 +398,12 @@ export default function MyPage() {
   }
 
   const handleToggleVisibility = async (f: Folder) => {
-    const next = f.visibility === 'public' ? 'private' : 'public'
+    // 3단계 순환: private -> friends -> public -> private
+    let next: 'private' | 'friends' | 'public' = 'private'
+    if (!f.visibility || f.visibility === 'private') next = 'friends'
+    else if (f.visibility === 'friends') next = 'public'
+    else next = 'private'
+
     await updateFolderVisibility(f.id, next)
     setFolders(prev => prev.map(item => item.id === f.id ? { ...item, visibility: next } : item))
   }
@@ -609,17 +614,19 @@ export default function MyPage() {
                       </span>
                     </button>
 
-                    {/* 공개 범위 토글 (본인 폴더인 경우) */}
+                    {/* 공개 범위 토글 뱃지 */}
                     <button
                       onClick={(e) => { e.stopPropagation(); handleToggleVisibility(f) }}
-                      className={`absolute right-10 top-1/2 -translate-y-1/2 w-7 h-7 rounded-lg flex items-center justify-center transition-all ${
+                      className={`absolute right-10 top-1/2 -translate-y-1/2 px-2 py-1 rounded-md text-[10px] font-bold transition-all shadow-sm ${
                         f.visibility === 'public' 
-                          ? 'text-orange-400 hover:bg-orange-500/10' 
-                          : 'text-[#75716e] hover:bg-white/10'
+                          ? 'bg-orange-500 text-white border border-orange-400' 
+                          : f.visibility === 'friends'
+                            ? 'bg-blue-600 text-white border border-blue-500'
+                            : 'bg-[#3d3a38] text-[#75716e] border border-white/10'
                       }`}
-                      title={f.visibility === 'public' ? '친구/전체 공개 중' : '나만 보기(비공개)'}
+                      title={f.visibility === 'public' ? '누구나 주소로 볼 수 있음' : f.visibility === 'friends' ? '친구만 볼 수 있음' : '나만 보기'}
                     >
-                      {f.visibility === 'public' ? '🔓' : '🔒'}
+                      {f.visibility === 'public' ? '🌐 전체공개' : f.visibility === 'friends' ? '👥 친구만' : '🔒 나만보기'}
                     </button>
                   </div>
                 )}

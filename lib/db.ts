@@ -6,7 +6,7 @@ export interface Folder {
   id: string
   userId: string
   name: string
-  visibility?: 'private' | 'public'
+  visibility?: 'private' | 'friends' | 'public'
   clonedFrom?: {
     userId: string
     displayName: string
@@ -107,7 +107,7 @@ export async function renameFolder(folderId: string, newName: string): Promise<v
   await updateDoc(doc(db, 'folders', folderId), { name: newName })
 }
 
-export async function updateFolderVisibility(folderId: string, visibility: 'private' | 'public'): Promise<void> {
+export async function updateFolderVisibility(folderId: string, visibility: 'private' | 'friends' | 'public'): Promise<void> {
   await updateDoc(doc(db, 'folders', folderId), { visibility })
 }
 
