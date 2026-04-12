@@ -59,7 +59,7 @@ export default function ProfilePage() {
         // URL의 userId가 이메일일 수 있으므로, 프로필에서 얻은 진짜 UID(p.uid)를 우선 사용합니다.
         const actualUid = p?.uid || userId
         const isFriend = status === 'friends'
-        const f = await getVisibleFolders(actualUid, isFriend)
+        const f = await getVisibleFolders(actualUid, isMyProfile, isFriend)
         setFolders(f)
       } catch (e) {
         console.error(e)

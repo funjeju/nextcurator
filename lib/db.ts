@@ -513,24 +513,35 @@ export async function getFriends(myUid: string): Promise<{ uid: string; displayN
  * 특정 사용자의 공개 가능한 폴더 목록을 가져옵니다.
  * - Firestore 보안 규칙 위반을 피하기 위해 쿼리 레벨에서 필터링합니다.
  */
-export async function getVisibleFolders(userId: string, isFriend: boolean = false) {
+export async function getVisibleFolders(targetUserId: string, isOwner: boolean = false, isFriend: boolean = false) {
   const foldersRef = collection(db, 'folders')
   
-  // 1. 인덱스 누락으로 인한 쿼리 실패를 방지하기 위해, 오직 userId로만 먼저 가져옵니다. (Index-Free Filtering)
-  const q = query(foldersRef, where('userId', '==', userId))
-  const snap = await getDocs(q)
-  const allFolders = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Folder))
+  // 1. 본인이 자신의 프로필을 보는 경우: 인덱스 없이 userId만으로 모든 폴더 조회 가능 (보안 규칙 통과)
+  if (isOwner) {
+    const q = query(foldersRef, where('userId', '==', targetUserId))
+    const snap = await getDocs(q)
+    return snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Folder))
+  }
 
-  // 2. 메모리에서 권한에 따라 필터링 (폴더 개수가 수만 개가 아니므로 이 방식이 빌드 에러 없이 가장 안전합니다.)
-  return allFolders.filter(f => {
-    if (isFriend) {
-      // 친구라면: 전체공개(public) 또는 친구공개(friends) 모두 노출
-      return f.visibility === 'public' || f.visibility === 'friends'
-    } else {
-      // 비친구(또는 비로그인): 오직 전체공개(public)만 노출
-      return f.visibility === 'public'
-    }
-  })
+  // 2. 타인(또는 비로그인)이 보는 경우: 보안 규칙상 visibility == 'public'이 쿼리에 포함되어야 함.
+  // 복합 인덱스 없이 작동하기 위해, 먼저 모든 'public' 폴더를 가져온 뒤 메모리에서 해당 유저의 것만 필터링합니다.
+  const q = query(foldersRef, where('visibility', '==', 'public'))
+  const snap = await getDocs(q)
+  const publicFolders = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Folder))
+  
+  const folders = publicFolders.filter(f => f.userId === targetUserId)
+  
+  // 3. 만약 친구라면 추가로 'friends' 상태인 폴더도 가져와야 함 (필요시)
+  if (isFriend) {
+    const qf = query(foldersRef, where('visibility', '==', 'friends'))
+    const snapf = await getDocs(qf)
+    const friendsFolders = snapf.docs
+      .map(doc => ({ id: doc.id, ...doc.data() } as Folder))
+      .filter(f => f.userId === targetUserId)
+    return [...folders, ...friendsFolders]
+  }
+
+  return folders
 }
 
 /** 폴더 통째로 복제하기 */
