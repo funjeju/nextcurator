@@ -1,6 +1,7 @@
 import { db } from './firebase'
 import { collection, doc, setDoc, getDocs, getDoc, query, where, addDoc, deleteDoc, updateDoc, increment, serverTimestamp, writeBatch } from 'firebase/firestore'
 import { SummaryData } from '@/types/summary'
+import { getLocalUserId } from './user';
 
 export interface Folder {
   id: string
