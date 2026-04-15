@@ -115,5 +115,23 @@ service cloud.firestore {
       allow read: if true;
       allow create: if request.auth != null;
     }
+
+    // classes: 로그인 유저 읽기, 교사(생성자)만 수정/삭제
+    match /classes/{classCode} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null;
+      allow update, delete: if request.auth != null && request.auth.uid == resource.data.teacherId;
+    }
+
+    // activity_logs: 학생 본인 생성, 본인 및 담당 교사 읽기
+    match /activity_logs/{logId} {
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.studentId;
+      allow read: if request.auth != null && (
+        request.auth.uid == resource.data.studentId ||
+        (resource != null &&
+         exists(/databases/$(database)/documents/classes/$(resource.data.classCode)) &&
+         get(/databases/$(database)/documents/classes/$(resource.data.classCode)).data.teacherId == request.auth.uid)
+      );
+    }
   }
 }

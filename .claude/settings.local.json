@@ -83,7 +83,11 @@
       "Bash(curl -s \"https://nextcurator-transcript.nextcurator.workers.dev?videoId=3Yr3NZXe9EY\")",
       "Bash(curl -s \"https://nextcurator-transcript.nextcurator.workers.dev?videoId=5KWMw21iYOc\")",
       "Bash(curl -s \"https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=gYmAZZADq00&format=json\")",
-      "Bash(curl -s \"https://www.googleapis.com/youtube/v3/videos?id=gYmAZZADq00&part=snippet&key=AIzaSyBKoj6Mxfh789W802WkERtAAZg-1gipQkE\")"
+      "Bash(curl -s \"https://www.googleapis.com/youtube/v3/videos?id=gYmAZZADq00&part=snippet&key=AIzaSyBKoj6Mxfh789W802WkERtAAZg-1gipQkE\")",
+      "Bash(git commit -m ' *)",
+      "Bash(firebase projects:list)",
+      "Bash(grep -E \"\\\\.\\(tsx|ts\\)$\")",
+      "Bash(grep -r \"role\\\\|permission\\\\|access\\\\|visibility\" /c/Users/funjeju/Desktop/aiproject/nextcurator/lib/*.ts)"
     ]
   }
 }

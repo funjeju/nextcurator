@@ -1,7 +1,11 @@
 'use client'
 
 import React, { createContext, useContext, useEffect, useState } from 'react'
-import { User, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut as firebaseSignOut } from 'firebase/auth'
+import {
+  User, onAuthStateChanged, GoogleAuthProvider, signInWithPopup,
+  signOut as firebaseSignOut, createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+} from 'firebase/auth'
 import { auth } from '@/lib/firebase'
 import { getUserProfile, initNewUserTokens, UserProfile } from '@/lib/db'
 
@@ -12,6 +16,7 @@ interface AuthContextType {
   needsProfile: boolean          // 온보딩 모달 표시 여부
   refreshProfile: () => Promise<void>
   signInWithGoogle: () => Promise<void>
+  signInStudent: (email: string, password: string) => Promise<void>
   signOut: () => Promise<void>
 }
 
@@ -22,6 +27,7 @@ const AuthContext = createContext<AuthContextType>({
   needsProfile: false,
   refreshProfile: async () => {},
   signInWithGoogle: async () => {},
+  signInStudent: async () => {},
   signOut: async () => {},
 })
 
@@ -76,6 +82,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
+  const signInStudent = async (email: string, password: string) => {
+    await signInWithEmailAndPassword(auth, email, password)
+    // 프로필 로드는 onAuthStateChanged에서 처리됨
+  }
+
   const signOut = async () => {
     try {
       await firebaseSignOut(auth)
@@ -87,7 +98,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, userProfile, needsProfile, refreshProfile, signInWithGoogle, signOut }}>
+    <AuthContext.Provider value={{ user, loading, userProfile, needsProfile, refreshProfile, signInWithGoogle, signInStudent, signOut }}>
       {children}
     </AuthContext.Provider>
   )

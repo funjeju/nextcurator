@@ -59,7 +59,13 @@ export interface UserProfile {
   tokensEarnedTotal?: number    // 누적 획득 토큰 (통계용)
   plan?: 'free' | 'starter' | 'pro'
   planExpiresAt?: any           // 기간제 플랜 만료일
-  role?: 'admin' | 'user'       // 관리자 권한 여부
+  role?: 'admin' | 'user' | 'teacher' | 'student'  // 역할
+  // 클래스룸 전용 필드
+  classCode?: string             // 교사/학생 공통 (소속 클래스)
+  studentName?: string           // 학생 전용 (표시 이름)
+  schoolName?: string            // 교사 전용
+  grade?: number                 // 교사 전용
+  classNum?: number              // 교사 전용
   updatedAt: any
 }
 

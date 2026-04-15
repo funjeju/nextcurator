@@ -93,6 +93,9 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
   const [worksheetLoading, setWorksheetLoading] = useState(false)
   const [worksheetLevel, setWorksheetLevel] = useState<'elementary' | 'middle' | 'advanced'>('elementary')
 
+  // 메타인지 자기점검
+  const [metaLevel, setMetaLevel] = useState<'complete' | 'confused' | 'unknown' | null>(null)
+
   useEffect(() => {
     if (!data?.videoId) return
     import('qrcode').then(QRCode => {
@@ -379,6 +382,32 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
     }
   }
 
+  // 메타인지 자기점검 로그
+  const handleMeta = async (level: 'complete' | 'confused' | 'unknown') => {
+    if (!user || !data) return
+    const { getUserProfile } = await import('@/lib/db')
+    const p = await getUserProfile(user.uid)
+    if (p?.role !== 'student' || !p.classCode) return
+
+    setMetaLevel(level)
+    try {
+      await fetch('/api/classroom/activity', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          studentId: user.uid,
+          studentName: p.studentName || p.displayName || '',
+          classCode: p.classCode,
+          type: 'meta',
+          videoId: data.videoId,
+          sessionId: data.sessionId,
+          videoTitle: data.title,
+          value: { level },
+        }),
+      })
+    } catch { /* 로그 실패는 조용히 */ }
+  }
+
   // 링크 복사/공유 — 모바일은 네이티브 공유 시트, PC는 클립보드 복사
   const handleShare = async () => {
     if (!data) return
@@ -588,6 +617,11 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
                 </div>
               )}
             </div>
+          )}
+
+          {/* 메타인지 자기점검 — summary 탭에서만 표시 */}
+          {activeTab === 'summary' && (
+            <MetaCheckButtons metaLevel={metaLevel} onSelect={handleMeta} />
           )}
 
           {activeTab === 'transcript' && (
@@ -826,6 +860,46 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
             getSavedSummaryBySessionId(uid, data.sessionId).then(setSavedItem).catch(() => {})
           }}
         />
+      )}
+    </div>
+  )
+}
+
+// ─── 메타인지 자기점검 버튼 ───────────────────────
+function MetaCheckButtons({
+  metaLevel,
+  onSelect,
+}: {
+  metaLevel: 'complete' | 'confused' | 'unknown' | null
+  onSelect: (level: 'complete' | 'confused' | 'unknown') => void
+}) {
+  const buttons = [
+    { level: 'complete' as const, emoji: '✅', label: '완전이해', color: 'border-emerald-500/30 hover:bg-emerald-500/10 hover:border-emerald-500/60 text-emerald-400', activeColor: 'bg-emerald-500/20 border-emerald-500 text-emerald-300' },
+    { level: 'confused' as const, emoji: '🤔', label: '알쏭달쏭', color: 'border-yellow-500/30 hover:bg-yellow-500/10 hover:border-yellow-500/60 text-yellow-400', activeColor: 'bg-yellow-500/20 border-yellow-500 text-yellow-300' },
+    { level: 'unknown' as const,  emoji: '❓', label: '전혀모름',  color: 'border-red-500/30 hover:bg-red-500/10 hover:border-red-500/60 text-red-400',       activeColor: 'bg-red-500/20 border-red-500 text-red-300' },
+  ]
+
+  return (
+    <div className="mt-4 pt-4 border-t border-white/5">
+      <p className="text-xs text-gray-500 mb-3 text-center">이 영상을 얼마나 이해했나요?</p>
+      <div className="flex gap-2">
+        {buttons.map(btn => (
+          <button
+            key={btn.level}
+            onClick={() => onSelect(btn.level)}
+            className={`flex-1 py-3 rounded-2xl border text-sm font-bold transition-all ${metaLevel === btn.level ? btn.activeColor : btn.color}`}
+          >
+            <span className="block text-xl mb-0.5">{btn.emoji}</span>
+            {btn.label}
+          </button>
+        ))}
+      </div>
+      {metaLevel && (
+        <p className="text-center text-xs text-gray-600 mt-2">
+          {metaLevel === 'complete' ? '✓ 선생님께 완전이해로 기록됐어요' :
+           metaLevel === 'confused' ? '✓ 선생님께 알쏭달쏭으로 기록됐어요' :
+           '✓ 선생님께 전혀모름으로 기록됐어요'}
+        </p>
       )}
     </div>
   )
