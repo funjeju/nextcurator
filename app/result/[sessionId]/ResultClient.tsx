@@ -199,6 +199,24 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
     fetchSummary()
   }, [sessionId, user])
 
+  // videoPublishedAt 없는 경우 서버에서 가져와 보완
+  useEffect(() => {
+    if (!data?.videoId || data.videoPublishedAt) return
+    fetch('/api/video-published-at', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId: data.sessionId, videoId: data.videoId }),
+    })
+      .then(r => r.ok ? r.json() : null)
+      .then(res => {
+        if (res?.publishedAt) {
+          setData(prev => prev ? { ...prev, videoPublishedAt: res.publishedAt } : prev)
+          sessionStorage.removeItem(`summary_${sessionId}`)
+        }
+      })
+      .catch(() => {})
+  }, [data?.videoId, data?.videoPublishedAt])
+
   // 댓글 로드
   useEffect(() => {
     if (!sessionId) return
