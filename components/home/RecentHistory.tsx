@@ -55,25 +55,22 @@ export default function RecentHistory() {
     <div className="w-full flex flex-col gap-4 border-b border-white/5 pb-8 mb-2">
       <div className="flex items-center justify-between">
         <p className="text-[#75716e] text-sm font-medium">최근 요약 기록</p>
-        {hasMore && (
-          <Link href="/history" className="text-xs font-medium text-orange-400 hover:text-orange-300 transition-colors">
-            히스토리 전체보기 →
-          </Link>
-        )}
+        <Link href="/history" className="text-xs font-medium text-orange-400 hover:text-orange-300 transition-colors">
+          모든 기록 보기 →
+        </Link>
       </div>
 
       <div className="grid grid-cols-3 gap-2">
         {recentItems.map((item) => (
-          <Link 
-            key={item.sessionId} 
+          <Link
+            key={item.sessionId}
             href={`/result/${item.sessionId}`}
             className="group block relative overflow-hidden rounded-[16px] bg-[#23211f] border border-white/5 hover:border-white/20 transition-all"
           >
             <div className="aspect-video relative overflow-hidden">
-              {/* Using standard img to avoid Next.js external domain config issues for now, since it's just YouTube thumbs */}
-              <img 
-                src={item.thumbnail} 
-                alt={item.title} 
+              <img
+                src={item.thumbnail}
+                alt={item.title}
                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
               />
               <div className="absolute inset-0 bg-black/40 group-hover:bg-black/20 transition-colors" />
@@ -89,15 +86,6 @@ export default function RecentHistory() {
           </Link>
         ))}
       </div>
-      
-      {/* If exactly 3 items and no 'hasMore' yet, still nice to allow seeing the list page if they want */}
-      {!hasMore && history.length > 0 && (
-        <div className="text-right mt-1">
-          <Link href="/history" className="text-xs font-medium text-zinc-500 hover:text-zinc-300 transition-colors">
-            모든 기록 보기
-          </Link>
-        </div>
-      )}
     </div>
   )
 }

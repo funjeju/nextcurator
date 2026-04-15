@@ -279,6 +279,11 @@ export default function MyPage() {
   const [aiSearchLoading, setAiSearchLoading] = useState(false)
   const [aiSearchIds, setAiSearchIds] = useState<string[] | null>(null)
   const [aiSearchNoEmbed, setAiSearchNoEmbed] = useState(false)  // 임베딩 없는 항목 존재 여부
+  // 회원탈퇴
+  const [showWithdrawModal, setShowWithdrawModal] = useState(false)
+  const [withdrawConfirm, setWithdrawConfirm] = useState('')
+  const [withdrawing, setWithdrawing] = useState(false)
+  const [withdrawError, setWithdrawError] = useState('')
 
   // 폴더 메뉴 외부 클릭 시 닫기
   useEffect(() => {
@@ -371,6 +376,30 @@ export default function MyPage() {
       setTeacherError(err.message || '오류가 발생했습니다.')
     } finally {
       setTeacherSaving(false)
+    }
+  }
+
+  const handleDeleteAccount = async () => {
+    if (!user) return
+    setWithdrawing(true)
+    setWithdrawError('')
+    try {
+      const idToken = await user.getIdToken()
+      const res = await fetch('/api/user/delete', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({ classCode: userProfile?.classCode || null }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+      // 탈퇴 완료 → 홈으로 이동
+      window.location.href = '/'
+    } catch (err: any) {
+      setWithdrawError(err.message || '탈퇴 처리 중 오류가 발생했습니다.')
+      setWithdrawing(false)
     }
   }
 
@@ -754,6 +783,14 @@ export default function MyPage() {
                   <span className="text-orange-400 text-xs font-bold">+{PROFILE_COMPLETE_TOKENS} 토큰 받기</span>
                 </div>
               )}
+              {/* 회원탈퇴 */}
+              <button
+                onClick={() => { setShowWithdrawModal(true); setWithdrawConfirm(''); setWithdrawError('') }}
+                className="text-[#4a4745] hover:text-red-500/70 text-[10px] transition-colors px-1"
+                title="회원탈퇴"
+              >
+                탈퇴
+              </button>
             </div>
           </div>
         </div>
@@ -1278,6 +1315,57 @@ export default function MyPage() {
             setShowPhotoUpload(false)
           }}
         />
+      )}
+
+      {/* 회원탈퇴 모달 */}
+      {showWithdrawModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => { if (!withdrawing) setShowWithdrawModal(false) }} />
+          <div className="relative w-full max-w-sm bg-[#1c1a18] rounded-3xl border border-red-500/20 shadow-2xl p-7">
+            <button
+              onClick={() => setShowWithdrawModal(false)}
+              disabled={withdrawing}
+              className="absolute top-4 right-4 text-[#75716e] hover:text-white transition-colors text-xl leading-none"
+            >✕</button>
+            <div className="text-center mb-5">
+              <div className="text-4xl mb-3">⚠️</div>
+              <h2 className="text-lg font-bold text-white mb-2">회원 탈퇴</h2>
+              <p className="text-[#a4a09c] text-sm leading-relaxed">
+                탈퇴하면 저장된 모든 영상, 폴더, 친구 관계가 <span className="text-red-400 font-bold">영구 삭제</span>됩니다.
+                이 작업은 되돌릴 수 없습니다.
+              </p>
+            </div>
+            <div className="bg-[#2a2826] rounded-2xl p-4 mb-5">
+              <p className="text-[#75716e] text-xs mb-2">탈퇴를 진행하려면 아래에 <span className="text-white font-bold">탈퇴합니다</span>를 입력하세요</p>
+              <input
+                type="text"
+                value={withdrawConfirm}
+                onChange={e => setWithdrawConfirm(e.target.value)}
+                placeholder="탈퇴합니다"
+                disabled={withdrawing}
+                className="w-full bg-[#1c1a18] border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder:text-[#4a4745] focus:outline-none focus:border-red-500/50 transition-colors"
+              />
+            </div>
+            {withdrawError && (
+              <p className="text-red-400 text-xs text-center mb-4">{withdrawError}</p>
+            )}
+            <button
+              onClick={handleDeleteAccount}
+              disabled={withdrawConfirm !== '탈퇴합니다' || withdrawing}
+              className="w-full py-3 bg-red-600 hover:bg-red-500 disabled:bg-[#3a3836] disabled:text-[#75716e] text-white font-bold rounded-2xl text-sm transition-colors flex items-center justify-center gap-2"
+            >
+              {withdrawing ? (
+                <>
+                  <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                  </svg>
+                  탈퇴 처리 중...
+                </>
+              ) : '탈퇴하기'}
+            </button>
+          </div>
+        </div>
       )}
 
       {/* 선생님 전환 모달 */}

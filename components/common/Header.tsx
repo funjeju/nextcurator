@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useRef } from 'react'
 import Link from 'next/link'
 import { useAuth } from '@/providers/AuthProvider'
 import { getTotalUnread } from '@/lib/db'
@@ -13,6 +13,19 @@ export default function Header({ title = 'SSOKTUBE' }: { title?: string }) {
   const { theme, toggle } = useTheme()
   const [unread, setUnread] = useState(0)
   const [showMessages, setShowMessages] = useState(false)
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const mobileMenuRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!mobileMenuOpen) return
+    const handler = (e: MouseEvent) => {
+      if (mobileMenuRef.current && !mobileMenuRef.current.contains(e.target as Node)) {
+        setMobileMenuOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [mobileMenuOpen])
 
   useEffect(() => {
     if (!user) { setUnread(0); return }
@@ -95,21 +108,68 @@ export default function Header({ title = 'SSOKTUBE' }: { title?: string }) {
             )}
           </button>
 
-          {/* 모바일 */}
-          {isStudent ? (
-            <Link href="/mypage" onClick={handleNav} className="md:hidden text-[11px] text-blue-400 whitespace-nowrap px-1.5 py-1 rounded-md hover:bg-white/5 transition-colors">수업</Link>
-          ) : isTeacher && classCode ? (
-            <Link href={`/classroom/${classCode}`} onClick={handleNav} className="md:hidden text-[11px] text-emerald-400 whitespace-nowrap px-1.5 py-1 rounded-md hover:bg-white/5 transition-colors">클래스</Link>
-          ) : (
-            <>
-              <Link href="/mypage" onClick={handleNav} className="md:hidden text-[11px] text-[#a4a09c] hover:text-white whitespace-nowrap px-1.5 py-1 rounded-md hover:bg-white/5 transition-colors">My</Link>
-              <Link href="/square" onClick={handleNav} className="md:hidden text-[11px] text-[#a4a09c] hover:text-white whitespace-nowrap px-1.5 py-1 rounded-md hover:bg-white/5 transition-colors">Square</Link>
-            </>
-          )}
+          {/* 모바일 햄버거 */}
+          <div className="md:hidden relative" ref={mobileMenuRef}>
+            <button
+              onClick={() => setMobileMenuOpen(v => !v)}
+              className="w-8 h-8 flex items-center justify-center rounded-full text-[#a4a09c] hover:text-white hover:bg-white/8 transition-all"
+              aria-label="메뉴"
+            >
+              {mobileMenuOpen ? (
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+              ) : (
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+              )}
+            </button>
+            {mobileMenuOpen && (
+              <div className="absolute right-0 top-10 w-44 bg-[#1c1a18] border border-white/10 rounded-2xl shadow-2xl py-2 z-50">
+                {isStudent ? (
+                  <Link href="/mypage" onClick={() => { handleNav; setMobileMenuOpen(false) }} className="flex items-center gap-2 px-4 py-2.5 text-sm text-blue-400 hover:bg-white/5 transition-colors">
+                    <span>📚</span> 수업자료
+                  </Link>
+                ) : (
+                  <>
+                    <Link href="/mypage" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-2 px-4 py-2.5 text-sm text-[#a4a09c] hover:text-white hover:bg-white/5 transition-colors">
+                      <span>👤</span> My Page
+                    </Link>
+                    <Link href="/square" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-2 px-4 py-2.5 text-sm text-[#a4a09c] hover:text-white hover:bg-white/5 transition-colors">
+                      <span>🟧</span> Square
+                    </Link>
+                    {isTeacher && classCode && (
+                      <Link href={`/classroom/${classCode}`} onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-2 px-4 py-2.5 text-sm text-emerald-400 hover:text-emerald-300 hover:bg-white/5 transition-colors font-bold">
+                        <span>🏫</span> 내 클래스
+                      </Link>
+                    )}
+                    {isTeacher && !classCode && (
+                      <Link href="/classroom/setup" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-2 px-4 py-2.5 text-sm text-emerald-400 hover:bg-white/5 transition-colors">
+                        <span>➕</span> 클래스 만들기
+                      </Link>
+                    )}
+                  </>
+                )}
+                <div className="border-t border-white/5 mt-1 pt-1">
+                  {user ? (
+                    <button onClick={() => { signOut(); setMobileMenuOpen(false) }} className="w-full text-left flex items-center gap-2 px-4 py-2.5 text-sm text-orange-400 hover:bg-white/5 transition-colors">
+                      <span>🚪</span> 로그아웃
+                    </button>
+                  ) : (
+                    <>
+                      <button onClick={() => { openAuthModal('login'); setMobileMenuOpen(false) }} className="w-full text-left flex items-center gap-2 px-4 py-2.5 text-sm text-[#a4a09c] hover:text-white hover:bg-white/5 transition-colors">
+                        <span>🔑</span> 로그인
+                      </button>
+                      <button onClick={() => { openAuthModal('signup'); setMobileMenuOpen(false) }} className="w-full text-left flex items-center gap-2 px-4 py-2.5 text-sm text-orange-400 hover:bg-white/5 transition-colors">
+                        <span>✨</span> 회원가입
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
 
           {user ? (
-            <div className="flex items-center gap-1.5 ml-1 pl-1.5 border-l border-white/10 md:border-none md:ml-0 md:pl-0">
-              {/* 학생 계정: 메시지 아이콘 숨김 */}
+            <div className="flex items-center gap-1.5">
+              {/* 메시지 아이콘 (학생 제외) */}
               {!isStudent && (
                 <button
                   onClick={() => setShowMessages(v => !v)}
@@ -123,7 +183,7 @@ export default function Header({ title = 'SSOKTUBE' }: { title?: string }) {
                   )}
                 </button>
               )}
-              {/* 학생은 이름 표시, 그 외는 프로필 사진 */}
+              {/* 프로필 아바타 (모바일: 항상 표시) */}
               {isStudent ? (
                 <span className="text-xs text-white font-bold">{userProfile?.studentName || userProfile?.displayName}</span>
               ) : user.photoURL ? (
@@ -138,7 +198,8 @@ export default function Header({ title = 'SSOKTUBE' }: { title?: string }) {
               ) : (
                 <div className="w-6 h-6 rounded-full bg-[#3d3a38] flex items-center justify-center text-xs border border-white/10">👤</div>
               )}
-              <button onClick={signOut} className="text-[11px] text-orange-400 hover:text-orange-300 whitespace-nowrap">
+              {/* Logout: 데스크탑만 */}
+              <button onClick={signOut} className="hidden md:inline text-[11px] text-orange-400 hover:text-orange-300 whitespace-nowrap">
                 Logout
               </button>
             </div>
@@ -150,15 +211,16 @@ export default function Header({ title = 'SSOKTUBE' }: { title?: string }) {
               >
                 📖 학생 로그인
               </Link>
+              {/* 로그인/가입: 데스크탑만 (모바일은 햄버거에서) */}
               <button
                 onClick={() => openAuthModal('login')}
-                className="px-3 py-1.5 bg-white/10 text-white text-xs font-bold rounded-full hover:bg-white/20 transition-colors whitespace-nowrap border border-white/10"
+                className="hidden md:inline-flex px-3 py-1.5 bg-white/10 text-white text-xs font-bold rounded-full hover:bg-white/20 transition-colors whitespace-nowrap border border-white/10"
               >
                 로그인
               </button>
               <button
                 onClick={() => openAuthModal('signup')}
-                className="px-3 py-1.5 bg-orange-500 text-white text-xs font-bold rounded-full hover:bg-orange-600 transition-colors whitespace-nowrap"
+                className="hidden md:inline-flex px-3 py-1.5 bg-orange-500 text-white text-xs font-bold rounded-full hover:bg-orange-600 transition-colors whitespace-nowrap"
               >
                 회원가입
               </button>

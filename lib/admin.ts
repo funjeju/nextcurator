@@ -1,4 +1,4 @@
-const ADMIN_EMAIL = process.env.ADMIN_EMAIL   // 서버 전용 (NEXT_PUBLIC_ 아님)
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL || process.env.NEXT_PUBLIC_ADMIN_EMAIL
 const API_KEY = process.env.NEXT_PUBLIC_FIREBASE_API_KEY!
 
 /**
