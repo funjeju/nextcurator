@@ -72,12 +72,13 @@ export async function generateUniqueClassCode(): Promise<string> {
 // ─────────────────────────────────────────────
 
 export function buildStudentEmail(classCode: string, studentName: string): string {
-  // 한국어 이름 포함 안전하게 Base64 변환
-  const encoded = Buffer.from(encodeURIComponent(studentName))
+  // UTF-8 바이트를 직접 base64로 인코딩 — 한글 자모 단위로 고유성 보장
+  // 주의: encodeURIComponent + slice 방식은 비슷한 이름의 공통 prefix를 잘라내서
+  //       "심지후"/"심지현"/"심지민" 등이 동일한 이메일이 되는 버그가 있었음
+  const encoded = Buffer.from(studentName, 'utf8')
     .toString('base64')
     .replace(/[+/=]/g, '')
     .toLowerCase()
-    .slice(0, 20)
   return `${classCode.toLowerCase()}.${encoded}@cls.ssoktube.com`
 }
 

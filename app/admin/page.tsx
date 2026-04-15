@@ -6,6 +6,7 @@ import { useAuth } from '@/providers/AuthProvider'
 import { useRouter } from 'next/navigation'
 import { formatRelativeDate } from '@/lib/formatDate'
 import Link from 'next/link'
+import AnalyticsTab from '@/components/admin/AnalyticsTab'
 
 interface AdminStats {
   totalSummaries: number
@@ -22,7 +23,7 @@ interface UserStats {
   paid: number
 }
 
-type AdminTab = 'videos' | 'users'
+type AdminTab = 'analytics' | 'videos' | 'users'
 
 export default function AdminDashboard() {
   const { user, loading: authLoading } = useAuth()
@@ -35,7 +36,7 @@ export default function AdminDashboard() {
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [page, setPage] = useState(1)
   const [hasMore, setHasMore] = useState(true)
-  const [activeTab, setActiveTab] = useState<AdminTab>('videos')
+  const [activeTab, setActiveTab] = useState<AdminTab>('analytics')
 
   // 회원 관리
   const [users, setUsers] = useState<any[]>([])
@@ -178,7 +179,13 @@ export default function AdminDashboard() {
         </div>
 
         {/* 탭 */}
-        <div className="flex gap-2 mb-6">
+        <div className="flex gap-2 mb-6 flex-wrap">
+          <button
+            onClick={() => setActiveTab('analytics')}
+            className={`px-5 py-2.5 rounded-xl text-sm font-bold transition-colors ${activeTab === 'analytics' ? 'bg-orange-500 text-white' : 'bg-white/5 text-gray-400 hover:bg-white/10'}`}
+          >
+            📈 통계 분석
+          </button>
           <button
             onClick={() => setActiveTab('videos')}
             className={`px-5 py-2.5 rounded-xl text-sm font-bold transition-colors ${activeTab === 'videos' ? 'bg-orange-500 text-white' : 'bg-white/5 text-gray-400 hover:bg-white/10'}`}
@@ -192,6 +199,11 @@ export default function AdminDashboard() {
             👥 회원 관리
           </button>
         </div>
+
+        {/* ── 통계 분석 탭 ── */}
+        {activeTab === 'analytics' && (
+          <AnalyticsTab getAuthHeader={getAuthHeader} />
+        )}
 
         {/* ── 영상 관리 탭 ── */}
         {activeTab === 'videos' && (
@@ -344,8 +356,11 @@ export default function AdminDashboard() {
                       <tr><td colSpan={6} className="py-16 text-center text-gray-500">불러오는 중...</td></tr>
                     ) : users.length === 0 ? (
                       <tr><td colSpan={6} className="py-16 text-center text-gray-500">회원이 없습니다.</td></tr>
-                    ) : users.map(u => (
-                      <tr key={u.id} className="hover:bg-white/[0.02] transition-colors">
+                    ) : users.map(u => {
+                      const isIncomplete = !u.profileCompleted && !u.role
+                      const isStudentEmail = (u.email || '').includes('@cls.ssoktube.com')
+                      return (
+                      <tr key={u.id} className={`hover:bg-white/[0.02] transition-colors ${isIncomplete ? 'opacity-60' : ''}`}>
                         <td className="py-3 pr-4">
                           <div className="flex items-center gap-2">
                             {u.photoURL
@@ -353,7 +368,13 @@ export default function AdminDashboard() {
                               : <div className="w-7 h-7 rounded-full bg-[#3d3a38] flex items-center justify-center text-sm shrink-0">{u.avatarEmoji || '👤'}</div>
                             }
                             <div className="min-w-0">
-                              <p className="text-white font-semibold truncate max-w-[140px]">{u.displayName || u.studentName || '(이름 없음)'}</p>
+                              <div className="flex items-center gap-1">
+                                <p className={`font-semibold truncate max-w-[120px] ${!u.displayName && !u.studentName ? 'text-gray-500 italic' : 'text-white'}`}>
+                                  {u.displayName || u.studentName || '(이름 없음)'}
+                                </p>
+                                {isIncomplete && <span className="text-[8px] px-1 py-0.5 bg-yellow-500/15 text-yellow-500 rounded border border-yellow-500/20 shrink-0">미완성</span>}
+                                {isStudentEmail && !u.role && <span className="text-[8px] px-1 py-0.5 bg-blue-500/15 text-blue-400 rounded border border-blue-500/20 shrink-0">학생?</span>}
+                              </div>
                               <p className="text-gray-500 text-[9px] truncate max-w-[140px]">{u.email}</p>
                             </div>
                           </div>
@@ -382,7 +403,8 @@ export default function AdminDashboard() {
                           {u.createdAt || u.updatedAt ? formatRelativeDate(u.createdAt || u.updatedAt) : '-'}
                         </td>
                       </tr>
-                    ))}
+                    )})}
+
                   </tbody>
                 </table>
               </div>

@@ -81,7 +81,8 @@ export async function POST(req: NextRequest) {
     const signUpRes = await fetch(signUpUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password, returnSecureToken: true }),
+      // displayName을 Firebase Auth에 함께 저장 — 이후 initNewUserTokens가 이름을 정확히 불러오도록
+      body: JSON.stringify({ email, password, displayName: studentName, returnSecureToken: true }),
     })
     const signUpData = await signUpRes.json()
     if (!signUpRes.ok) {
