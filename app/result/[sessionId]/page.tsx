@@ -91,7 +91,10 @@ export async function generateMetadata(
       type: 'article',
       url: `https://ssoktube.com/result/${sessionId}`,
       siteName: 'SSOKTUBE',
-      // images는 opengraph-image.tsx가 자동으로 제공하므로 별도 지정 안 함
+      // 유튜브 썸네일을 og:image로 명시 → 카카오 등 링크 미리보기에서 썸네일 표시
+      ...(og.thumbnail ? {
+        images: [{ url: og.thumbnail, width: 1280, height: 720, alt: og.title }],
+      } : {}),
     },
     twitter: {
       card: 'summary_large_image',

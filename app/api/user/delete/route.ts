@@ -22,32 +22,107 @@ async function getUidFromToken(idToken: string): Promise<string | null> {
   }
 }
 
-async function deleteFirestoreDoc(path: string, idToken: string) {
-  const url = `${FIRESTORE_BASE}/${path}?key=${API_KEY}`
-  await fetch(url, {
-    method: 'DELETE',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${idToken}`,
-    },
-  })
-}
-
-async function listSubCollection(path: string, idToken: string): Promise<string[]> {
-  const url = `${FIRESTORE_BASE}/${path}?key=${API_KEY}&pageSize=200`
+// 최상위 컬렉션에서 userId 필드로 문서 ID 목록 조회
+async function queryDocIdsByUserId(
+  collectionId: string,
+  uid: string,
+  idToken: string,
+  userField = 'userId'
+): Promise<string[]> {
   try {
+    const url = `${FIRESTORE_BASE}:runQuery?key=${API_KEY}`
     const res = await fetch(url, {
-      headers: { 'Authorization': `Bearer ${idToken}` },
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${idToken}`,
+      },
+      body: JSON.stringify({
+        structuredQuery: {
+          from: [{ collectionId }],
+          where: {
+            fieldFilter: {
+              field: { fieldPath: userField },
+              op: 'EQUAL',
+              value: { stringValue: uid },
+            },
+          },
+          select: { fields: [{ fieldPath: '__name__' }] },
+          limit: 500,
+        },
+      }),
     })
     if (!res.ok) return []
-    const data = await res.json()
-    return (data.documents ?? []).map((d: any) => d.name.split('/documents/')[1])
+    const results = await res.json()
+    if (!Array.isArray(results)) return []
+    return results
+      .filter((r: any) => r.document?.name)
+      .map((r: any) => r.document.name.split('/documents/')[1])
   } catch {
     return []
   }
 }
 
-async function deleteFirebaseAuthAccount(idToken: string): Promise<boolean> {
+async function deleteFirestoreDoc(path: string, idToken: string): Promise<void> {
+  try {
+    await fetch(`${FIRESTORE_BASE}/${path}?key=${API_KEY}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${idToken}` },
+    })
+  } catch {
+    // 삭제 실패는 무시 (이미 없는 문서일 수 있음)
+  }
+}
+
+// array-contains 쿼리 (friendships.uids 등)
+async function queryDocsByArrayContains(
+  collectionId: string,
+  field: string,
+  value: string,
+  idToken: string
+): Promise<string[]> {
+  try {
+    const url = `${FIRESTORE_BASE}:runQuery?key=${API_KEY}`
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${idToken}`,
+      },
+      body: JSON.stringify({
+        structuredQuery: {
+          from: [{ collectionId }],
+          where: {
+            fieldFilter: {
+              field: { fieldPath: field },
+              op: 'ARRAY_CONTAINS',
+              value: { stringValue: value },
+            },
+          },
+          select: { fields: [{ fieldPath: '__name__' }] },
+          limit: 200,
+        },
+      }),
+    })
+    if (!res.ok) return []
+    const results = await res.json()
+    if (!Array.isArray(results)) return []
+    return results
+      .filter((r: any) => r.document?.name)
+      .map((r: any) => r.document.name.split('/documents/')[1])
+  } catch {
+    return []
+  }
+}
+
+async function deleteBatch(paths: string[], idToken: string): Promise<void> {
+  // 20개씩 병렬 처리
+  for (let i = 0; i < paths.length; i += 20) {
+    await Promise.all(paths.slice(i, i + 20).map(p => deleteFirestoreDoc(p, idToken)))
+  }
+}
+
+async function deleteFirebaseAuthAccount(idToken: string): Promise<{ ok: boolean; error?: string }> {
   try {
     const res = await fetch(
       `https://identitytoolkit.googleapis.com/v1/accounts:delete?key=${API_KEY}`,
@@ -57,9 +132,11 @@ async function deleteFirebaseAuthAccount(idToken: string): Promise<boolean> {
         body: JSON.stringify({ idToken }),
       }
     )
-    return res.ok
-  } catch {
-    return false
+    if (res.ok) return { ok: true }
+    const data = await res.json()
+    return { ok: false, error: data?.error?.message || 'AUTH_DELETE_FAILED' }
+  } catch (e: any) {
+    return { ok: false, error: e.message }
   }
 }
 
@@ -69,36 +146,49 @@ export async function POST(req: NextRequest) {
     if (!idToken) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const uid = await getUidFromToken(idToken)
-    if (!uid) return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
+    if (!uid) return NextResponse.json({ error: '유효하지 않은 토큰입니다.' }, { status: 401 })
 
-    // 1. users 문서 삭제
-    await deleteFirestoreDoc(`users/${uid}`, idToken)
+    // 본문에서 classCode 읽기 (학생 탈퇴용)
+    const body = await req.json().catch(() => ({}))
+    const classCode: string | null = body.classCode || null
 
-    // 2. 저장된 요약(savedSummaries) 삭제
-    const summaries = await listSubCollection(`users/${uid}/savedSummaries`, idToken)
-    await Promise.all(summaries.map(p => deleteFirestoreDoc(p, idToken)))
+    // 1. 최상위 컬렉션에서 본인 문서 ID 조회 (병렬)
+    const [savedIds, folderIds, friendReqFromIds, friendReqToIds] = await Promise.all([
+      queryDocIdsByUserId('saved_summaries', uid, idToken),           // userId 필드
+      queryDocIdsByUserId('folders', uid, idToken),                    // userId 필드
+      queryDocIdsByUserId('friend_requests', uid, idToken, 'fromUid'), // fromUid 필드
+      queryDocIdsByUserId('friend_requests', uid, idToken, 'toUid'),   // toUid 필드
+    ])
 
-    // 3. 폴더(folders) 삭제
-    const folders = await listSubCollection(`users/${uid}/folders`, idToken)
-    await Promise.all(folders.map(p => deleteFirestoreDoc(p, idToken)))
+    // 2. friendships: uids array-contains (REST API 지원)
+    const friendshipIds = await queryDocsByArrayContains('friendships', 'uids', uid, idToken)
 
-    // 4. 친구 관계 삭제 (friends, friendRequests)
-    const friends = await listSubCollection(`users/${uid}/friends`, idToken)
-    await Promise.all(friends.map(p => deleteFirestoreDoc(p, idToken)))
+    // 3. Firestore 데이터 삭제 (병렬)
+    await Promise.all([
+      deleteFirestoreDoc(`users/${uid}`, idToken),
+      deleteBatch(savedIds, idToken),
+      deleteBatch(folderIds, idToken),
+      deleteBatch([...friendReqFromIds, ...friendReqToIds], idToken),
+      deleteBatch(friendshipIds, idToken),
+    ])
 
-    const friendReqs = await listSubCollection(`users/${uid}/friendRequests`, idToken)
-    await Promise.all(friendReqs.map(p => deleteFirestoreDoc(p, idToken)))
-
-    // 5. 학생인 경우: 클래스에서 제거 (user 문서에서 classCode 조회 불가하므로 클라이언트가 전달)
-    const { classCode } = await req.json().catch(() => ({}))
+    // 4. 학생인 경우 클래스 students 서브컬렉션에서 제거
     if (classCode) {
       await deleteFirestoreDoc(`classes/${classCode}/students/${uid}`, idToken)
     }
 
-    // 6. Firebase Auth 계정 삭제
-    const authDeleted = await deleteFirebaseAuthAccount(idToken)
-    if (!authDeleted) {
-      return NextResponse.json({ error: '계정 삭제에 실패했습니다. 다시 로그인 후 시도해주세요.' }, { status: 500 })
+    // 5. Firebase Auth 계정 삭제 (마지막 — 이후 idToken 무효화)
+    const authResult = await deleteFirebaseAuthAccount(idToken)
+    if (!authResult.ok) {
+      // Auth 삭제 실패 시 — Firestore 데이터는 이미 지워졌지만 Auth만 남은 상태
+      // CREDENTIAL_TOO_OLD_LOGIN_AGAIN 등의 경우 재로그인 안내
+      const needsRelogin = authResult.error?.includes('CREDENTIAL_TOO_OLD') ||
+                           authResult.error?.includes('TOKEN_EXPIRED')
+      return NextResponse.json({
+        error: needsRelogin
+          ? '보안을 위해 재로그인 후 다시 탈퇴해주세요.'
+          : `계정 삭제 실패: ${authResult.error}`,
+      }, { status: 500 })
     }
 
     return NextResponse.json({ success: true })

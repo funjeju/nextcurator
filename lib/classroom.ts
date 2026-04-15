@@ -18,8 +18,16 @@ export interface ClassRoom {
   schoolName: string
   grade: number
   classNum: number
-  masterFolderId?: string // 교사가 학생에게 배포할 기준 폴더
+  masterFolderId?: string  // 하위호환: 단일 폴더 (deprecated)
+  masterFolderIds?: string[] // 기준 폴더 목록 (복수 지원)
   createdAt: any
+}
+
+// 기준 폴더 ID 목록 반환 (단일/복수 하위호환)
+export function getMasterFolderIds(classroom: ClassRoom): string[] {
+  if (classroom.masterFolderIds?.length) return classroom.masterFolderIds
+  if (classroom.masterFolderId) return [classroom.masterFolderId]
+  return []
 }
 
 export interface ActivityLog {
@@ -27,7 +35,7 @@ export interface ActivityLog {
   studentId: string
   studentName: string
   classCode: string
-  type: 'login' | 'play' | 'quiz' | 'meta'
+  type: 'login' | 'logout' | 'play' | 'quiz' | 'meta' | 'comment' | 'segment'
   videoId?: string
   sessionId?: string
   videoTitle?: string
@@ -91,7 +99,7 @@ export async function createClass(data: Omit<ClassRoom, 'classCode' | 'createdAt
   await setDoc(doc(db, 'classes', classCode), {
     ...data,
     classCode,
-    masterFolderId: data.masterFolderId || null,
+    masterFolderIds: data.masterFolderIds || [],
     createdAt: serverTimestamp(),
   })
   return classCode
@@ -111,6 +119,19 @@ export async function getTeacherClasses(teacherId: string): Promise<ClassRoom[]>
 
 export async function setMasterFolder(classCode: string, folderId: string): Promise<void> {
   await setDoc(doc(db, 'classes', classCode), { masterFolderId: folderId }, { merge: true })
+}
+
+// 기준 폴더 토글 (추가/제거)
+export async function toggleMasterFolder(
+  classCode: string,
+  folderId: string,
+  currentIds: string[],
+): Promise<string[]> {
+  const newIds = currentIds.includes(folderId)
+    ? currentIds.filter(id => id !== folderId)
+    : [...currentIds, folderId]
+  await setDoc(doc(db, 'classes', classCode), { masterFolderIds: newIds }, { merge: true })
+  return newIds
 }
 
 // ─────────────────────────────────────────────

@@ -86,6 +86,7 @@ export default function RoomClient({ roomId }: { roomId: string }) {
 
   const playerRef = useRef<YT.Player | null>(null)
   const chatBottomRef = useRef<HTMLDivElement>(null)
+  const mobileChatBottomRef = useRef<HTMLDivElement>(null)
   const isSyncing = useRef(false)  // 참여자 동기화 무한루프 방지
 
   const isHost = room?.hostUid === uid
@@ -143,6 +144,7 @@ export default function RoomClient({ roomId }: { roomId: string }) {
   // ── 채팅 스크롤 ──────────────────────────────────────────────────────────────
   useEffect(() => {
     chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    mobileChatBottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
   // ── 입장 처리 ────────────────────────────────────────────────────────────────
@@ -537,6 +539,84 @@ export default function RoomClient({ roomId }: { roomId: string }) {
             >
               ✋ {myHandRaised ? '손 내리기' : '손들기'}
             </button>
+          </div>
+
+          {/* ── 모바일 채팅 (md 이상 사이드바로 대체) ── */}
+          <div className="md:hidden flex flex-col border-t border-white/10">
+            <div className="shrink-0 flex items-center gap-2 px-4 py-2 bg-[#252423] border-b border-white/10">
+              <span className="text-xs font-semibold text-[#a4a09c]">💬 채팅</span>
+              <span className="text-[10px] text-[#75716e]">{messages.filter(m => m.type === 'chat' || m.type === 'emoji' || m.type === 'note').length}개</span>
+            </div>
+            <div className="h-52 overflow-y-auto p-3 space-y-2 bg-[#252423]">
+              {messages.map(msg => {
+                if (msg.type === 'system') return (
+                  <p key={msg.id} className="text-center text-[#75716e] text-[10px] py-1">{msg.content}</p>
+                )
+                if (msg.type === 'emoji') return (
+                  <div key={msg.id} className="flex items-center gap-1.5">
+                    <span className="text-[#75716e] text-[10px]">{msg.displayName}</span>
+                    <span className="text-xl">{msg.content}</span>
+                  </div>
+                )
+                if (msg.type === 'note') return (
+                  <div key={msg.id} className="bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-2 space-y-0.5">
+                    <p className="text-yellow-300 text-[10px] font-semibold">{msg.displayName} · 📝 {msg.videoTs} 메모</p>
+                    <p className="text-white text-xs">{msg.content}</p>
+                  </div>
+                )
+                if (msg.type === 'file') return (
+                  <div key={msg.id} className="space-y-0.5">
+                    <p className="text-[#75716e] text-[9px]">{msg.displayName}</p>
+                    <a href={msg.fileUrl} target="_blank" rel="noopener noreferrer"
+                      className="flex items-center gap-2 px-3 py-2 bg-[#32302e] border border-white/10 rounded-xl transition-colors">
+                      <span className="text-xl shrink-0">
+                        {msg.fileType?.startsWith('image/') ? '🖼️' :
+                         msg.fileType?.startsWith('video/') ? '🎬' :
+                         msg.fileType === 'application/pdf' ? '📄' : '📎'}
+                      </span>
+                      <p className="text-white text-xs truncate">{msg.content}</p>
+                    </a>
+                  </div>
+                )
+                const isMe = msg.uid === uid
+                return (
+                  <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'} gap-2`}>
+                    {!isMe && (
+                      <div className="w-6 h-6 rounded-full bg-[#3d3a38] shrink-0 mt-0.5 text-[10px] flex items-center justify-center">👤</div>
+                    )}
+                    <div className="max-w-[80%]">
+                      {!isMe && <p className="text-[#75716e] text-[9px] mb-0.5">{msg.displayName}</p>}
+                      <div className={`px-2.5 py-1.5 rounded-2xl text-xs leading-relaxed ${
+                        isMe ? 'bg-orange-500 text-white rounded-br-sm' : 'bg-[#32302e] text-[#e8e4e0] rounded-bl-sm'
+                      }`}>
+                        {msg.content}
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+              <div ref={mobileChatBottomRef} />
+            </div>
+            <div className="shrink-0 p-2 border-t border-white/10 bg-[#252423]">
+              <div className="flex gap-2">
+                <input
+                  value={chatInput}
+                  onChange={e => setChatInput(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendChat() } }}
+                  placeholder="메시지 입력..."
+                  className="flex-1 h-9 px-3 bg-[#32302e] border border-white/10 rounded-xl text-xs text-white placeholder:text-[#75716e] focus:outline-none focus:border-orange-500/50"
+                />
+                <button
+                  onClick={handleSendChat}
+                  disabled={!chatInput.trim()}
+                  className="w-9 h-9 rounded-xl bg-orange-500 hover:bg-orange-600 text-white flex items-center justify-center disabled:opacity-40 transition-colors shrink-0"
+                >
+                  <svg className="w-3.5 h-3.5 rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                  </svg>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
 

@@ -26,6 +26,9 @@ async function getClass(classCode: string) {
     grade: Number(data.fields.grade?.integerValue),
     classNum: Number(data.fields.classNum?.integerValue),
     masterFolderId: data.fields.masterFolderId?.stringValue || null,
+    masterFolderIds: (data.fields.masterFolderIds?.arrayValue?.values ?? [])
+      .map((v: any) => v.stringValue)
+      .filter(Boolean) as string[],
   }
 }
 
@@ -148,6 +151,7 @@ export async function POST(req: NextRequest) {
       classCode: upperCode,
       teacherName: classroom.teacherName,
       masterFolderId: classroom.masterFolderId,
+      masterFolderIds: classroom.masterFolderIds,
       teacherId: classroom.teacherId,
     })
   } catch (error: any) {

@@ -96,6 +96,10 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
   const [worksheetLoading, setWorksheetLoading] = useState(false)
   const [worksheetLevel, setWorksheetLevel] = useState<'elementary' | 'middle' | 'advanced'>('elementary')
 
+  // 배속
+  const [playbackRate, setPlaybackRate] = useState(1)
+  const [showSpeedMenu, setShowSpeedMenu] = useState(false)
+
   // 구간별 요약 (30분+ 영상)
   const [segments, setSegments] = useState<any[] | null>(null)
   const [segmentsLoading, setSegmentsLoading] = useState(false)
@@ -483,7 +487,7 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
     }
   }
 
-  // 링크 복사/공유 — 모바일은 네이티브 공유 시트 (썸네일 파일 첨부 시도), PC는 클립보드 복사
+  // 링크 복사/공유 — 모바일: 네이티브 공유 시트 (URL+텍스트만), PC: 클립보드 복사
   const handleShare = async () => {
     if (!data) return
     setSharing(true)
@@ -491,23 +495,11 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
     const isMobile = typeof navigator !== 'undefined' && navigator.maxTouchPoints > 0
     try {
       if (isMobile && navigator.share) {
-        // 썸네일을 File로 변환해서 같이 공유 시도 (지원 브라우저만)
-        let files: File[] | undefined
-        if (data.thumbnail && navigator.canShare) {
-          try {
-            const imgRes = await fetch(`/api/proxy-image?url=${encodeURIComponent(data.thumbnail)}`)
-            if (imgRes.ok) {
-              const blob = await imgRes.blob()
-              const file = new File([blob], 'thumbnail.jpg', { type: 'image/jpeg' })
-              if (navigator.canShare({ files: [file] })) files = [file]
-            }
-          } catch { /* 썸네일 첨부 실패 시 URL만 공유 */ }
-        }
+        // 파일 첨부 없이 URL만 공유 — 카카오 등에서 OG 이미지로 썸네일이 자동 표시됨
         await navigator.share({
           title: data.title,
           text: `${data.title} — SSOKTUBE AI 요약`,
           url: pageUrl,
-          ...(files ? { files } : {}),
         })
       } else {
         // PC: 클립보드 복사
@@ -567,9 +559,45 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
 
         {/* 플레이어 (YouTube가 아닌 경우 썸네일 or 소스 표시) */}
         {data.videoId ? (
-          <div className="sticky top-[68px] md:top-[76px] z-40 bg-zinc-950 pb-4 shadow-[0_15px_20px_-10px_rgba(9,9,11,1)]">
+          <div className="sticky top-[68px] md:top-[76px] z-40 bg-zinc-950 pb-2 shadow-[0_15px_20px_-10px_rgba(9,9,11,1)]">
             <div className="rounded-xl overflow-hidden shadow-2xl border border-white/10 ring-1 ring-black/50">
               <YoutubePlayer videoId={data.videoId} onPlayerReady={handlePlayerReady} onWatchLog={handleWatchLog} />
+            </div>
+            {/* 배속 컨트롤 */}
+            <div className="flex items-center justify-end px-1 pt-2">
+              <div className="relative">
+                <button
+                  onClick={() => setShowSpeedMenu(v => !v)}
+                  className="flex items-center gap-1 px-3 h-7 rounded-lg bg-white/5 hover:bg-white/10 text-xs text-zinc-400 hover:text-white transition-colors border border-white/5"
+                >
+                  🐇 <span className="font-mono">{playbackRate}x</span>
+                  <span className="text-[9px] opacity-50 ml-0.5">▾</span>
+                </button>
+                {showSpeedMenu && (
+                  <>
+                    <div className="fixed inset-0 z-10" onClick={() => setShowSpeedMenu(false)} />
+                    <div className="absolute bottom-9 right-0 flex gap-1 bg-zinc-900 border border-white/10 rounded-xl p-1.5 shadow-2xl z-20">
+                      {[0.5, 0.75, 1, 1.25, 1.5, 2].map(r => (
+                        <button
+                          key={r}
+                          onClick={() => {
+                            setPlaybackRate(r)
+                            setShowSpeedMenu(false)
+                            playerRef.current?.setPlaybackRate(r)
+                          }}
+                          className={`px-2.5 py-1 rounded-lg text-xs transition-colors font-mono ${
+                            r === playbackRate
+                              ? 'bg-orange-500 text-white font-bold'
+                              : 'text-zinc-400 hover:bg-white/10 hover:text-white'
+                          }`}
+                        >
+                          {r}x
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
           </div>
         ) : (data as any).sourceUrl || (data as any).sourceType === 'pdf' ? (

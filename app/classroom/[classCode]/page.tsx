@@ -8,7 +8,8 @@ import Link from 'next/link'
 import { formatRelativeDate } from '@/lib/formatDate'
 import {
   getClass, getClassStudents, getClassLogs, summarizeStudentLogs,
-  setMasterFolder, pushVideoToClass, ClassRoom, ActivityLog
+  toggleMasterFolder, getMasterFolderIds, pushVideoToClass,
+  ClassRoom, ActivityLog
 } from '@/lib/classroom'
 import { getUserFolders, getSavedSummariesByFolder } from '@/lib/db'
 
@@ -25,6 +26,70 @@ interface StudentRow {
   lastActive: any
 }
 
+interface VideoRecord {
+  videoId: string
+  videoTitle: string
+  watchDurationSec: number
+  percentWatched: number
+  completed: boolean
+  meta: { complete: number; confused: number; unknown: number }
+  quiz: { attempts: number; correct: number }
+  comments: ActivityLog[]
+  segments: ActivityLog[]
+  lastSeen: any
+}
+
+function buildVideoRecords(logs: ActivityLog[]): VideoRecord[] {
+  const byVideo: Record<string, VideoRecord> = {}
+  for (const log of logs) {
+    if (!log.videoId) continue
+    if (!byVideo[log.videoId]) {
+      byVideo[log.videoId] = {
+        videoId: log.videoId,
+        videoTitle: log.videoTitle || '(제목 없음)',
+        watchDurationSec: 0,
+        percentWatched: 0,
+        completed: false,
+        meta: { complete: 0, confused: 0, unknown: 0 },
+        quiz: { attempts: 0, correct: 0 },
+        comments: [],
+        segments: [],
+        lastSeen: log.timestamp,
+      }
+    }
+    const vr = byVideo[log.videoId]
+    if (!vr.lastSeen && log.timestamp) vr.lastSeen = log.timestamp
+    if (log.type === 'play') {
+      vr.watchDurationSec += log.value.durationSec || 0
+      vr.percentWatched = Math.max(vr.percentWatched, log.value.percentWatched || 0)
+      if (log.value.completed) vr.completed = true
+    }
+    if (log.type === 'meta') {
+      if (log.value.level === 'complete') vr.meta.complete++
+      else if (log.value.level === 'confused') vr.meta.confused++
+      else if (log.value.level === 'unknown') vr.meta.unknown++
+    }
+    if (log.type === 'quiz') {
+      vr.quiz.attempts++
+      if (log.value.correct) vr.quiz.correct++
+    }
+    if (log.type === 'comment') vr.comments.push(log)
+    if (log.type === 'segment') vr.segments.push(log)
+  }
+  return Object.values(byVideo).sort((a, b) => {
+    const aT = a.lastSeen?.toMillis?.() ?? 0
+    const bT = b.lastSeen?.toMillis?.() ?? 0
+    return bT - aT
+  })
+}
+
+function fmtDuration(sec: number): string {
+  if (!sec) return '-'
+  const m = Math.floor(sec / 60)
+  const s = sec % 60
+  return m > 0 ? `${m}분 ${s}초` : `${s}초`
+}
+
 export default function ClassDashboard() {
   const { user, userProfile, loading: authLoading } = useAuth()
   const router = useRouter()
@@ -38,14 +103,15 @@ export default function ClassDashboard() {
   const [folders, setFolders] = useState<any[]>([])
   const [selectedStudent, setSelectedStudent] = useState<StudentRow | null>(null)
   const [studentLogs, setStudentLogs] = useState<ActivityLog[]>([])
-  const [pushingFolder, setPushingFolder] = useState(false)
+  const [studentDetailTab, setStudentDetailTab] = useState<'videos' | 'access'>('videos')
+  const [loadingLogs, setLoadingLogs] = useState(false)
+  const [pushingFolder, setPushingFolder] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
 
   const loadData = useCallback(async () => {
     if (!user || !classCode) return
     setLoading(true)
     try {
-      // logs는 실패해도 대시보드는 표시
       const [cls, studentList, userFolders] = await Promise.all([
         getClass(classCode),
         getClassStudents(classCode).catch(() => []),
@@ -53,7 +119,6 @@ export default function ClassDashboard() {
       ])
 
       if (!cls) {
-        // 방금 생성된 클래스라면 짧게 재시도
         await new Promise(r => setTimeout(r, 1000))
         const retry = await getClass(classCode).catch(() => null)
         if (!retry || retry.teacherId !== user.uid) {
@@ -74,10 +139,8 @@ export default function ClassDashboard() {
       setClassroom(cls)
       setFolders(userFolders)
 
-      // 로그 조회 (실패해도 학생 목록은 표시)
       const logs = await getClassLogs(classCode, 1000).catch(() => [])
 
-      // 학생별 활동 집계
       const rows: StudentRow[] = studentList.map((s: any) => {
         const sLogs = logs.filter((l: ActivityLog) => l.studentId === s.uid)
         const summary = summarizeStudentLogs(sLogs)
@@ -107,17 +170,18 @@ export default function ClassDashboard() {
     if (!authLoading) loadData()
   }, [authLoading, loadData])
 
-  const handleSetMasterFolder = async (folderId: string) => {
-    if (!classCode) return
-    await setMasterFolder(classCode, folderId)
-    setClassroom(prev => prev ? { ...prev, masterFolderId: folderId } : prev)
-    alert('기준 폴더가 설정됐습니다. 이제 신규 학생이 참여하면 이 폴더의 영상이 자동 배포됩니다.')
+  const masterFolderIds = classroom ? getMasterFolderIds(classroom) : []
+
+  const handleToggleMasterFolder = async (folderId: string) => {
+    if (!classCode || !classroom) return
+    const newIds = await toggleMasterFolder(classCode, folderId, masterFolderIds)
+    setClassroom(prev => prev ? { ...prev, masterFolderIds: newIds } : prev)
   }
 
   const handlePushToAll = async (folderId: string) => {
     if (!classroom || !user) return
     if (!confirm('현재 이 폴더의 모든 영상을 기존 학생 전체에게 배포하시겠습니까?')) return
-    setPushingFolder(true)
+    setPushingFolder(folderId)
     try {
       const items = await getSavedSummariesByFolder(user.uid, folderId)
       for (const item of items) {
@@ -127,14 +191,21 @@ export default function ClassDashboard() {
     } catch (e: any) {
       alert('배포 중 오류: ' + e.message)
     } finally {
-      setPushingFolder(false)
+      setPushingFolder(null)
     }
   }
 
   const openStudentDetail = async (student: StudentRow) => {
     setSelectedStudent(student)
-    const logs = await getClassLogs(classCode, 1000)
-    setStudentLogs(logs.filter(l => l.studentId === student.uid))
+    setStudentDetailTab('videos')
+    setStudentLogs([])
+    setLoadingLogs(true)
+    try {
+      const logs = await getClassLogs(classCode, 1000)
+      setStudentLogs(logs.filter(l => l.studentId === student.uid))
+    } finally {
+      setLoadingLogs(false)
+    }
   }
 
   const copyCode = () => {
@@ -159,6 +230,9 @@ export default function ClassDashboard() {
       <Link href="/mypage" className="mt-4 px-5 py-2.5 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-xl text-sm transition-colors">마이페이지로 이동</Link>
     </div>
   )
+
+  const videoRecords = buildVideoRecords(studentLogs)
+  const loginLogs = studentLogs.filter(l => l.type === 'login' || l.type === 'logout')
 
   return (
     <div className="min-h-screen bg-[#1a1918] text-white">
@@ -254,7 +328,7 @@ export default function ClassDashboard() {
                             onClick={() => openStudentDetail(s)}
                             className="px-3 py-1 rounded-lg bg-white/5 hover:bg-white/10 transition-colors text-gray-400"
                           >
-                            보기
+                            상세보기
                           </button>
                         </td>
                       </tr>
@@ -270,42 +344,54 @@ export default function ClassDashboard() {
         {activeTab === 'folders' && (
           <div className="bg-[#23211f] rounded-[28px] border border-white/10 p-6">
             <p className="text-sm text-gray-400 mb-6">
-              폴더를 <span className="text-orange-400 font-bold">기준 폴더</span>로 설정하면 이후 참여하는 학생에게 자동으로 복제됩니다.
+              폴더를 <span className="text-orange-400 font-bold">기준 폴더</span>로 지정하면 이후 참여하는 학생에게 자동으로 복제됩니다.
+              <span className="text-white"> 여러 개</span> 지정 가능합니다.
               기존 학생에게도 즉시 배포하려면 <span className="text-blue-400">전체 배포</span> 버튼을 사용하세요.
             </p>
+            {masterFolderIds.length > 0 && (
+              <div className="bg-orange-500/5 border border-orange-500/20 rounded-2xl px-4 py-3 mb-4 text-xs text-orange-300">
+                기준 폴더 <span className="font-bold text-orange-400">{masterFolderIds.length}개</span> 지정됨
+              </div>
+            )}
             {folders.length === 0 ? (
               <p className="text-gray-500 text-sm">폴더가 없습니다. 내 페이지에서 폴더를 먼저 만들어주세요.</p>
             ) : (
               <div className="space-y-3">
-                {folders.map(folder => (
-                  <div key={folder.id} className="flex items-center justify-between bg-[#1a1918] rounded-2xl px-5 py-4 border border-white/5">
-                    <div className="flex items-center gap-3">
-                      <span className="text-xl">📁</span>
-                      <div>
-                        <p className="font-bold text-sm">{folder.name}</p>
-                        {classroom.masterFolderId === folder.id && (
-                          <span className="text-[9px] text-orange-400 font-bold bg-orange-500/10 px-2 py-0.5 rounded-full">기준 폴더</span>
-                        )}
+                {folders.map(folder => {
+                  const isMaster = masterFolderIds.includes(folder.id)
+                  return (
+                    <div key={folder.id} className={`flex items-center justify-between rounded-2xl px-5 py-4 border transition-colors ${isMaster ? 'bg-orange-500/5 border-orange-500/30' : 'bg-[#1a1918] border-white/5'}`}>
+                      <div className="flex items-center gap-3">
+                        <span className="text-xl">📁</span>
+                        <div>
+                          <p className="font-bold text-sm">{folder.name}</p>
+                          {isMaster && (
+                            <span className="text-[9px] text-orange-400 font-bold bg-orange-500/10 px-2 py-0.5 rounded-full">✓ 기준 폴더</span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => handleToggleMasterFolder(folder.id)}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+                            isMaster
+                              ? 'bg-orange-500/20 text-orange-400 hover:bg-orange-500/30'
+                              : 'bg-white/5 text-gray-400 hover:bg-white/10'
+                          }`}
+                        >
+                          {isMaster ? '✓ 기준폴더 해제' : '기준폴더 지정'}
+                        </button>
+                        <button
+                          onClick={() => handlePushToAll(folder.id)}
+                          disabled={pushingFolder === folder.id}
+                          className="px-3 py-1.5 rounded-lg text-xs bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 disabled:opacity-50 transition-colors font-bold"
+                        >
+                          {pushingFolder === folder.id ? '배포 중...' : '전체 배포'}
+                        </button>
                       </div>
                     </div>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => handleSetMasterFolder(folder.id)}
-                        disabled={classroom.masterFolderId === folder.id}
-                        className="px-3 py-1.5 rounded-lg text-xs bg-orange-500/10 text-orange-400 hover:bg-orange-500/20 disabled:opacity-30 transition-colors font-bold"
-                      >
-                        {classroom.masterFolderId === folder.id ? '✓ 기준폴더' : '기준폴더 지정'}
-                      </button>
-                      <button
-                        onClick={() => handlePushToAll(folder.id)}
-                        disabled={pushingFolder}
-                        className="px-3 py-1.5 rounded-lg text-xs bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 disabled:opacity-50 transition-colors font-bold"
-                      >
-                        전체 배포
-                      </button>
-                    </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             )}
           </div>
@@ -328,35 +414,144 @@ export default function ClassDashboard() {
       {/* 학생 상세 모달 */}
       {selectedStudent && (
         <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4" onClick={() => setSelectedStudent(null)}>
-          <div className="bg-[#23211f] rounded-[28px] border border-white/10 w-full max-w-lg max-h-[80vh] overflow-y-auto p-6" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-lg font-black">{selectedStudent.studentName} 학생 활동 기록</h2>
-              <button onClick={() => setSelectedStudent(null)} className="text-gray-400 hover:text-white text-xl">✕</button>
+          <div
+            className="bg-[#23211f] rounded-[28px] border border-white/10 w-full max-w-2xl max-h-[90vh] flex flex-col"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* 모달 헤더 */}
+            <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-white/5 shrink-0">
+              <div>
+                <h2 className="text-lg font-black">{selectedStudent.studentName}</h2>
+                <p className="text-xs text-gray-500 mt-0.5">학생 활동 상세 기록</p>
+              </div>
+              <button onClick={() => setSelectedStudent(null)} className="text-gray-400 hover:text-white text-xl leading-none">✕</button>
             </div>
 
-            <div className="grid grid-cols-3 gap-3 mb-6">
-              <MiniStat label="✅ 완전이해" value={selectedStudent.metaComplete} color="text-emerald-400" />
-              <MiniStat label="🤔 알쏭달쏭" value={selectedStudent.metaConfused} color="text-yellow-400" />
-              <MiniStat label="❓ 전혀모름" value={selectedStudent.metaUnknown} color="text-red-400" />
+            {/* 요약 카드 */}
+            <div className="grid grid-cols-4 gap-2 px-6 py-4 shrink-0">
+              <MiniStat label="접속 횟수" value={selectedStudent.loginCount} unit="회" color="text-white" />
+              <MiniStat label="✅ 완전이해" value={selectedStudent.metaComplete} unit="건" color="text-emerald-400" />
+              <MiniStat label="퀴즈 정답" value={selectedStudent.quizAttempts > 0 ? Math.round(selectedStudent.quizCorrect / selectedStudent.quizAttempts * 100) : 0} unit="%" color="text-blue-400" />
+              <MiniStat label="❓ 모름" value={selectedStudent.metaUnknown} unit="건" color="text-red-400" />
             </div>
 
-            <div className="space-y-2">
-              <p className="text-xs text-gray-500 mb-3">최근 활동 로그</p>
-              {studentLogs.length === 0
-                ? <p className="text-gray-600 text-sm text-center py-8">활동 기록이 없습니다.</p>
-                : studentLogs.slice(0, 30).map((log, i) => (
-                  <div key={i} className="flex items-start gap-3 bg-[#1a1918] rounded-xl px-4 py-3 text-xs">
-                    <span className="text-lg">{logTypeEmoji(log.type)}</span>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-gray-300 font-medium">{logTypeLabel(log.type, log.value)}</p>
-                      {log.videoTitle && <p className="text-gray-600 truncate">{log.videoTitle}</p>}
-                    </div>
-                    <span className="text-gray-600 whitespace-nowrap">
-                      {log.timestamp ? formatRelativeDate(log.timestamp?.toDate?.() || log.timestamp) : ''}
-                    </span>
+            {/* 탭 */}
+            <div className="flex gap-2 px-6 pb-3 shrink-0">
+              <button
+                onClick={() => setStudentDetailTab('videos')}
+                className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-colors ${studentDetailTab === 'videos' ? 'bg-orange-500 text-white' : 'bg-white/5 text-gray-400 hover:bg-white/10'}`}
+              >
+                🎬 영상별 기록
+              </button>
+              <button
+                onClick={() => setStudentDetailTab('access')}
+                className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-colors ${studentDetailTab === 'access' ? 'bg-orange-500 text-white' : 'bg-white/5 text-gray-400 hover:bg-white/10'}`}
+              >
+                🔐 접속 기록
+              </button>
+            </div>
+
+            {/* 탭 콘텐츠 */}
+            <div className="overflow-y-auto flex-1 px-6 pb-6">
+              {loadingLogs ? (
+                <div className="flex items-center justify-center py-12">
+                  <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-orange-500" />
+                </div>
+              ) : studentDetailTab === 'videos' ? (
+                videoRecords.length === 0 ? (
+                  <p className="text-gray-600 text-sm text-center py-12">영상 시청 기록이 없습니다.</p>
+                ) : (
+                  <div className="space-y-3">
+                    {videoRecords.map(vr => (
+                      <div key={vr.videoId} className="bg-[#1a1918] rounded-2xl p-4 border border-white/5">
+                        {/* 영상 제목 + 완료 뱃지 */}
+                        <div className="flex items-start justify-between gap-2 mb-3">
+                          <p className="text-sm font-bold text-white leading-snug flex-1">{vr.videoTitle}</p>
+                          {vr.completed && (
+                            <span className="shrink-0 text-[9px] bg-emerald-500/20 text-emerald-400 font-bold px-2 py-0.5 rounded-full">완료</span>
+                          )}
+                        </div>
+
+                        {/* 시청 진행률 바 */}
+                        <div className="mb-3">
+                          <div className="flex items-center justify-between text-[10px] text-gray-500 mb-1">
+                            <span>시청률</span>
+                            <span className="text-white font-bold">{vr.percentWatched}% · {fmtDuration(vr.watchDurationSec)}</span>
+                          </div>
+                          <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-orange-500 rounded-full"
+                              style={{ width: `${Math.min(vr.percentWatched, 100)}%` }}
+                            />
+                          </div>
+                        </div>
+
+                        {/* 자기점검 + 퀴즈 */}
+                        <div className="grid grid-cols-2 gap-2 mb-3">
+                          <div className="bg-black/20 rounded-xl p-2.5">
+                            <p className="text-[9px] text-gray-500 mb-1.5">자기점검</p>
+                            <div className="flex gap-2 text-[10px]">
+                              <span className="text-emerald-400">✅ {vr.meta.complete}</span>
+                              <span className="text-yellow-400">🤔 {vr.meta.confused}</span>
+                              <span className="text-red-400">❓ {vr.meta.unknown}</span>
+                            </div>
+                          </div>
+                          <div className="bg-black/20 rounded-xl p-2.5">
+                            <p className="text-[9px] text-gray-500 mb-1.5">퀴즈</p>
+                            {vr.quiz.attempts > 0 ? (
+                              <p className="text-[10px]">
+                                <span className="text-blue-400 font-bold">{Math.round(vr.quiz.correct / vr.quiz.attempts * 100)}%</span>
+                                <span className="text-gray-500 ml-1">({vr.quiz.correct}/{vr.quiz.attempts})</span>
+                              </p>
+                            ) : (
+                              <p className="text-[10px] text-gray-600">미응시</p>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* 댓글 / 세그먼트 코멘트 */}
+                        {(vr.comments.length > 0 || vr.segments.length > 0) && (
+                          <div className="space-y-1 mt-1">
+                            {vr.segments.map((seg, i) => (
+                              <div key={i} className="bg-purple-500/5 border border-purple-500/15 rounded-xl px-3 py-2 text-[10px]">
+                                <span className="text-purple-400 font-bold mr-2">구간 코멘트</span>
+                                <span className="text-gray-300">{seg.value.text || ''}</span>
+                                {seg.value.timeLabel && <span className="text-gray-600 ml-2">[{seg.value.timeLabel}]</span>}
+                              </div>
+                            ))}
+                            {vr.comments.map((c, i) => (
+                              <div key={i} className="bg-blue-500/5 border border-blue-500/15 rounded-xl px-3 py-2 text-[10px]">
+                                <span className="text-blue-400 font-bold mr-2">댓글</span>
+                                <span className="text-gray-300">{c.value.text || ''}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))}
                   </div>
-                ))
-              }
+                )
+              ) : (
+                /* 접속 기록 탭 */
+                loginLogs.length === 0 ? (
+                  <p className="text-gray-600 text-sm text-center py-12">접속 기록이 없습니다.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {loginLogs.map((log, i) => (
+                      <div key={i} className="flex items-center gap-3 bg-[#1a1918] rounded-xl px-4 py-3 text-xs">
+                        <span className="text-lg">{log.type === 'login' ? '🔐' : '🚪'}</span>
+                        <div className="flex-1">
+                          <p className="text-gray-300 font-medium">{log.type === 'login' ? '로그인' : '로그아웃'}</p>
+                          {log.value.device && <p className="text-gray-600">{log.value.device}</p>}
+                        </div>
+                        <span className="text-gray-500">
+                          {log.timestamp ? formatRelativeDate(log.timestamp?.toDate?.() || log.timestamp) : ''}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )
+              )}
             </div>
           </div>
         </div>
@@ -374,11 +569,11 @@ function StatCard({ label, value, unit, color }: { label: string; value: number;
   )
 }
 
-function MiniStat({ label, value, color }: { label: string; value: number; color: string }) {
+function MiniStat({ label, value, unit, color }: { label: string; value: number; unit: string; color: string }) {
   return (
     <div className="bg-[#1a1918] rounded-2xl p-3 text-center">
       <p className="text-gray-500 text-[9px] mb-1">{label}</p>
-      <p className={`text-xl font-black ${color}`}>{value}</p>
+      <p className={`text-xl font-black ${color}`}>{value}<span className="text-[9px] font-normal text-gray-600 ml-0.5">{unit}</span></p>
     </div>
   )
 }
@@ -390,23 +585,4 @@ function InfoRow({ label, value, highlight }: { label: string; value: string; hi
       <span className={`text-sm font-bold ${highlight ? 'font-mono text-orange-400 text-lg tracking-widest' : 'text-white'}`}>{value}</span>
     </div>
   )
-}
-
-function logTypeEmoji(type: string) {
-  if (type === 'login') return '🔐'
-  if (type === 'meta') return '🧠'
-  if (type === 'quiz') return '📝'
-  if (type === 'play') return '▶️'
-  return '📌'
-}
-
-function logTypeLabel(type: string, value: Record<string, any>) {
-  if (type === 'login') return '접속'
-  if (type === 'meta') {
-    const labels: Record<string, string> = { complete: '완전이해 ✅', confused: '알쏭달쏭 🤔', unknown: '전혀모름 ❓' }
-    return labels[value.level] || '자기점검'
-  }
-  if (type === 'quiz') return value.correct ? '퀴즈 정답 ✓' : '퀴즈 오답'
-  if (type === 'play') return `영상 시청 ${value.percentWatched ?? '?'}%`
-  return type
 }
