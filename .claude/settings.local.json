@@ -81,7 +81,9 @@
       "Bash(curl -s -X POST 'https://www.youtube.com/youtubei/v1/player?key=AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8' -H 'Content-Type: application/json' -H 'User-Agent: com.google.android.youtube/17.36.4 \\(Linux; U; Android 12\\) gzip' -d '{\"videoId\":\"qCg_G6de9QE\",\"context\":{\"client\":{\"clientName\":\"ANDROID\",\"clientVersion\":\"17.36.4\",\"androidSdkVersion\":31,\"hl\":\"en\"}}}' -o /tmp/android_test.json)",
       "Bash(curl -s -X POST https://www.youtube.com/youtubei/v1/player -H 'Content-Type: application/json' -H 'User-Agent: Mozilla/5.0 \\(SMART-TV; LINUX; Tizen 6.0\\) AppleWebKit/538.1 \\(KHTML, like Gecko\\) Version/6.0 TV Safari/538.1' -d '{\"videoId\":\"qCg_G6de9QE\",\"context\":{\"client\":{\"clientName\":\"TVHTML5_SIMPLY_EMBEDDED_PLAYER\",\"clientVersion\":\"2.0\",\"hl\":\"en\"},\"thirdParty\":{\"embedUrl\":\"https://www.youtube.com\"}}}' -o /tmp/tv_test.json)",
       "Bash(curl -s \"https://nextcurator-transcript.nextcurator.workers.dev?videoId=3Yr3NZXe9EY\")",
-      "Bash(curl -s \"https://nextcurator-transcript.nextcurator.workers.dev?videoId=5KWMw21iYOc\")"
+      "Bash(curl -s \"https://nextcurator-transcript.nextcurator.workers.dev?videoId=5KWMw21iYOc\")",
+      "Bash(curl -s \"https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=gYmAZZADq00&format=json\")",
+      "Bash(curl -s \"https://www.googleapis.com/youtube/v3/videos?id=gYmAZZADq00&part=snippet&key=AIzaSyBKoj6Mxfh789W802WkERtAAZg-1gipQkE\")"
     ]
   }
 }
