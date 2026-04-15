@@ -239,7 +239,7 @@ function FriendsTab({ myUid }: { myUid: string }) {
 }
 
 export default function MyPage() {
-  const { user, userProfile, needsProfile } = useAuth()
+  const { user, userProfile, needsProfile, refreshProfile } = useAuth()
   const [activeTab, setActiveTab] = useState<'library' | 'friends'>('library')
   const [folders, setFolders] = useState<Folder[]>([])
   const [summaries, setSummaries] = useState<SavedSummary[]>([])
@@ -346,11 +346,13 @@ export default function MyPage() {
     setTeacherSaving(true)
     setTeacherError('')
     try {
+      const idToken = await user.getIdToken()
       const res = await fetch('/api/classroom/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           uid: user.uid,
+          idToken,
           teacherName: userProfile?.displayName || user.displayName || '',
           schoolName: teacherSchool.trim(),
           grade: Number(teacherGrade),

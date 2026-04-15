@@ -94,11 +94,13 @@ export default function ProfileSetupModal() {
     setSaving(true)
     setTeacherError('')
     try {
+      const idToken = await user.getIdToken()
       const res = await fetch('/api/classroom/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           uid: user.uid,
+          idToken,
           teacherName: userProfile?.displayName || user.displayName || '',
           schoolName: schoolName.trim(),
           grade: Number(grade),
