@@ -239,6 +239,16 @@ export async function POST(req: NextRequest) {
         const cached = await getCachedByVideoId(videoId)
         if (cached) {
           console.log('[Summarize] ✅ Cache hit for videoId:', videoId)
+          // videoPublishedAt 없으면 YouTube API에서 보완 후 저장
+          if (!cached.videoPublishedAt) {
+            try {
+              const info = await getVideoInfo(videoId)
+              if (info.publishedAt) {
+                cached.videoPublishedAt = info.publishedAt
+                await saveToFirestore(cached.sessionId as string, cached)
+              }
+            } catch { /* 보완 실패해도 캐시 반환은 진행 */ }
+          }
           return NextResponse.json(cached)
         }
       } catch (e) {

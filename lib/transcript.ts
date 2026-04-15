@@ -2,9 +2,8 @@
  * lib/transcript.ts
  * YouTube 자막 추출 파이프라인
  *
- * [1단계] Cloudflare Worker — YouTube watch 페이지에서 공식/자동 자막 무료 추출
- * [2단계] SocialKit (STT) — 자막 없거나 CF Worker 실패 시 Whisper STT 변환 (유료)
- * [3단계] youtube-transcript npm — 로컬 개발환경 전용 폴백
+ * [1단계] SocialKit — 자막 추출 + 자막 없는 영상 Whisper STT (유료)
+ * [2단계] youtube-transcript npm — 로컬 개발환경 전용 폴백
  */
 
 import { YoutubeTranscript } from 'youtube-transcript'
@@ -66,39 +65,9 @@ export function detectTranscriptLang(text: string): 'ko' | 'en' | 'other' {
 }
 
 // ─────────────────────────────────────────────
-// [1단계] Cloudflare Worker (프로덕션 메인, 무료)
-// - YouTube watch 페이지 직접 스크래핑으로 공식/자동 자막 추출
-// - 자막 없으면 NO_CAPTIONS(404) 반환 → SocialKit STT로 넘김
-// ─────────────────────────────────────────────
-async function getTranscriptViaCloudflare(videoId: string): Promise<string> {
-  const workerUrl = process.env.CLOUDFLARE_WORKER_URL
-  if (!workerUrl) throw new Error('CLOUDFLARE_WORKER_NOT_CONFIGURED')
-
-  const res = await fetch(`${workerUrl}?videoId=${videoId}`, {
-    signal: AbortSignal.timeout(35000), // watch 페이지 스크래핑만 하므로 35초면 충분
-  })
-
-  if (!res.ok) {
-    const errData = await res.json().catch(() => ({})) as { error?: string }
-    const code = errData.error || 'unknown'
-    // NO_CAPTIONS: 자막 트랙 자체가 없는 영상 → SocialKit STT 필요
-    // FETCH_FAILED: YouTube 일시적 접근 실패 → SocialKit 폴백
-    throw new Error(`CLOUDFLARE_${code}`)
-  }
-
-  const data = await res.json() as { transcript?: string }
-
-  if (!data.transcript || data.transcript.trim().length < 10) {
-    throw new Error('CLOUDFLARE_EMPTY_TRANSCRIPT')
-  }
-
-  return data.transcript.trim()
-}
-
-// ─────────────────────────────────────────────
-// [2단계] SocialKit API (유료 폴백)
+// [1단계] SocialKit API
+// - 자막 있는 영상: 자막 직접 추출
 // - 자막 없는 영상: 오디오 다운로드 후 Whisper STT 변환
-// - 자막 있는 영상: 자막 직접 추출 (CF Worker 실패 시 보조)
 // ─────────────────────────────────────────────
 async function getTranscriptViaSocialKit(videoId: string): Promise<string> {
   const apiKey = process.env.SOCIALKIT_API_KEY
@@ -199,25 +168,7 @@ export interface TranscriptResult {
 export async function getTranscript(videoId: string): Promise<TranscriptResult> {
   const errors: string[] = []
 
-  // ── 1단계: Cloudflare Worker (자막 있는 영상 → 무료) ──
-  if (process.env.CLOUDFLARE_WORKER_URL) {
-    try {
-      console.log(`[Transcript] Trying: Cloudflare Worker for ${videoId}`)
-      const text = await getTranscriptViaCloudflare(videoId)
-      console.log('[Transcript] ✅ Cloudflare Worker 성공')
-      return { text, source: 'Cloudflare Worker', lang: detectTranscriptLang(text) }
-    } catch (e) {
-      const msg = (e as Error).message
-      console.warn(`[Transcript] ❌ Cloudflare Worker 실패: ${msg}`)
-      errors.push(`Cloudflare Worker: ${msg}`)
-      // NO_CAPTIONS면 자막 없는 영상임을 로그로 명시
-      if (msg === 'CLOUDFLARE_NO_CAPTIONS') {
-        console.log('[Transcript] 자막 없는 영상 → SocialKit STT로 처리')
-      }
-    }
-  }
-
-  // ── 2단계: SocialKit (자막 없거나 CF Worker 실패 → 유료 STT) ──
+  // ── 1단계: SocialKit (자막 추출 + STT 모두 처리) ──
   if (process.env.SOCIALKIT_API_KEY) {
     try {
       console.log(`[Transcript] Trying: SocialKit STT for ${videoId}`)
