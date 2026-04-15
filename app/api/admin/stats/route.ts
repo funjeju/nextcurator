@@ -4,11 +4,14 @@ import { checkIsAdminByToken } from '@/lib/admin'
 
 const API_KEY = process.env.NEXT_PUBLIC_FIREBASE_API_KEY!
 
-async function getCount(collectionId: string): Promise<number> {
+async function getCount(collectionId: string, idToken?: string): Promise<number> {
   const url = `${FIRESTORE_BASE}:runAggregationQuery?key=${API_KEY}`
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+  if (idToken) headers['Authorization'] = `Bearer ${idToken}`
+
   const res = await fetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify({
       structuredAggregationQuery: {
         structuredQuery: { from: [{ collectionId }] },
@@ -25,6 +28,7 @@ async function getCount(collectionId: string): Promise<number> {
 async function getTodayCount(): Promise<number> {
   const today = new Date()
   today.setHours(0, 0, 0, 0)
+  // summarizedAt은 ISO 문자열로 저장되므로 stringValue로 비교
   const todayISO = today.toISOString()
 
   const url = `${FIRESTORE_BASE}:runAggregationQuery?key=${API_KEY}`
@@ -39,7 +43,7 @@ async function getTodayCount(): Promise<number> {
             fieldFilter: {
               field: { fieldPath: 'summarizedAt' },
               op: 'GREATER_THAN_OR_EQUAL',
-              value: { timestampValue: todayISO },
+              value: { stringValue: todayISO },
             },
           },
         },
@@ -63,7 +67,7 @@ export async function POST(req: NextRequest) {
 
     const [totalSummaries, totalSaved, totalUsers, todaySummaries] = await Promise.all([
       getCount('summaries'),
-      getCount('saved_summaries'),
+      getCount('saved_summaries', idToken),  // 인증 필요한 컬렉션
       getCount('users'),
       getTodayCount(),
     ])

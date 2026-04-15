@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { getLocalUserId } from '@/lib/user'
-import { getUserFolders, createFolder, saveSummary, upsertUserProfile, Folder } from '@/lib/db'
+import { getUserFolders, createFolder, saveSummary, upsertUserProfile, getSavedSummaryByVideoId, updateSavedSummary, Folder } from '@/lib/db'
 import { useAuth } from '@/providers/AuthProvider'
 
 function withTimeout<T>(promise: Promise<T>, ms = 8000): Promise<T> {
@@ -24,13 +24,18 @@ export default function SaveModal({ data, onClose }: { data: any, onClose: () =>
   const [classifying, setClassifying] = useState(false)
   const [newFolderName, setNewFolderName] = useState('')
   const [isPublic, setIsPublic] = useState(false)
+  const [duplicateInfo, setDuplicateInfo] = useState<{ id: string; folderId: string } | null>(null)
 
   useEffect(() => {
     const fetchFolders = async () => {
       try {
         const uid = getLocalUserId()
-        const list = await withTimeout(getUserFolders(uid), 6000)
+        const [list, existing] = await Promise.all([
+          withTimeout(getUserFolders(uid), 6000),
+          user && data.videoId ? getSavedSummaryByVideoId(uid, data.videoId).catch(() => null) : null,
+        ])
         setFolders(list)
+        if (existing) setDuplicateInfo({ id: existing.id, folderId: existing.folderId })
       } catch (e) {
         console.error('Failed to load folders:', e)
       } finally {
@@ -40,35 +45,57 @@ export default function SaveModal({ data, onClose }: { data: any, onClose: () =>
     fetchFolders()
   }, [])
 
+  const doEmbed = (docId: string) => {
+    fetch('/api/embed', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ docId, title: data.title, category: data.category, summary: data.summary, contextSummary: data.contextSummary }),
+    }).catch(() => {})
+  }
+
   const handleSaveToFolder = async (folderId: string) => {
     setSaving(true)
     try {
       const uid = getLocalUserId()
       if (user) await upsertUserProfile({ uid: user.uid, displayName: user.displayName || '', photoURL: user.photoURL || '' })
-      const docId = await withTimeout(saveSummary({
-        userId: uid,
-        userDisplayName: user?.displayName || '',
-        userPhotoURL: user?.photoURL || '',
-        folderId,
-        sessionId: data.sessionId,
-        videoId: data.videoId,
-        title: data.title,
-        channel: data.channel,
-        thumbnail: data.thumbnail,
-        category: data.category,
-        summary: data.summary ?? null,
-        square_meta: data.summary?.square_meta,
-        transcript: data.transcript,
-        transcriptSource: data.transcriptSource,
-        isPublic
-      }))
-      // 임베딩 생성 (비동기, 실패해도 저장에 영향 없음)
-      fetch('/api/embed', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ docId, title: data.title, category: data.category, summary: data.summary, contextSummary: data.contextSummary }),
-      }).catch(() => {})
-      alert('저장되었습니다!')
+
+      // 같은 영상이 이미 저장된 경우 → 업데이트
+      if (duplicateInfo) {
+        await withTimeout(updateSavedSummary(duplicateInfo.id, {
+          sessionId: data.sessionId,
+          folderId,
+          title: data.title,
+          channel: data.channel,
+          thumbnail: data.thumbnail,
+          category: data.category,
+          summary: data.summary ?? null,
+          square_meta: data.summary?.square_meta,
+          transcript: data.transcript,
+          transcriptSource: data.transcriptSource,
+          isPublic,
+        }))
+        doEmbed(duplicateInfo.id)
+      } else {
+        const docId = await withTimeout(saveSummary({
+          userId: uid,
+          userDisplayName: user?.displayName || '',
+          userPhotoURL: user?.photoURL || '',
+          folderId,
+          sessionId: data.sessionId,
+          videoId: data.videoId,
+          title: data.title,
+          channel: data.channel,
+          thumbnail: data.thumbnail,
+          category: data.category,
+          summary: data.summary ?? null,
+          square_meta: data.summary?.square_meta,
+          transcript: data.transcript,
+          transcriptSource: data.transcriptSource,
+          isPublic,
+        }))
+        doEmbed(docId)
+      }
+      alert(duplicateInfo ? '기존 항목이 업데이트되었습니다!' : '저장되었습니다!')
       onClose()
     } catch (e) {
       console.error('Save error:', e)
@@ -84,31 +111,44 @@ export default function SaveModal({ data, onClose }: { data: any, onClose: () =>
     try {
       const uid = getLocalUserId()
       const newFolder = await withTimeout(createFolder(uid, newFolderName.trim()))
-      
       if (user) await upsertUserProfile({ uid: user.uid, displayName: user.displayName || '', photoURL: user.photoURL || '' })
-      const docId2 = await withTimeout(saveSummary({
-        userId: uid,
-        userDisplayName: user?.displayName || '',
-        userPhotoURL: user?.photoURL || '',
-        folderId: newFolder.id,
-        sessionId: data.sessionId,
-        videoId: data.videoId,
-        title: data.title,
-        channel: data.channel,
-        thumbnail: data.thumbnail,
-        category: data.category,
-        summary: data.summary ?? null,
-        square_meta: data.summary?.square_meta,
-        transcript: data.transcript,
-        transcriptSource: data.transcriptSource,
-        isPublic
-      }))
-      fetch('/api/embed', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ docId: docId2, title: data.title, category: data.category, summary: data.summary, contextSummary: data.contextSummary }),
-      }).catch(() => {})
-      alert('저장되었습니다!')
+
+      if (duplicateInfo) {
+        await withTimeout(updateSavedSummary(duplicateInfo.id, {
+          sessionId: data.sessionId,
+          folderId: newFolder.id,
+          title: data.title,
+          channel: data.channel,
+          thumbnail: data.thumbnail,
+          category: data.category,
+          summary: data.summary ?? null,
+          square_meta: data.summary?.square_meta,
+          transcript: data.transcript,
+          transcriptSource: data.transcriptSource,
+          isPublic,
+        }))
+        doEmbed(duplicateInfo.id)
+      } else {
+        const docId2 = await withTimeout(saveSummary({
+          userId: uid,
+          userDisplayName: user?.displayName || '',
+          userPhotoURL: user?.photoURL || '',
+          folderId: newFolder.id,
+          sessionId: data.sessionId,
+          videoId: data.videoId,
+          title: data.title,
+          channel: data.channel,
+          thumbnail: data.thumbnail,
+          category: data.category,
+          summary: data.summary ?? null,
+          square_meta: data.summary?.square_meta,
+          transcript: data.transcript,
+          transcriptSource: data.transcriptSource,
+          isPublic,
+        }))
+        doEmbed(docId2)
+      }
+      alert(duplicateInfo ? '기존 항목이 업데이트되었습니다!' : '저장되었습니다!')
       onClose()
     } catch (e) {
       console.error('Create and save error:', e)
@@ -149,26 +189,39 @@ export default function SaveModal({ data, onClose }: { data: any, onClose: () =>
       if (targetFolderId) {
         const uid = getLocalUserId()
         if (user) await upsertUserProfile({ uid: user.uid, displayName: user.displayName || '', photoURL: user.photoURL || '' })
-        const docId3 = await withTimeout(saveSummary({
-          userId: uid,
-          userDisplayName: user?.displayName || '',
-          userPhotoURL: user?.photoURL || '',
-          folderId: targetFolderId,
-          sessionId: data.sessionId,
-          videoId: data.videoId,
-          title: data.title,
-          thumbnail: data.thumbnail,
-          category: data.category,
-          square_meta: data.summary?.square_meta,
-          transcript: data.transcript,
-          isPublic
-        }))
-        fetch('/api/embed', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ docId: docId3, title: data.title, category: data.category, summary: data.summary, contextSummary: data.contextSummary }),
-        }).catch(() => {})
-        alert('저장되었습니다!')
+
+        if (duplicateInfo) {
+          await withTimeout(updateSavedSummary(duplicateInfo.id, {
+            sessionId: data.sessionId,
+            folderId: targetFolderId,
+            title: data.title,
+            thumbnail: data.thumbnail,
+            category: data.category,
+            summary: data.summary ?? null,
+            square_meta: data.summary?.square_meta,
+            transcript: data.transcript,
+            isPublic,
+          }))
+          doEmbed(duplicateInfo.id)
+        } else {
+          const docId3 = await withTimeout(saveSummary({
+            userId: uid,
+            userDisplayName: user?.displayName || '',
+            userPhotoURL: user?.photoURL || '',
+            folderId: targetFolderId,
+            sessionId: data.sessionId,
+            videoId: data.videoId,
+            title: data.title,
+            thumbnail: data.thumbnail,
+            category: data.category,
+            summary: data.summary ?? null,
+            square_meta: data.summary?.square_meta,
+            transcript: data.transcript,
+            isPublic,
+          }))
+          doEmbed(docId3)
+        }
+        alert(duplicateInfo ? '기존 항목이 업데이트되었습니다!' : '저장되었습니다!')
         onClose()
       }
     } catch (e) {
@@ -184,6 +237,16 @@ export default function SaveModal({ data, onClose }: { data: any, onClose: () =>
     <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
       <div className="bg-[#23211f] border border-white/10 rounded-3xl w-full max-w-md p-6 flex flex-col gap-6 shadow-2xl">
         <h2 className="text-xl font-bold text-white text-center">라이브러리에 저장</h2>
+
+        {/* 중복 영상 안내 */}
+        {duplicateInfo && (
+          <div className="flex items-start gap-2.5 bg-amber-500/10 border border-amber-500/25 rounded-2xl px-4 py-3">
+            <span className="text-base shrink-0">🔄</span>
+            <p className="text-amber-300 text-xs leading-relaxed">
+              이미 저장된 영상입니다. 저장하면 <span className="font-bold">기존 항목이 최신 분석 내용으로 업데이트</span>됩니다. 중복 저장되지 않습니다.
+            </p>
+          </div>
+        )}
 
         {/* 비회원: 로그인 유도 */}
         {!user && (

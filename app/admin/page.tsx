@@ -379,7 +379,7 @@ export default function AdminDashboard() {
                           <span className="text-orange-400 font-bold">{u.tokens ?? 0}</span>
                         </td>
                         <td className="py-3 text-gray-500">
-                          {u.createdAt ? formatRelativeDate(u.createdAt) : '-'}
+                          {u.createdAt || u.updatedAt ? formatRelativeDate(u.createdAt || u.updatedAt) : '-'}
                         </td>
                       </tr>
                     ))}

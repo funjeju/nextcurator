@@ -382,6 +382,25 @@ export async function getSavedSummaryBySessionId(userId: string, sessionId: stri
   return { id: snap.docs[0].id, ...snap.docs[0].data() } as SavedSummary
 }
 
+export async function getSavedSummaryByVideoId(userId: string, videoId: string): Promise<SavedSummary | null> {
+  const q = query(
+    collection(db, 'saved_summaries'),
+    where('userId', '==', userId),
+    where('videoId', '==', videoId)
+  )
+  const snap = await getDocs(q)
+  if (snap.empty) return null
+  return { id: snap.docs[0].id, ...snap.docs[0].data() } as SavedSummary
+}
+
+export async function updateSavedSummary(id: string, data: Partial<SavedSummary>): Promise<void> {
+  const { id: _id, ...rest } = data as any
+  await updateDoc(doc(db, 'saved_summaries', id), {
+    ...rest,
+    updatedAt: serverTimestamp(),
+  })
+}
+
 export async function toggleLike(userId: string, savedSummaryId: string): Promise<boolean> {
   const likeId = `${userId}_${savedSummaryId}`
   const likeRef = doc(db, 'likes', likeId)

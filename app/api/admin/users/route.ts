@@ -11,13 +11,18 @@ export async function POST(req: NextRequest) {
     const { search = '', role = 'all', plan = 'all', page = 1 } = await req.json()
     const PAGE_SIZE = 20
 
-    // 전체 users 조회 (최대 500명 - 이후 필터/페이지)
+    // 전체 users 조회 (최대 500명) — orderBy 없이 전체 조회 후 클라이언트 정렬
+    // orderBy를 쓰면 해당 필드 없는 문서가 제외됨
     const users = await runFirestoreQuery('users', {
       limit: 500,
-      orderBy: [{ field: { fieldPath: 'createdAt' }, direction: 'DESCENDING' }],
     })
 
-    let filtered = users as any[]
+    // 최신순 정렬 (createdAt → updatedAt → 없으면 맨 뒤)
+    let filtered = (users as any[]).sort((a, b) => {
+      const aTime = a.createdAt || a.updatedAt || ''
+      const bTime = b.createdAt || b.updatedAt || ''
+      return bTime > aTime ? 1 : bTime < aTime ? -1 : 0
+    })
 
     // role 필터
     if (role !== 'all') {
