@@ -70,7 +70,8 @@
       "Bash(cmd.exe /c \"npm install -g firebase-tools 2>&1\")",
       "Bash(firebase --version)",
       "Bash(firebase login:*)",
-      "Bash(node -e \"const p = require\\('./package.json'\\); console.log\\('next:', p.dependencies.next\\)\")"
+      "Bash(node -e \"const p = require\\('./package.json'\\); console.log\\('next:', p.dependencies.next\\)\")",
+      "Bash(echo \"exit:$?\")"
     ]
   }
 }

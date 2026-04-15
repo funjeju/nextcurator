@@ -2,8 +2,9 @@
  * lib/transcript.ts
  * YouTube 자막 추출 파이프라인
  *
- * [1단계] SocialKit API → YouTube IP 차단 우회, 자막 없어도 STT 변환 (프로덕션)
- * [2단계] youtube-transcript npm → 로컬 개발환경 전용 폴백
+ * [1단계] Cloudflare Worker — YouTube watch 페이지에서 공식/자동 자막 무료 추출
+ * [2단계] SocialKit (STT) — 자막 없거나 CF Worker 실패 시 Whisper STT 변환 (유료)
+ * [3단계] youtube-transcript npm — 로컬 개발환경 전용 폴백
  */
 
 import { YoutubeTranscript } from 'youtube-transcript'
@@ -65,23 +66,27 @@ export function detectTranscriptLang(text: string): 'ko' | 'en' | 'other' {
 }
 
 // ─────────────────────────────────────────────
-// [1단계] Cloudflare Worker (프로덕션 메인)
-// - YouTube IP 차단 우회, 자막 직접 추출
+// [1단계] Cloudflare Worker (프로덕션 메인, 무료)
+// - YouTube watch 페이지 직접 스크래핑으로 공식/자동 자막 추출
+// - 자막 없으면 NO_CAPTIONS(404) 반환 → SocialKit STT로 넘김
 // ─────────────────────────────────────────────
 async function getTranscriptViaCloudflare(videoId: string): Promise<string> {
   const workerUrl = process.env.CLOUDFLARE_WORKER_URL
   if (!workerUrl) throw new Error('CLOUDFLARE_WORKER_NOT_CONFIGURED')
 
   const res = await fetch(`${workerUrl}?videoId=${videoId}`, {
-    signal: AbortSignal.timeout(45000), // Worker 내부 폴백(STT 등)을 충분히 기다림
+    signal: AbortSignal.timeout(35000), // watch 페이지 스크래핑만 하므로 35초면 충분
   })
 
   if (!res.ok) {
-    const errData = await res.json().catch(() => ({})) as { error?: string; details?: string[] }
-    throw new Error(`CLOUDFLARE_${res.status}: ${errData.error || 'unknown'}`)
+    const errData = await res.json().catch(() => ({})) as { error?: string }
+    const code = errData.error || 'unknown'
+    // NO_CAPTIONS: 자막 트랙 자체가 없는 영상 → SocialKit STT 필요
+    // FETCH_FAILED: YouTube 일시적 접근 실패 → SocialKit 폴백
+    throw new Error(`CLOUDFLARE_${code}`)
   }
 
-  const data = await res.json() as { transcript?: string; error?: string }
+  const data = await res.json() as { transcript?: string }
 
   if (!data.transcript || data.transcript.trim().length < 10) {
     throw new Error('CLOUDFLARE_EMPTY_TRANSCRIPT')
@@ -91,83 +96,9 @@ async function getTranscriptViaCloudflare(videoId: string): Promise<string> {
 }
 
 // ─────────────────────────────────────────────
-// [2단계] Supadata API (CF Worker 실패 시 폴백)
-// - 자동생성 자막 포함 폭넓은 커버리지
-// ─────────────────────────────────────────────
-// 한국어 자막 품질 검증 — 세그먼트 수 & 길이 모두 충족해야 통과
-// 30분 영상에 2~3줄짜리 깨진 자막이 통과되는 문제 방지
-const MIN_KO_SEGMENTS = 10
-const MIN_KO_CHARS = 200
-
-async function getTranscriptViaSupadata(videoId: string, skipKorean = false): Promise<string> {
-  const apiKey = process.env.SUPADATA_API_KEY
-  if (!apiKey) throw new Error('SUPADATA_NOT_CONFIGURED')
-
-  type SupadataResponse = {
-    content?: Array<{ text: string; offset: number; duration: number; lang: string }>
-    lang?: string
-    availableLangs?: string[]
-  }
-
-  const formatContent = (data: SupadataResponse): string =>
-    (data.content ?? [])
-      .map(s => {
-        const ms = s.offset
-        const mm = String(Math.floor(ms / 60000)).padStart(2, '0')
-        const ss = String(Math.floor((ms % 60000) / 1000)).padStart(2, '0')
-        return `[${mm}:${ss}] ${s.text.replace(/\n/g, ' ').trim()}`
-      })
-      .filter(line => line.length > 8)
-      .join('\n')
-
-  // 1차 시도: 한국어 자막 (skipKorean=true 이면 건너뜀)
-  if (!skipKorean) {
-    try {
-      const res = await fetch(
-        `https://api.supadata.ai/v1/youtube/transcript?videoId=${videoId}&text=false&lang=ko`,
-        { headers: { 'x-api-key': apiKey }, signal: AbortSignal.timeout(20000) }
-      )
-      if (res.ok) {
-        const data = await res.json() as SupadataResponse
-        if (data.content && data.content.length >= MIN_KO_SEGMENTS) {
-          const text = formatContent(data)
-          if (text.length >= MIN_KO_CHARS) return text
-          console.warn(`[Transcript] Korean subtitle too short (${data.content.length} segs, ${text.length} chars) — falling back to auto`)
-        }
-      }
-    } catch {
-      // 한국어 자막 없음 → 원본 언어로 폴백
-    }
-  }
-
-  // 2차 시도: 원본 언어 그대로 (자동 자막 포함)
-  const res = await fetch(
-    `https://api.supadata.ai/v1/youtube/transcript?videoId=${videoId}&text=false`,
-    {
-      headers: { 'x-api-key': apiKey },
-      signal: AbortSignal.timeout(60000),
-    }
-  )
-
-  if (!res.ok) {
-    const errText = await res.text().catch(() => '')
-    throw new Error(`SUPADATA_${res.status}: ${errText.slice(0, 100)}`)
-  }
-
-  const data = await res.json() as SupadataResponse
-
-  if (!data.content || data.content.length === 0) {
-    throw new Error('SUPADATA_EMPTY_RESPONSE')
-  }
-
-  return formatContent(data)
-}
-
-// ─────────────────────────────────────────────
-// [3단계] SocialKit API (최종 폴백)
-// - 자막 있는 영상: 자막 직접 추출
-// - 자막 없는 영상: 오디오 다운로드 후 STT 변환
-// - YouTube IP 차단 자체 우회 처리
+// [2단계] SocialKit API (유료 폴백)
+// - 자막 없는 영상: 오디오 다운로드 후 Whisper STT 변환
+// - 자막 있는 영상: 자막 직접 추출 (CF Worker 실패 시 보조)
 // ─────────────────────────────────────────────
 async function getTranscriptViaSocialKit(videoId: string): Promise<string> {
   const apiKey = process.env.SOCIALKIT_API_KEY
@@ -257,7 +188,7 @@ async function getTranscriptLocal(videoId: string): Promise<string> {
 }
 
 // ─────────────────────────────────────────────
-// 메인 함수: 환경에 따른 폴백 파이프라인
+// 메인 함수: CF Worker(무료) → SocialKit STT(유료) 2단계 파이프라인
 // ─────────────────────────────────────────────
 export interface TranscriptResult {
   text: string
@@ -265,55 +196,49 @@ export interface TranscriptResult {
   lang: 'ko' | 'en' | 'other'
 }
 
-export async function getTranscript(
-  videoId: string,
-  options?: { skipKoreanSubtitle?: boolean }
-): Promise<TranscriptResult> {
-  const skipKorean = options?.skipKoreanSubtitle ?? false
-  const strategies: Array<{ name: string; fn: () => Promise<string> }> = []
-
-  if (process.env.CLOUDFLARE_WORKER_URL && !skipKorean) {
-    // Cloudflare Worker는 언어 제어가 없으므로 skipKorean 시 건너뜀
-    strategies.push({
-      name: 'Cloudflare Worker',
-      fn: () => getTranscriptViaCloudflare(videoId),
-    })
-  }
-
-  if (process.env.SUPADATA_API_KEY) {
-    strategies.push({
-      name: skipKorean ? 'Supadata (자동자막)' : 'Supadata',
-      fn: () => getTranscriptViaSupadata(videoId, skipKorean),
-    })
-  }
-
-  if (process.env.SOCIALKIT_API_KEY) {
-    strategies.push({
-      name: 'SocialKit',
-      fn: () => getTranscriptViaSocialKit(videoId),
-    })
-  }
-
-  strategies.push({
-    name: 'youtube-transcript (local)',
-    fn: () => getTranscriptLocal(videoId),
-  })
-
+export async function getTranscript(videoId: string): Promise<TranscriptResult> {
   const errors: string[] = []
 
-  for (const strategy of strategies) {
+  // ── 1단계: Cloudflare Worker (자막 있는 영상 → 무료) ──
+  if (process.env.CLOUDFLARE_WORKER_URL) {
     try {
-      console.log(`[Transcript] Trying: ${strategy.name} for ${videoId}`)
-      const text = await strategy.fn()
-      console.log(`[Transcript] ✅ Success: ${strategy.name}`)
-      const lang = detectTranscriptLang(text)
-      console.log(`[Transcript] 감지 언어: ${lang}`)
-      return { text, source: strategy.name, lang }
+      console.log(`[Transcript] Trying: Cloudflare Worker for ${videoId}`)
+      const text = await getTranscriptViaCloudflare(videoId)
+      console.log('[Transcript] ✅ Cloudflare Worker 성공')
+      return { text, source: 'Cloudflare Worker', lang: detectTranscriptLang(text) }
     } catch (e) {
       const msg = (e as Error).message
-      console.warn(`[Transcript] ❌ Failed (${strategy.name}): ${msg}`)
-      errors.push(`${strategy.name}: ${msg}`)
+      console.warn(`[Transcript] ❌ Cloudflare Worker 실패: ${msg}`)
+      errors.push(`Cloudflare Worker: ${msg}`)
+      // NO_CAPTIONS면 자막 없는 영상임을 로그로 명시
+      if (msg === 'CLOUDFLARE_NO_CAPTIONS') {
+        console.log('[Transcript] 자막 없는 영상 → SocialKit STT로 처리')
+      }
     }
+  }
+
+  // ── 2단계: SocialKit (자막 없거나 CF Worker 실패 → 유료 STT) ──
+  if (process.env.SOCIALKIT_API_KEY) {
+    try {
+      console.log(`[Transcript] Trying: SocialKit STT for ${videoId}`)
+      const text = await getTranscriptViaSocialKit(videoId)
+      console.log('[Transcript] ✅ SocialKit 성공')
+      return { text, source: 'SocialKit', lang: detectTranscriptLang(text) }
+    } catch (e) {
+      const msg = (e as Error).message
+      console.warn(`[Transcript] ❌ SocialKit 실패: ${msg}`)
+      errors.push(`SocialKit: ${msg}`)
+    }
+  }
+
+  // ── 3단계: 로컬 개발 폴백 (프로덕션에서는 IP 차단으로 실패 예상) ──
+  try {
+    console.log(`[Transcript] Trying: youtube-transcript (local) for ${videoId}`)
+    const text = await getTranscriptLocal(videoId)
+    console.log('[Transcript] ✅ Local 성공')
+    return { text, source: 'youtube-transcript (local)', lang: detectTranscriptLang(text) }
+  } catch (e) {
+    errors.push(`local: ${(e as Error).message}`)
   }
 
   console.error('[Transcript] All strategies failed:', errors)

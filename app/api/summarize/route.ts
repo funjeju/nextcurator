@@ -262,7 +262,7 @@ export async function POST(req: NextRequest) {
       transcriptLang = detectTranscriptLang(cachedTranscript)
     } else {
       try {
-        const result = await getTranscript(videoId, { skipKoreanSubtitle: !!forceAutoCaption })
+        const result = await getTranscript(videoId)
         transcript = result.text
         transcriptSource = result.source
         transcriptLang = result.lang

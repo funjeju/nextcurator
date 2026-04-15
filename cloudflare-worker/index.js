@@ -1,13 +1,12 @@
 /**
- * Cloudflare Worker: YouTube Transcript Proxy (v6)
+ * Cloudflare Worker: YouTube Caption Proxy (v7)
  *
- * 전략:
- * 1. 직접 YouTube watch 페이지 스크래핑 (성공 시 가장 빠름)
- * 2. Supadata API (자동생성 자막 포함 넓은 커버리지)
- * 3. SocialKit API (STT 변환 지원)
+ * 역할: YouTube watch 페이지에서 공식/자동생성 자막 직접 추출
+ *       자막이 없거나 실패하면 명확한 에러 코드 반환 → Next.js가 SocialKit STT로 넘김
  *
- * API 키는 CF Worker 시크릿으로 관리
- * Vercel에는 CLOUDFLARE_WORKER_URL 하나만 설정하면 됨
+ * 에러 코드:
+ *   NO_CAPTIONS  (404) → 자막 트랙 자체가 없는 영상 → SocialKit STT 필요
+ *   FETCH_FAILED (502) → YouTube 접근 실패(일시적) → SocialKit 폴백
  */
 
 const CORS_HEADERS = {
@@ -19,7 +18,7 @@ const CORS_HEADERS = {
 const LANG_PRIORITY = ['ko', 'en', 'ja', 'zh-Hans', 'zh-Hant', 'es', 'fr', 'de', 'id', 'th']
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, _env) {
     if (request.method === 'OPTIONS') {
       return new Response(null, { headers: CORS_HEADERS })
     }
@@ -28,62 +27,40 @@ export default {
     const videoId = url.searchParams.get('videoId')
 
     if (!videoId || !/^[A-Za-z0-9_-]{11}$/.test(videoId)) {
-      return json({ error: 'Invalid videoId' }, 400)
+      return json({ error: 'INVALID_VIDEO_ID' }, 400)
     }
 
-    const errors = []
-
-    // 전략 1: YouTube watch 페이지 직접 스크래핑 (Googlebot UA)
     try {
       const transcript = await fetchViaWatchPage(videoId)
       return json({ transcript })
     } catch (e) {
-      errors.push(`watch: ${e.message}`)
-    }
+      const msg = e.message
 
-    // 전략 2: Supadata API (자동생성 자막 포함 넓은 커버리지)
-    const supadataKey = env.SUPADATA_API_KEY
-    if (supadataKey) {
-      try {
-        const transcript = await fetchViaSupadata(videoId, supadataKey)
-        return json({ transcript })
-      } catch (e) {
-        errors.push(`supadata: ${e.message}`)
+      // 자막 트랙 자체가 없는 경우 → SocialKit STT 필요함을 명시
+      if (msg === 'NO_CAPTION_TRACKS' || msg === 'EMPTY_TRACKS') {
+        console.warn(`[Worker] No captions for ${videoId}: ${msg}`)
+        return json({ error: 'NO_CAPTIONS', videoId }, 404)
       }
-    } else {
-      errors.push('supadata: SUPADATA_API_KEY not configured in worker env')
-    }
 
-    // 전략 3: SocialKit API (STT 변환 지원)
-    const socialkitKey = env.SOCIALKIT_API_KEY
-    if (socialkitKey) {
-      try {
-        const transcript = await fetchViaSocialKit(videoId, socialkitKey)
-        return json({ transcript })
-      } catch (e) {
-        errors.push(`socialkit: ${e.message}`)
-      }
-    } else {
-      errors.push('socialkit: SOCIALKIT_API_KEY not configured in worker env')
+      // 그 외 일시적 오류 (YouTube 접근 실패, 파싱 오류 등)
+      console.error(`[Worker] Fetch failed for ${videoId}: ${msg}`)
+      return json({ error: 'FETCH_FAILED', detail: msg }, 502)
     }
-
-    console.error('[Worker] All strategies failed:', errors)
-    return json({ error: 'TRANSCRIPT_UNAVAILABLE', details: errors }, 404)
   },
 }
 
 // ─────────────────────────────────────────────
-// 전략 1: watch 페이지 직접 스크래핑
+// watch 페이지 직접 스크래핑 → 자막 추출
 // ─────────────────────────────────────────────
 async function fetchViaWatchPage(videoId) {
   const res = await fetch(`https://www.youtube.com/watch?v=${videoId}&hl=en`, {
     headers: {
-      // Googlebot UA: GDPR 동의 페이지 우회 가능성
       'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
       'Accept': 'text/html',
       'Accept-Language': 'en-US,en;q=0.9',
     },
     cf: { cacheTtl: 0 },
+    signal: AbortSignal.timeout(20000),
   })
 
   if (!res.ok) throw new Error(`HTTP_${res.status}`)
@@ -97,7 +74,7 @@ async function fetchViaWatchPage(videoId) {
     throw new Error('SUSPICIOUS_SHORT_RESPONSE')
   }
 
-  // ytInitialPlayerResponse JSON 파싱
+  // ytInitialPlayerResponse JSON 파싱 (1차)
   const playerMatch = html.match(/ytInitialPlayerResponse\s*=\s*(\{.+?\});(?:\s*var\s|\s*<\/script>|\s*window\[)/)
   if (playerMatch) {
     try {
@@ -111,6 +88,7 @@ async function fetchViaWatchPage(videoId) {
     }
   }
 
+  // 정규식 폴백 (2차)
   const match = html.match(/"captionTracks":(\[.*?\])/)
   if (!match) throw new Error('NO_CAPTION_TRACKS')
 
@@ -123,81 +101,6 @@ async function fetchViaWatchPage(videoId) {
 
   if (!tracks?.length) throw new Error('EMPTY_TRACKS')
   return await fetchTranscriptFromTracks(tracks)
-}
-
-// ─────────────────────────────────────────────
-// 전략 2: Supadata API
-// ─────────────────────────────────────────────
-async function fetchViaSupadata(videoId, apiKey) {
-  const res = await fetch(
-    `https://api.supadata.ai/v1/youtube/transcript?videoId=${videoId}&text=false`,
-    {
-      headers: { 'x-api-key': apiKey },
-      signal: AbortSignal.timeout(30000),
-    }
-  )
-
-  if (!res.ok) {
-    const errText = await res.text().catch(() => '')
-    throw new Error(`HTTP_${res.status}: ${errText.slice(0, 100)}`)
-  }
-
-  const data = await res.json()
-
-  if (!data.content || data.content.length === 0) {
-    throw new Error('EMPTY_RESPONSE')
-  }
-
-  return data.content
-    .map(s => {
-      const ms = s.offset
-      const mm = String(Math.floor(ms / 60000)).padStart(2, '0')
-      const ss = String(Math.floor((ms % 60000) / 1000)).padStart(2, '0')
-      return `[${mm}:${ss}] ${s.text.replace(/\n/g, ' ').trim()}`
-    })
-    .filter(line => line.length > 8)
-    .join('\n')
-}
-
-// ─────────────────────────────────────────────
-// 전략 3: SocialKit API
-// ─────────────────────────────────────────────
-async function fetchViaSocialKit(videoId, apiKey) {
-  const videoUrl = `https://www.youtube.com/watch?v=${videoId}`
-
-  const res = await fetch(
-    `https://api.socialkit.dev/youtube/transcript?url=${encodeURIComponent(videoUrl)}`,
-    {
-      headers: { 'x-access-key': apiKey },
-      signal: AbortSignal.timeout(30000),
-    }
-  )
-
-  if (!res.ok) {
-    const errText = await res.text().catch(() => '')
-    throw new Error(`HTTP_${res.status}: ${errText.slice(0, 100)}`)
-  }
-
-  const data = await res.json()
-
-  if (!data.success || !data.data) {
-    throw new Error(`FAILED: ${data.error || 'unknown'}`)
-  }
-
-  // transcriptSegments → 타임스탬프 포함 포맷
-  const segs = data.data.transcriptSegments
-  if (segs?.length > 0) {
-    return segs
-      .map(s => `[${s.timestamp}] ${s.text.replace(/\n/g, ' ').trim()}`)
-      .filter(line => line.length > 10)
-      .join('\n')
-  }
-
-  if (data.data.transcript?.trim().length > 50) {
-    return data.data.transcript.trim()
-  }
-
-  throw new Error('EMPTY_RESPONSE')
 }
 
 // ─────────────────────────────────────────────
@@ -223,6 +126,7 @@ async function fetchTranscriptFromTracks(tracks) {
       'User-Agent': 'Mozilla/5.0',
       'Referer': 'https://www.youtube.com/',
     },
+    signal: AbortSignal.timeout(10000),
   })
 
   if (!captionRes.ok) throw new Error(`CAPTION_HTTP_${captionRes.status}`)
