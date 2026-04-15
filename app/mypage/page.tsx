@@ -15,7 +15,20 @@ import {
 import { useAuth } from '@/providers/AuthProvider'
 import { PROFILE_COMPLETE_TOKENS } from '@/lib/db'
 import { AVATARS, getAvatarBg } from '@/lib/avatar'
+import { naturalSearch } from '@/lib/nlp-search'
 import FloatingChat from '@/components/chat/FloatingChat'
+
+/** 두 벡터의 코사인 유사도 (−1 ~ 1) */
+function cosineSimilarity(a: number[], b: number[]): number {
+  let dot = 0, normA = 0, normB = 0
+  for (let i = 0; i < a.length; i++) {
+    dot   += a[i] * b[i]
+    normA += a[i] * a[i]
+    normB += b[i] * b[i]
+  }
+  const denom = Math.sqrt(normA) * Math.sqrt(normB)
+  return denom === 0 ? 0 : dot / denom
+}
 
 const CATEGORY_LABEL: Record<string, string> = {
   recipe: '🍳 요리',
@@ -253,6 +266,7 @@ export default function MyPage() {
   const [savingAvatar, setSavingAvatar] = useState(false)
   const [aiSearchLoading, setAiSearchLoading] = useState(false)
   const [aiSearchIds, setAiSearchIds] = useState<string[] | null>(null)
+  const [aiSearchNoEmbed, setAiSearchNoEmbed] = useState(false)  // 임베딩 없는 항목 존재 여부
 
   // 폴더 메뉴 외부 클릭 시 닫기
   useEffect(() => {
@@ -319,23 +333,35 @@ export default function MyPage() {
     const q = searchQuery.trim()
     if (!q) return
     setAiSearchLoading(true)
+    setAiSearchNoEmbed(false)
     try {
-      const pool = allSummaries  // 현재 로드된 전체 항목으로 검색
-      const payload = pool.map(s => ({
-        id: s.id,
-        title: s.title,
-        category: s.category,
-        tags: s.square_meta?.tags ?? [],
-        topic_cluster: s.square_meta?.topic_cluster ?? '',
-        vibe: s.square_meta?.vibe ?? '',
-      }))
-      const res = await fetch('/api/search', {
+      // 1. 쿼리를 벡터로 변환
+      const res = await fetch('/api/embed-query', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: q, summaries: payload }),
+        body: JSON.stringify({ query: q }),
       })
-      const data = await res.json()
-      setAiSearchIds(data.results ?? [])
+      if (!res.ok) throw new Error('embed-query failed')
+      const { embedding: queryVec } = await res.json() as { embedding: number[] }
+
+      // 2. 저장된 영상들과 코사인 유사도 계산
+      const THRESHOLD = 0.55
+      const withoutEmbed: string[] = []
+
+      const scored = allSummaries
+        .map(s => {
+          if (!s.embedding || s.embedding.length === 0) {
+            withoutEmbed.push(s.id)
+            return null
+          }
+          const score = cosineSimilarity(queryVec, s.embedding)
+          return { id: s.id, score }
+        })
+        .filter((x): x is { id: string; score: number } => x !== null && x.score >= THRESHOLD)
+        .sort((a, b) => b.score - a.score)
+
+      setAiSearchNoEmbed(withoutEmbed.length > 0)
+      setAiSearchIds(scored.map(x => x.id))
     } catch {
       setAiSearchIds([])
     } finally {
@@ -343,7 +369,7 @@ export default function MyPage() {
     }
   }
 
-  const clearAiSearch = () => { setSearchQuery(''); setAiSearchIds(null) }
+  const clearAiSearch = () => { setSearchQuery(''); setAiSearchIds(null); setAiSearchNoEmbed(false) }
 
   // ── 드래그 순서 변경 (특정 폴더에서만 활성화) ──
   const canDrag = activeFolder !== 'all'
@@ -528,16 +554,15 @@ export default function MyPage() {
   const filteredSummaries = aiSearchIds !== null
     ? aiSearchIds.map(id => allSummaries.find(s => s.id === id)).filter(Boolean) as typeof summaries
     : searchQuery.trim()
-      ? catFiltered.filter(s => {
-          const q = searchQuery.toLowerCase()
-          const catLabel = (CATEGORY_LABEL[s.category] ?? s.category).toLowerCase()
-          const tags = (s.square_meta?.tags ?? []).join(' ').toLowerCase()
-          return (
-            s.title.toLowerCase().includes(q) ||
-            tags.includes(q) ||
-            catLabel.includes(q)
-          )
-        })
+      ? naturalSearch(
+          catFiltered.map(s => ({
+            ...s,
+            categoryLabel: CATEGORY_LABEL[s.category] ?? s.category,
+            tags: s.square_meta?.tags ?? [],
+            topicCluster: s.square_meta?.topic_cluster ?? '',
+          })),
+          searchQuery,
+        )
       : catFiltered
 
   // 현재 폴더 범위에서 실제 존재하는 카테고리만 드롭다운에 노출
@@ -847,6 +872,12 @@ export default function MyPage() {
             <div className="flex items-center gap-2 mb-2 text-[11px] text-orange-400/80">
               ✨ AI 검색 결과 {filteredSummaries.length}개 —
               <button onClick={clearAiSearch} className="text-[#75716e] hover:text-white">전체 보기</button>
+            </div>
+          )}
+          {aiSearchNoEmbed && aiSearchIds !== null && (
+            <div className="flex items-center gap-2 mb-2 px-3 py-2 bg-[#2a2826] rounded-xl border border-white/5">
+              <span className="text-sm">ℹ️</span>
+              <p className="text-[#75716e] text-xs">일부 오래된 영상은 임베딩이 없어 검색 대상에서 제외됐어요.</p>
             </div>
           )}
           <div className="flex items-center gap-3 mb-5">

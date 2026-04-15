@@ -38,6 +38,7 @@ export interface SavedSummary {
   likeCount?: number
   viewCount?: number
   sortOrder?: number
+  embedding?: number[]       // text-embedding-004 벡터 (768차원) — AI 유사도 검색용
 }
 
 export type AgeGroup = '10s' | '20s' | '30s' | '40s' | '50s' | '60s+'

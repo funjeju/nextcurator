@@ -96,7 +96,7 @@ export default function CommentSection({
     <div ref={sectionRef} className="bg-[#2a2826] rounded-2xl border border-white/5 p-5 flex flex-col gap-5">
       <div className="flex items-center justify-between">
         <h3 className="text-base font-bold text-white flex items-center gap-2">
-          💬 토론
+          💬 댓글
           <span className="text-sm text-[#75716e] font-normal">{topLevel.length}개</span>
         </h3>
         <span className="text-[10px] text-[#75716e] bg-[#32302e] px-2 py-1 rounded-full">단락 댓글은 요약 내 말풍선에서</span>

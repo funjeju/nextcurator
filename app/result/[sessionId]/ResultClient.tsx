@@ -62,14 +62,14 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
   const searchParams = useSearchParams()
   const fromSquare = searchParams.get('from') === 'square'
   const isTempReanalyze = searchParams.get('temp') === '1'
-  const { user } = useAuth()
+  const { user, openAuthModal } = useAuth()
   const [data, setData] = useState<SummarizeResponse | null>(null)
   const [loadError, setLoadError] = useState(false)
   const [savedItem, setSavedItem] = useState<SavedSummary | null>(null)
   const playerRef = useRef<YT.Player | null>(null)
   const [showSaveModal, setShowSaveModal] = useState(false)
   const [showRoomModal, setShowRoomModal] = useState(false)
-  const [activeTab, setActiveTab] = useState<'summary' | 'transcript' | 'reanalyze'>('summary')
+  const [activeTab, setActiveTab] = useState<'summary' | 'transcript' | 'segments' | 'reanalyze'>('summary')
   const [sharing, setSharing] = useState(false)
   const [shareCopied, setShareCopied] = useState(false)
   const [togglingVisibility, setTogglingVisibility] = useState(false)
@@ -96,10 +96,6 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
   const [worksheetLoading, setWorksheetLoading] = useState(false)
   const [worksheetLevel, setWorksheetLevel] = useState<'elementary' | 'middle' | 'advanced'>('elementary')
 
-  // 시청자 반응 요약
-  const [commentAnalysis, setCommentAnalysis] = useState<any>(null)
-  const [commentAnalysisLoading, setCommentAnalysisLoading] = useState(false)
-
   // 구간별 요약 (30분+ 영상)
   const [segments, setSegments] = useState<any[] | null>(null)
   const [segmentsLoading, setSegmentsLoading] = useState(false)
@@ -123,6 +119,7 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
   }, [data?.videoId])
 
   const handleDownloadPdf = async () => {
+    if (!user) { openAuthModal('login'); return }
     if (!pdfRef.current || !data) return
     setDownloading(true)
     try {
@@ -442,30 +439,6 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
     logStudentActivity('meta', log)
   }, [logStudentActivity])
 
-  // 시청자 반응 요약
-  const handleCommentAnalysis = async () => {
-    if (!data?.videoId || commentAnalysisLoading) return
-    setCommentAnalysisLoading(true)
-    try {
-      const res = await fetch('/api/comment-analysis', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ videoId: data.videoId, title: data.title }),
-      })
-      const json = await res.json()
-      if (!res.ok) {
-        // no_comments: 댓글 없음/접근불가 → 에러 팝업 대신 인라인 안내
-        setCommentAnalysis({ _error: json.error ?? 'unknown' })
-        return
-      }
-      setCommentAnalysis(json.analysis)
-    } catch {
-      setCommentAnalysis({ _error: 'network' })
-    } finally {
-      setCommentAnalysisLoading(false)
-    }
-  }
-
   const handleSegmentAnalysis = async () => {
     if (!data?.transcript || segmentsLoading) return
     setSegmentsLoading(true)
@@ -660,14 +633,25 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
 
         {/* 탭 */}
         <div className="flex bg-[#32302e] rounded-xl p-1 border border-white/5 w-full mt-2">
-          {(['summary', 'transcript', 'reanalyze'] as const).map(tab => {
-            const labels = { summary: '기본 요약', transcript: '전체 자막', reanalyze: '🔄 다시 분석' }
+          {(['summary', 'transcript', ...(isLongVideo ? ['segments'] : []), 'reanalyze'] as const).map(tab => {
+            const labels: Record<string, string> = {
+              summary: '기본 요약',
+              transcript: '전체 자막',
+              segments: '🗂 구간 분석',
+              reanalyze: '🔄 다시 분석',
+            }
             return (
               <button
                 key={tab}
-                onClick={() => setActiveTab(tab)}
+                onClick={() => setActiveTab(tab as any)}
                 className={`flex-1 py-2.5 text-xs md:text-sm font-bold rounded-lg transition-all ${
-                  activeTab === tab ? 'bg-[#23211f] text-white shadow' : 'text-[#75716e] hover:text-white'
+                  activeTab === tab
+                    ? tab === 'segments'
+                      ? 'bg-indigo-600 text-white shadow'
+                      : 'bg-[#23211f] text-white shadow'
+                    : tab === 'segments'
+                      ? 'text-indigo-400 hover:text-indigo-300'
+                      : 'text-[#75716e] hover:text-white'
                 }`}
               >
                 {labels[tab]}
@@ -760,81 +744,9 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
             </div>
           )}
 
-          {/* 시청자 반응 요약 — YouTube 영상만, summary 탭 */}
-          {activeTab === 'summary' && data.videoId && (
-            <div className="mt-4">
-              {!commentAnalysis ? (
-                <button
-                  onClick={handleCommentAnalysis}
-                  disabled={commentAnalysisLoading}
-                  className="w-full py-3.5 rounded-2xl border border-dashed border-amber-500/40 bg-amber-500/5 hover:bg-amber-500/10 text-amber-400 hover:text-amber-300 font-semibold text-sm transition-all flex items-center justify-center gap-2 disabled:opacity-50"
-                >
-                  {commentAnalysisLoading ? (
-                    <><svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>댓글 분석 중...</>
-                  ) : (
-                    <>💬 시청자 반응 요약 보기</>
-                  )}
-                </button>
-              ) : commentAnalysis?._error ? (
-                <div className="flex items-center justify-between px-4 py-3 rounded-2xl border border-white/10 bg-[#2a2826] text-sm text-[#75716e]">
-                  <span>💬 댓글을 불러올 수 없습니다 <span className="text-[10px]">(YouTube 댓글 API 제한)</span></span>
-                  <button onClick={() => setCommentAnalysis(null)} className="hover:text-white text-xs transition-colors ml-3">✕</button>
-                </div>
-              ) : (
-                <div className="bg-[#2a2826] border border-amber-500/15 rounded-2xl p-5 flex flex-col gap-4">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-amber-400 font-bold text-sm flex items-center gap-2">💬 시청자 반응 요약</h3>
-                    <button onClick={() => setCommentAnalysis(null)} className="text-[#75716e] hover:text-white text-xs transition-colors">닫기</button>
-                  </div>
-                  {/* 감성 비율 */}
-                  <div className="flex items-center gap-3">
-                    <span className={`px-3 py-1 rounded-full text-xs font-bold border ${
-                      commentAnalysis.overall_sentiment === '긍정적' ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' :
-                      commentAnalysis.overall_sentiment === '부정적' ? 'bg-red-500/15 text-red-400 border-red-500/30' :
-                      'bg-amber-500/15 text-amber-400 border-amber-500/30'
-                    }`}>{commentAnalysis.overall_sentiment}</span>
-                    <div className="flex-1 h-2 bg-[#32302e] rounded-full overflow-hidden flex">
-                      <div className="h-full bg-emerald-500 transition-all" style={{ width: `${commentAnalysis.sentiment_ratio?.positive ?? 0}%` }} />
-                      <div className="h-full bg-amber-500" style={{ width: `${commentAnalysis.sentiment_ratio?.neutral ?? 0}%` }} />
-                      <div className="h-full bg-red-500" style={{ width: `${commentAnalysis.sentiment_ratio?.negative ?? 0}%` }} />
-                    </div>
-                    <span className="text-xs text-[#75716e]">{commentAnalysis.sentiment_ratio?.positive}% 긍정</span>
-                  </div>
-                  {/* 요약 */}
-                  <p className="text-[#e2e2e2] text-sm leading-relaxed">{commentAnalysis.summary}</p>
-                  {/* 대표 반응 */}
-                  {commentAnalysis.top_reactions?.length > 0 && (
-                    <div className="flex flex-wrap gap-2">
-                      {commentAnalysis.top_reactions.map((r: string, i: number) => (
-                        <span key={i} className="px-2.5 py-1 bg-[#32302e] border border-white/10 rounded-full text-xs text-[#a4a09c]">{r}</span>
-                      ))}
-                    </div>
-                  )}
-                  {/* 주요 의견 */}
-                  {commentAnalysis.key_opinions?.length > 0 && (
-                    <div className="flex flex-col gap-2">
-                      {commentAnalysis.key_opinions.map((op: any, i: number) => (
-                        <div key={i} className="flex items-start gap-2">
-                          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20 shrink-0 mt-0.5">{op.count_hint}</span>
-                          <p className="text-[#a4a09c] text-xs">{op.opinion}</p>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  {/* 인상적인 댓글 */}
-                  {commentAnalysis.notable_comment && (
-                    <blockquote className="border-l-2 border-amber-500/40 pl-3 text-xs text-[#75716e] italic">
-                      &quot;{commentAnalysis.notable_comment}&quot;
-                    </blockquote>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* 구간별 분석 — 30분+ 영상이고 summary 탭에서만 */}
-          {activeTab === 'summary' && isLongVideo && (
-            <div className="rounded-2xl border border-indigo-500/20 bg-indigo-500/5 p-4 flex flex-col gap-3">
+          {/* 구간별 분석 탭 — 30분+ 영상 전용 */}
+          {activeTab === 'segments' && isLongVideo && (
+            <div className="flex flex-col gap-4 pt-2">
               {segments ? (
                 <SegmentedSummaryPanel
                   segments={segments}
@@ -842,15 +754,19 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
                   onRequestQuiz={handleSegmentQuiz}
                 />
               ) : (
-                <div className="flex items-center justify-between gap-3">
+                <div className="rounded-2xl border border-indigo-500/30 bg-indigo-500/5 p-6 flex flex-col items-center gap-4 text-center">
+                  <span className="text-4xl">🗂</span>
                   <div>
-                    <p className="text-white text-sm font-semibold">구간별 심층 분석 가능</p>
-                    <p className="text-[#a4a09c] text-xs mt-0.5">30분 이상 영상입니다. 10분 단위로 나눠 각 구간을 분석하고 퀴즈를 풀 수 있어요.</p>
+                    <p className="text-white font-semibold mb-1">구간별 심층 분석</p>
+                    <p className="text-[#a4a09c] text-sm leading-relaxed">
+                      30분 이상 영상입니다.<br />
+                      10분 단위로 나눠 각 구간을 분석하고 퀴즈를 풀 수 있어요.
+                    </p>
                   </div>
                   <button
                     onClick={handleSegmentAnalysis}
                     disabled={segmentsLoading}
-                    className="shrink-0 flex items-center gap-1.5 px-4 py-2.5 bg-indigo-500 hover:bg-indigo-400 text-white text-sm font-bold rounded-2xl transition-all disabled:opacity-50"
+                    className="flex items-center gap-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-2xl transition-all disabled:opacity-50 text-sm"
                   >
                     {segmentsLoading ? (
                       <>
@@ -860,7 +776,7 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
                         </svg>
                         분석 중...
                       </>
-                    ) : '🗂 구간 분석'}
+                    ) : '구간 분석 시작하기'}
                   </button>
                 </div>
               )}
@@ -985,12 +901,12 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
             </Button>
           )}
 
-          {/* 시청파티 버튼 — YouTube 영상만 */}
+          {/* 시청파티 버튼 — YouTube 영상만, 로그인 필요 */}
           {data.videoId && (
             <button
-              onClick={() => setShowRoomModal(true)}
+              onClick={() => user ? setShowRoomModal(true) : openAuthModal('login')}
               className="h-12 w-12 border border-white/10 bg-[#32302e] text-white hover:bg-orange-500/15 hover:border-orange-500/30 hover:text-orange-400 transition-all rounded-xl flex items-center justify-center"
-              title="시청파티 만들기"
+              title={user ? '시청파티 만들기' : '로그인 후 이용 가능'}
             >
               <span className="text-lg leading-none">🎬</span>
             </button>

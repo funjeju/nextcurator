@@ -92,7 +92,8 @@
       "Bash(node_modules/.bin/tsc --noEmit --skipLibCheck)",
       "Bash(npx --prefix c:/Users/funjeju/Desktop/aiproject/nextcurator tsc --project c:/Users/funjeju/Desktop/aiproject/nextcurator/tsconfig.json --noEmit)",
       "Bash(dir \"c:\\\\Users\\\\funjeju\\\\Desktop\\\\aiproject\\\\nextcurator\\\\app\\\\api\\\\search\")",
-      "Bash(dir \"c:\\\\Users\\\\funjeju\\\\Desktop\\\\aiproject\\\\nextcurator\\\\app\\\\api\\\\embed\")"
+      "Bash(dir \"c:\\\\Users\\\\funjeju\\\\Desktop\\\\aiproject\\\\nextcurator\\\\app\\\\api\\\\embed\")",
+      "Bash(cmd /c \"dir c:\\\\Users\\\\funjeju\\\\Desktop\\\\aiproject\\\\nextcurator\\\\app\\\\api\\\\embed-query 2>&1\")"
     ]
   }
 }
