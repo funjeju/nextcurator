@@ -144,6 +144,12 @@ export default function Header({ title = 'SSOKTUBE' }: { title?: string }) {
             </div>
           ) : (
             <div className="flex items-center gap-1.5">
+              <Link
+                href="/classroom/login"
+                className="px-2.5 py-1.5 text-blue-400 text-xs font-bold rounded-full hover:bg-blue-500/10 transition-colors whitespace-nowrap border border-blue-500/20 hidden md:flex items-center gap-1"
+              >
+                📖 학생 로그인
+              </Link>
               <button
                 onClick={() => openAuthModal('login')}
                 className="px-3 py-1.5 bg-white/10 text-white text-xs font-bold rounded-full hover:bg-white/20 transition-colors whitespace-nowrap border border-white/10"

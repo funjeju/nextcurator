@@ -264,6 +264,14 @@ export default function MyPage() {
   const [showAvatarPicker, setShowAvatarPicker] = useState(false)
   const [currentAvatar, setCurrentAvatar] = useState<string>('')
   const [savingAvatar, setSavingAvatar] = useState(false)
+  // 선생님 전환 모달
+  const [showTeacherModal, setShowTeacherModal] = useState(false)
+  const [teacherSchool, setTeacherSchool] = useState('')
+  const [teacherGrade, setTeacherGrade] = useState('')
+  const [teacherClassNum, setTeacherClassNum] = useState('')
+  const [teacherSaving, setTeacherSaving] = useState(false)
+  const [teacherError, setTeacherError] = useState('')
+  const [teacherDoneCode, setTeacherDoneCode] = useState('')
   const [aiSearchLoading, setAiSearchLoading] = useState(false)
   const [aiSearchIds, setAiSearchIds] = useState<string[] | null>(null)
   const [aiSearchNoEmbed, setAiSearchNoEmbed] = useState(false)  // 임베딩 없는 항목 존재 여부
@@ -326,6 +334,37 @@ export default function MyPage() {
       alert('아바타 변경에 실패했습니다.')
     } finally {
       setSavingAvatar(false)
+    }
+  }
+
+  const handleTeacherSetup = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!user || !teacherSchool.trim() || !teacherGrade || !teacherClassNum) {
+      setTeacherError('모든 항목을 입력해주세요.')
+      return
+    }
+    setTeacherSaving(true)
+    setTeacherError('')
+    try {
+      const res = await fetch('/api/classroom/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          uid: user.uid,
+          teacherName: userProfile?.displayName || user.displayName || '',
+          schoolName: teacherSchool.trim(),
+          grade: Number(teacherGrade),
+          classNum: Number(teacherClassNum),
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+      setTeacherDoneCode(data.classCode)
+      await refreshProfile()
+    } catch (err: any) {
+      setTeacherError(err.message || '오류가 발생했습니다.')
+    } finally {
+      setTeacherSaving(false)
     }
   }
 
@@ -649,8 +688,30 @@ export default function MyPage() {
             </div>
             {/* 이름 + 정보 */}
             <div className="flex-1 min-w-0">
-              <p className="text-white font-bold text-sm truncate">{user.displayName || '사용자'}</p>
+              <p className="text-white font-bold text-sm truncate flex items-center gap-2">
+                {user.displayName || '사용자'}
+                {userProfile?.role === 'teacher' && (
+                  <span className="text-[10px] px-1.5 py-0.5 bg-emerald-500/15 text-emerald-400 rounded-full border border-emerald-500/20 font-bold">선생님</span>
+                )}
+                {userProfile?.role === 'student' && (
+                  <span className="text-[10px] px-1.5 py-0.5 bg-blue-500/15 text-blue-400 rounded-full border border-blue-500/20 font-bold">학생</span>
+                )}
+              </p>
               <p className="text-[#75716e] text-xs truncate">{user.email}</p>
+              {/* 선생님 전환 버튼 — 일반 사용자만 */}
+              {userProfile?.role !== 'teacher' && userProfile?.role !== 'student' && (
+                <button
+                  onClick={() => { setShowTeacherModal(true); setTeacherDoneCode(''); setTeacherError('') }}
+                  className="mt-1 text-[10px] text-emerald-400 hover:text-emerald-300 transition-colors"
+                >
+                  🏫 선생님으로 전환
+                </button>
+              )}
+              {userProfile?.role === 'teacher' && userProfile.classCode && (
+                <Link href={`/classroom/${userProfile.classCode}`} className="mt-1 text-[10px] text-emerald-400 hover:text-emerald-300 transition-colors block">
+                  🏫 내 클래스 대시보드 →
+                </Link>
+              )}
             </div>
             {/* 토큰 잔액 */}
             <div className="flex items-center gap-3 shrink-0">
@@ -1178,6 +1239,99 @@ export default function MyPage() {
       )}
 
       <FloatingChat summaries={allSummaries} source="mypage" userId={user?.uid || getLocalUserId()} />
+
+      {/* 선생님 전환 모달 */}
+      {showTeacherModal && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => { if (!teacherSaving) setShowTeacherModal(false) }} />
+          <div className="relative w-full max-w-sm bg-[#1c1a18] rounded-3xl border border-white/10 shadow-2xl p-8">
+            <button
+              onClick={() => setShowTeacherModal(false)}
+              disabled={teacherSaving}
+              className="absolute top-4 right-4 text-[#75716e] hover:text-white transition-colors text-xl leading-none"
+            >✕</button>
+
+            {teacherDoneCode ? (
+              /* 완료 화면 */
+              <div className="text-center">
+                <div className="text-5xl mb-4">🏫</div>
+                <h2 className="text-xl font-bold text-white mb-2">클래스 개설 완료!</h2>
+                <p className="text-[#a4a09c] text-sm mb-5">학생들에게 아래 코드를 알려주세요.</p>
+                <div className="bg-[#2a2826] rounded-2xl p-4 mb-5">
+                  <p className="text-[#75716e] text-xs mb-1">우리 반 코드</p>
+                  <p className="text-4xl font-black text-emerald-400 tracking-widest">{teacherDoneCode}</p>
+                  <p className="text-[#75716e] text-xs mt-2">{teacherSchool} {teacherGrade}학년 {teacherClassNum}반</p>
+                </div>
+                <Link
+                  href={`/classroom/${teacherDoneCode}`}
+                  onClick={() => setShowTeacherModal(false)}
+                  className="block w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-2xl text-sm transition-colors text-center"
+                >
+                  클래스 대시보드로 이동
+                </Link>
+              </div>
+            ) : (
+              /* 입력 폼 */
+              <>
+                <h2 className="text-lg font-bold text-white mb-1">🏫 선생님으로 전환</h2>
+                <p className="text-[#a4a09c] text-sm mb-6">클래스를 개설하면 학생들을 초대할 수 있어요.</p>
+                <form onSubmit={handleTeacherSetup} className="flex flex-col gap-4">
+                  <div>
+                    <label className="block text-xs text-[#75716e] mb-1.5">학교명</label>
+                    <input
+                      type="text"
+                      value={teacherSchool}
+                      onChange={e => setTeacherSchool(e.target.value)}
+                      placeholder="예) 제주초등학교"
+                      className="w-full bg-[#2a2826] border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder:text-[#75716e] focus:outline-none focus:border-emerald-500/50 transition-colors"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs text-[#75716e] mb-1.5">학년</label>
+                      <select
+                        value={teacherGrade}
+                        onChange={e => setTeacherGrade(e.target.value)}
+                        className="w-full bg-[#2a2826] border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-emerald-500/50 transition-colors"
+                      >
+                        <option value="">선택</option>
+                        {[1,2,3,4,5,6].map(n => <option key={n} value={n}>{n}학년</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs text-[#75716e] mb-1.5">반</label>
+                      <select
+                        value={teacherClassNum}
+                        onChange={e => setTeacherClassNum(e.target.value)}
+                        className="w-full bg-[#2a2826] border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-emerald-500/50 transition-colors"
+                      >
+                        <option value="">선택</option>
+                        {Array.from({length: 15}, (_, i) => i+1).map(n => <option key={n} value={n}>{n}반</option>)}
+                      </select>
+                    </div>
+                  </div>
+                  {teacherError && <p className="text-red-400 text-xs text-center">{teacherError}</p>}
+                  <button
+                    type="submit"
+                    disabled={teacherSaving}
+                    className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-2xl text-sm transition-colors disabled:opacity-50 flex items-center justify-center gap-2 mt-1"
+                  >
+                    {teacherSaving ? (
+                      <>
+                        <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                        </svg>
+                        클래스 개설 중...
+                      </>
+                    ) : '클래스 개설하기'}
+                  </button>
+                </form>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

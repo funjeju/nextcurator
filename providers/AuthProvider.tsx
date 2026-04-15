@@ -64,6 +64,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const loadProfile = async (u: User) => {
     try {
+      // 이메일 미인증 상태(회원가입 직후 로그아웃 전) → 프로필 모달 띄우지 않음
+      const isEmailProvider = u.providerData.some(p => p.providerId === 'password')
+      if (isEmailProvider && !u.emailVerified) {
+        setNeedsProfile(false)
+        setLoading(false)
+        return
+      }
+
       // 신규 유저 초기화 (이미 있으면 내부에서 스킵)
       await initNewUserTokens(u.uid, u.displayName || '', u.photoURL || '', u.email || '')
       const profile = await getUserProfile(u.uid)
