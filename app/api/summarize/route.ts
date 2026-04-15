@@ -106,28 +106,61 @@ async function getVideoInfo(videoId: string) {
   // YouTube Data API v3 — title, channel, publishedAt 모두 가져옴
   if (apiKey) {
     try {
-      const apiRes = await fetch(`https://www.googleapis.com/youtube/v3/videos?id=${videoId}&part=snippet&key=${apiKey}`)
+      const apiRes = await fetch(`https://www.googleapis.com/youtube/v3/videos?id=${videoId}&part=snippet&key=${apiKey}`, { signal: AbortSignal.timeout(5000) })
       if (apiRes.ok) {
         const data = await apiRes.json()
         if (data.items && data.items.length > 0) {
           title = data.items[0].snippet.title
           channel = data.items[0].snippet.channelTitle
           publishedAt = data.items[0].snippet.publishedAt ?? ''
+        } else {
+          console.warn(`[getVideoInfo] YouTube API returned no items for ${videoId}:`, JSON.stringify(data).slice(0, 200))
         }
+      } else {
+        const errBody = await apiRes.text().catch(() => '')
+        console.error(`[getVideoInfo] YouTube API HTTP ${apiRes.status} for ${videoId}:`, errBody.slice(0, 200))
       }
-    } catch { /* fall through */ }
+    } catch (e) {
+      console.error(`[getVideoInfo] YouTube API fetch error for ${videoId}:`, e)
+    }
+  } else {
+    console.warn('[getVideoInfo] YOUTUBE_API_KEY not set — publishedAt will be empty')
   }
 
   // title/channel 없으면 oEmbed로 보완
   if (!title || !channel) {
     try {
-      const res = await fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`)
+      const res = await fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`, { signal: AbortSignal.timeout(5000) })
       if (res.ok) {
         const data = await res.json()
         if (!title) title = data.title as string
         if (!channel) channel = data.author_name as string
       }
     } catch { /* ignore */ }
+  }
+
+  // publishedAt 없으면 YouTube 페이지 HTML에서 파싱 (googleapis.com 차단 환경 fallback)
+  if (!publishedAt) {
+    try {
+      const pageRes = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
+        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1)' },
+        signal: AbortSignal.timeout(7000),
+      })
+      if (pageRes.ok) {
+        const html = await pageRes.text()
+        // ytInitialData 내 dateText 또는 meta 태그에서 날짜 추출
+        const metaMatch = html.match(/"datePublished"\s*:\s*"([^"]+)"/)
+        if (metaMatch) {
+          publishedAt = new Date(metaMatch[1]).toISOString()
+        } else {
+          // publishDate 형식 (YYYY-MM-DD)
+          const publishMatch = html.match(/"publishDate"\s*:\s*"([^"]+)"/)
+          if (publishMatch) publishedAt = new Date(publishMatch[1]).toISOString()
+        }
+      }
+    } catch (e) {
+      console.warn(`[getVideoInfo] HTML fallback for publishedAt failed:`, e)
+    }
   }
 
   if (!title) throw new Error('VIDEO_NOT_FOUND')
