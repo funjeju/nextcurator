@@ -622,13 +622,13 @@ export default function MyPage() {
             </div>
           )}
           {/* 공개 설정 범례 */}
-          <div className="flex items-center gap-3 mb-3 text-[10px] text-[#75716e] bg-[#32302e]/50 rounded-lg px-3 py-2">
-            <span className="flex items-center gap-1"><span>🔒</span><span>나만</span></span>
-            <span className="text-white/10">·</span>
-            <span className="flex items-center gap-1"><span>👥</span><span>친구만</span></span>
-            <span className="text-white/10">·</span>
-            <span className="flex items-center gap-1"><span>🌐</span><span>전체공개</span></span>
-            <span className="ml-auto text-[9px] text-white/20">클릭으로 변경</span>
+          <div className="flex items-center gap-2 mb-3 text-[10px] text-[#75716e] bg-[#32302e]/50 rounded-lg px-3 py-2 whitespace-nowrap overflow-hidden">
+            <span className="flex items-center gap-0.5 shrink-0"><span>🔒</span><span>나만</span></span>
+            <span className="text-white/10 shrink-0">·</span>
+            <span className="flex items-center gap-0.5 shrink-0"><span>👥</span><span>친구</span></span>
+            <span className="text-white/10 shrink-0">·</span>
+            <span className="flex items-center gap-0.5 shrink-0"><span>🌐</span><span>공개</span></span>
+            <span className="ml-auto text-[9px] text-white/20 shrink-0">탭으로 변경</span>
           </div>
           <div className="flex flex-row md:flex-col gap-2 overflow-x-auto md:overflow-visible pb-2 scrollbar-none">
             <button

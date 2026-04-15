@@ -96,9 +96,6 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
   const [worksheetLoading, setWorksheetLoading] = useState(false)
   const [worksheetLevel, setWorksheetLevel] = useState<'elementary' | 'middle' | 'advanced'>('elementary')
 
-  // 메타인지 자기점검
-  const [metaLevel, setMetaLevel] = useState<'complete' | 'confused' | 'unknown' | null>(null)
-
   // 시청자 반응 요약
   const [commentAnalysis, setCommentAnalysis] = useState<any>(null)
   const [commentAnalysisLoading, setCommentAnalysisLoading] = useState(false)
@@ -408,32 +405,6 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
     }
   }
 
-  // 메타인지 자기점검 로그
-  const handleMeta = async (level: 'complete' | 'confused' | 'unknown') => {
-    if (!user || !data) return
-    const { getUserProfile } = await import('@/lib/db')
-    const p = await getUserProfile(user.uid)
-    if (p?.role !== 'student' || !p.classCode) return
-
-    setMetaLevel(level)
-    try {
-      await fetch('/api/classroom/activity', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          studentId: user.uid,
-          studentName: p.studentName || p.displayName || '',
-          classCode: p.classCode,
-          type: 'meta',
-          videoId: data.videoId,
-          sessionId: data.sessionId,
-          videoTitle: data.title,
-          value: { level },
-        }),
-      })
-    } catch { /* 로그 실패는 조용히 */ }
-  }
-
   // 학생 계정 공통 로그 헬퍼
   const logStudentActivity = useCallback(async (type: string, value: Record<string, any>) => {
     if (!user || !data) return
@@ -462,8 +433,13 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
   }, [logStudentActivity])
 
   // 퀴즈 정답 로그
-  const handleQuizAnswer = useCallback((log: { questionIdx: number; selected: string; correct: boolean }) => {
+  const handleQuizAnswer = useCallback((log: { questionIdx: number; selected: string; correct: boolean; metaLevel?: string }) => {
     logStudentActivity('quiz', log)
+  }, [logStudentActivity])
+
+  // 퀴즈 메타인지 로그 (학습/영어 카테고리만)
+  const handleQuizMeta = useCallback((log: { questionIdx: number; question: string; metaLevel: string }) => {
+    logStudentActivity('meta', log)
   }, [logStudentActivity])
 
   // 시청자 반응 요약
@@ -476,11 +452,15 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ videoId: data.videoId, title: data.title }),
       })
-      if (!res.ok) throw new Error('분석 실패')
-      const { analysis } = await res.json()
-      setCommentAnalysis(analysis)
+      const json = await res.json()
+      if (!res.ok) {
+        // no_comments: 댓글 없음/접근불가 → 에러 팝업 대신 인라인 안내
+        setCommentAnalysis({ _error: json.error ?? 'unknown' })
+        return
+      }
+      setCommentAnalysis(json.analysis)
     } catch {
-      alert('댓글 분석에 실패했습니다.')
+      setCommentAnalysis({ _error: 'network' })
     } finally {
       setCommentAnalysisLoading(false)
     }
@@ -795,6 +775,11 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
                     <>💬 시청자 반응 요약 보기</>
                   )}
                 </button>
+              ) : commentAnalysis?._error ? (
+                <div className="flex items-center justify-between px-4 py-3 rounded-2xl border border-white/10 bg-[#2a2826] text-sm text-[#75716e]">
+                  <span>💬 댓글을 불러올 수 없습니다 <span className="text-[10px]">(YouTube 댓글 API 제한)</span></span>
+                  <button onClick={() => setCommentAnalysis(null)} className="hover:text-white text-xs transition-colors ml-3">✕</button>
+                </div>
               ) : (
                 <div className="bg-[#2a2826] border border-amber-500/15 rounded-2xl p-5 flex flex-col gap-4">
                   <div className="flex items-center justify-between">
@@ -880,11 +865,6 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
                 </div>
               )}
             </div>
-          )}
-
-          {/* 메타인지 자기점검 — summary 탭에서만 표시 */}
-          {activeTab === 'summary' && (
-            <MetaCheckButtons metaLevel={metaLevel} onSelect={handleMeta} />
           )}
 
           {/* 광고 — summary 탭 하단 */}
@@ -1100,7 +1080,15 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
         </div>
       </div>
 
-      {quiz && <QuizPanel quiz={quiz} onClose={() => setQuiz(null)} onAnswer={handleQuizAnswer} />}
+      {quiz && (
+        <QuizPanel
+          quiz={quiz}
+          onClose={() => setQuiz(null)}
+          onAnswer={handleQuizAnswer}
+          showMeta={data.category === 'learning' || data.category === 'english'}
+          onMeta={data.category === 'learning' || data.category === 'english' ? handleQuizMeta : undefined}
+        />
+      )}
       {worksheet && <WorksheetPanel worksheet={worksheet} onClose={() => setWorksheet(null)} />}
 
       {/* 레시피 음성 제어 — YouTube 영상이 있을 때만 */}

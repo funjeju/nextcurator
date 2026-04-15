@@ -4,7 +4,8 @@ import React, { createContext, useContext, useEffect, useState } from 'react'
 import {
   User, onAuthStateChanged, GoogleAuthProvider, signInWithPopup,
   signOut as firebaseSignOut, createUserWithEmailAndPassword,
-  signInWithEmailAndPassword,
+  signInWithEmailAndPassword, sendEmailVerification,
+  sendPasswordResetEmail, updateProfile,
 } from 'firebase/auth'
 import { auth } from '@/lib/firebase'
 import { getUserProfile, initNewUserTokens, UserProfile } from '@/lib/db'
@@ -13,11 +14,19 @@ interface AuthContextType {
   user: User | null
   loading: boolean
   userProfile: UserProfile | null
-  needsProfile: boolean          // 온보딩 모달 표시 여부
+  needsProfile: boolean
   refreshProfile: () => Promise<void>
   signInWithGoogle: () => Promise<void>
   signInStudent: (email: string, password: string) => Promise<void>
+  signInWithEmail: (email: string, password: string) => Promise<void>
+  signUpWithEmail: (email: string, password: string, displayName: string) => Promise<'verify_email'>
+  sendPasswordReset: (email: string) => Promise<void>
   signOut: () => Promise<void>
+  // 인증 모달 제어
+  authModalOpen: boolean
+  authModalView: 'login' | 'signup'
+  openAuthModal: (view?: 'login' | 'signup') => void
+  closeAuthModal: () => void
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -28,7 +37,14 @@ const AuthContext = createContext<AuthContextType>({
   refreshProfile: async () => {},
   signInWithGoogle: async () => {},
   signInStudent: async () => {},
+  signInWithEmail: async () => {},
+  signUpWithEmail: async () => 'verify_email',
+  sendPasswordReset: async () => {},
   signOut: async () => {},
+  authModalOpen: false,
+  authModalView: 'login',
+  openAuthModal: () => {},
+  closeAuthModal: () => {},
 })
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -36,6 +52,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true)
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
   const [needsProfile, setNeedsProfile] = useState(false)
+  const [authModalOpen, setAuthModalOpen] = useState(false)
+  const [authModalView, setAuthModalView] = useState<'login' | 'signup'>('login')
+
+  const openAuthModal = (view: 'login' | 'signup' = 'login') => {
+    setAuthModalView(view)
+    setAuthModalOpen(true)
+  }
+  const closeAuthModal = () => setAuthModalOpen(false)
 
   const loadProfile = async (u: User) => {
     try {
@@ -104,7 +128,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signInStudent = async (email: string, password: string) => {
     await signInWithEmailAndPassword(auth, email, password)
-    // 프로필 로드는 onAuthStateChanged에서 처리됨
+  }
+
+  const signInWithEmail = async (email: string, password: string) => {
+    const cred = await signInWithEmailAndPassword(auth, email, password)
+    if (!cred.user.emailVerified) {
+      await firebaseSignOut(auth)
+      throw new Error('EMAIL_NOT_VERIFIED')
+    }
+  }
+
+  const signUpWithEmail = async (email: string, password: string, displayName: string): Promise<'verify_email'> => {
+    const cred = await createUserWithEmailAndPassword(auth, email, password)
+    await updateProfile(cred.user, { displayName })
+    await sendEmailVerification(cred.user, {
+      url: `${typeof window !== 'undefined' ? window.location.origin : 'https://ssoktube.com'}/`,
+    })
+    // 인증 메일 발송 후 즉시 로그아웃 — 이메일 인증 후 다시 로그인하도록
+    await firebaseSignOut(auth)
+    return 'verify_email'
+  }
+
+  const sendPasswordReset = async (email: string) => {
+    await sendPasswordResetEmail(auth, email, {
+      url: `${typeof window !== 'undefined' ? window.location.origin : 'https://ssoktube.com'}/`,
+    })
   }
 
   const signOut = async () => {
@@ -117,8 +165,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
+  // 로그인 성공 시 모달 자동 닫기
+  useEffect(() => {
+    if (user) closeAuthModal()
+  }, [user])
+
   return (
-    <AuthContext.Provider value={{ user, loading, userProfile, needsProfile, refreshProfile, signInWithGoogle, signInStudent, signOut }}>
+    <AuthContext.Provider value={{
+      user, loading, userProfile, needsProfile, refreshProfile,
+      signInWithGoogle, signInStudent, signInWithEmail, signUpWithEmail, sendPasswordReset,
+      signOut,
+      authModalOpen, authModalView, openAuthModal, closeAuthModal,
+    }}>
       {children}
     </AuthContext.Provider>
   )

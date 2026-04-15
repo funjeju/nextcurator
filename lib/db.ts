@@ -714,7 +714,19 @@ export async function getSavedSummariesByFolder(userId: string, folderId: string
       q = query(savedRef, where('userId', '==', userId), where('folderId', '==', folderId))
     }
     const snap = await getDocs(q)
-    return snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as SavedSummary))
+    const items = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as SavedSummary))
+    // 특정 폴더: sortOrder 우선, 없으면 최신순 / 전체: 무조건 최신순
+    if (folderId === 'all') {
+      return items.sort((a, b) => (b.createdAt?.toMillis?.() ?? 0) - (a.createdAt?.toMillis?.() ?? 0))
+    }
+    return items.sort((a, b) => {
+      const aHasOrder = typeof a.sortOrder === 'number'
+      const bHasOrder = typeof b.sortOrder === 'number'
+      if (aHasOrder && bHasOrder) return (a.sortOrder as number) - (b.sortOrder as number)
+      if (aHasOrder) return -1
+      if (bHasOrder) return 1
+      return (b.createdAt?.toMillis?.() ?? 0) - (a.createdAt?.toMillis?.() ?? 0)
+    })
   } else {
     // 타인은 반드시 isPublic == true 가 쿼리에 포함되어야 함
     const qPublic = query(savedRef, where('isPublic', '==', true))

@@ -7,30 +7,41 @@ export interface QuizAnswerLog {
   questionIdx: number
   selected: string
   correct: boolean
+  metaLevel?: 'complete' | 'confused' | 'unknown'
+}
+
+export interface QuizMetaLog {
+  questionIdx: number
+  question: string
+  metaLevel: 'complete' | 'confused' | 'unknown'
 }
 
 interface Props {
   quiz: QuizData
   onClose: () => void
-  onAnswer?: (log: QuizAnswerLog) => void   // 문제별 정답 여부 콜백
+  onAnswer?: (log: QuizAnswerLog) => void
+  showMeta?: boolean
+  onMeta?: (log: QuizMetaLog) => void
 }
 
-export default function QuizPanel({ quiz, onClose, onAnswer }: Props) {
+export default function QuizPanel({ quiz, onClose, onAnswer, showMeta, onMeta }: Props) {
   const [idx, setIdx] = useState(0)
   const [flipped, setFlipped] = useState(false)
   const [selected, setSelected] = useState<string | null>(null)
   const [score, setScore] = useState(0)
   const [done, setDone] = useState(false)
   const [answers, setAnswers] = useState<boolean[]>([])
+  const [pendingMeta, setPendingMeta] = useState<'complete' | 'confused' | 'unknown' | null>(null)
 
   const q = quiz.questions[idx]
   const total = quiz.questions.length
 
-  const next = (correct: boolean, chosenOption?: string) => {
-    onAnswer?.({ questionIdx: idx, selected: chosenOption ?? (correct ? '알았어' : '몰랐어'), correct })
+  const next = (correct: boolean, chosenOption?: string, metaLevel?: 'complete' | 'confused' | 'unknown') => {
+    onAnswer?.({ questionIdx: idx, selected: chosenOption ?? (correct ? '알았어' : '몰랐어'), correct, metaLevel })
     const newAnswers = [...answers, correct]
     setAnswers(newAnswers)
     if (correct) setScore(s => s + 1)
+    setPendingMeta(null)
     if (idx + 1 >= total) {
       setDone(true)
     } else {
@@ -38,6 +49,11 @@ export default function QuizPanel({ quiz, onClose, onAnswer }: Props) {
       setFlipped(false)
       setSelected(null)
     }
+  }
+
+  const handleMetaSelect = (level: 'complete' | 'confused' | 'unknown') => {
+    setPendingMeta(level)
+    onMeta?.({ questionIdx: idx, question: q.question, metaLevel: level })
   }
 
   const restart = () => {
@@ -95,9 +111,23 @@ export default function QuizPanel({ quiz, onClose, onAnswer }: Props) {
         {/* 문제 */}
         <div className="p-5 flex flex-col gap-4 min-h-[360px]">
           {q.type === 'flashcard' ? (
-            <FlashCard q={q} flipped={flipped} onFlip={() => setFlipped(true)} onNext={(correct) => next(correct)} />
+            <FlashCard
+              q={q} flipped={flipped}
+              onFlip={() => setFlipped(true)}
+              onNext={(correct) => next(correct)}
+              showMeta={showMeta}
+              onMetaSelect={handleMetaSelect}
+              pendingMeta={pendingMeta}
+            />
           ) : (
-            <MultipleChoice q={q} selected={selected} onSelect={setSelected} onNext={(correct) => next(correct, selected ?? '')} />
+            <MultipleChoice
+              q={q} selected={selected}
+              onSelect={setSelected}
+              onNext={(correct) => next(correct, selected ?? '', pendingMeta ?? undefined)}
+              showMeta={showMeta}
+              onMetaSelect={handleMetaSelect}
+              pendingMeta={pendingMeta}
+            />
           )}
         </div>
       </div>
@@ -105,9 +135,44 @@ export default function QuizPanel({ quiz, onClose, onAnswer }: Props) {
   )
 }
 
-function FlashCard({ q, flipped, onFlip, onNext }: {
+const META_BUTTONS = [
+  { level: 'complete' as const, emoji: '✅', label: '완전이해', active: 'bg-emerald-500/20 border-emerald-500 text-emerald-300', idle: 'border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10' },
+  { level: 'confused' as const, emoji: '🤔', label: '알쏭달쏭', active: 'bg-yellow-500/20 border-yellow-500 text-yellow-300',   idle: 'border-yellow-500/30 text-yellow-400 hover:bg-yellow-500/10' },
+  { level: 'unknown'  as const, emoji: '❓', label: '전혀모름',  active: 'bg-red-500/20 border-red-500 text-red-300',            idle: 'border-red-500/30 text-red-400 hover:bg-red-500/10' },
+]
+
+function MetaRow({ pendingMeta, onSelect }: {
+  pendingMeta: 'complete' | 'confused' | 'unknown' | null
+  onSelect: (level: 'complete' | 'confused' | 'unknown') => void
+}) {
+  return (
+    <div className="flex flex-col gap-1.5 mt-1">
+      <p className="text-center text-[10px] text-[#75716e] uppercase tracking-wider">이 문제를 얼마나 이해했나요?</p>
+      <div className="flex gap-2">
+        {META_BUTTONS.map(btn => (
+          <button
+            key={btn.level}
+            onClick={() => onSelect(btn.level)}
+            className={`flex-1 py-2 rounded-xl border text-xs font-bold transition-all ${pendingMeta === btn.level ? btn.active : btn.idle}`}
+          >
+            <span className="block text-base mb-0.5">{btn.emoji}</span>
+            {btn.label}
+          </button>
+        ))}
+      </div>
+      {pendingMeta && (
+        <p className="text-center text-[10px] text-[#75716e]">✓ 선생님께 전달됩니다</p>
+      )}
+    </div>
+  )
+}
+
+function FlashCard({ q, flipped, onFlip, onNext, showMeta, onMetaSelect, pendingMeta }: {
   q: QuizQuestion; flipped: boolean
   onFlip: () => void; onNext: (correct: boolean) => void
+  showMeta?: boolean
+  onMetaSelect?: (level: 'complete' | 'confused' | 'unknown') => void
+  pendingMeta?: 'complete' | 'confused' | 'unknown' | null
 }) {
   return (
     <div className="flex flex-col gap-4 flex-1">
@@ -134,19 +199,24 @@ function FlashCard({ q, flipped, onFlip, onNext }: {
       </div>
 
       {flipped && (
-        <div className="flex gap-2">
-          <button
-            onClick={() => onNext(false)}
-            className="flex-1 py-3 bg-[#32302e] border border-red-500/30 text-red-400 hover:bg-red-500/10 font-bold rounded-2xl text-sm transition-colors"
-          >
-            😅 몰랐어
-          </button>
-          <button
-            onClick={() => onNext(true)}
-            className="flex-1 py-3 bg-[#32302e] border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10 font-bold rounded-2xl text-sm transition-colors"
-          >
-            ✅ 알았어
-          </button>
+        <div className="flex flex-col gap-2">
+          {showMeta && onMetaSelect && (
+            <MetaRow pendingMeta={pendingMeta ?? null} onSelect={onMetaSelect} />
+          )}
+          <div className="flex gap-2">
+            <button
+              onClick={() => { onMetaSelect?.('unknown'); onNext(false) }}
+              className="flex-1 py-3 bg-[#32302e] border border-red-500/30 text-red-400 hover:bg-red-500/10 font-bold rounded-2xl text-sm transition-colors"
+            >
+              😅 몰랐어
+            </button>
+            <button
+              onClick={() => { onMetaSelect?.('complete'); onNext(true) }}
+              className="flex-1 py-3 bg-[#32302e] border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10 font-bold rounded-2xl text-sm transition-colors"
+            >
+              ✅ 알았어
+            </button>
+          </div>
         </div>
       )}
       {!flipped && (
@@ -156,9 +226,12 @@ function FlashCard({ q, flipped, onFlip, onNext }: {
   )
 }
 
-function MultipleChoice({ q, selected, onSelect, onNext }: {
+function MultipleChoice({ q, selected, onSelect, onNext, showMeta, onMetaSelect, pendingMeta }: {
   q: QuizQuestion; selected: string | null
   onSelect: (v: string) => void; onNext: (correct: boolean) => void
+  showMeta?: boolean
+  onMetaSelect?: (level: 'complete' | 'confused' | 'unknown') => void
+  pendingMeta?: 'complete' | 'confused' | 'unknown' | null
 }) {
   const options = q.options ?? []
   const confirmed = selected !== null
@@ -192,12 +265,17 @@ function MultipleChoice({ q, selected, onSelect, onNext }: {
         })}
       </div>
       {confirmed && (
-        <button
-          onClick={() => onNext(selected === q.answer)}
-          className="w-full py-3 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-2xl text-sm transition-colors mt-1"
-        >
-          다음 →
-        </button>
+        <div className="flex flex-col gap-2 mt-1">
+          {showMeta && onMetaSelect && (
+            <MetaRow pendingMeta={pendingMeta ?? null} onSelect={onMetaSelect} />
+          )}
+          <button
+            onClick={() => onNext(selected === q.answer)}
+            className="w-full py-3 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-2xl text-sm transition-colors"
+          >
+            다음 →
+          </button>
+        </div>
       )}
     </div>
   )

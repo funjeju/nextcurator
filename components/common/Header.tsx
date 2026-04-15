@@ -8,7 +8,7 @@ import { useTheme } from './ThemeProvider'
 import MessagesModal from '@/components/messages/MessagesModal'
 
 export default function Header({ title = 'SSOKTUBE' }: { title?: string }) {
-  const { user, userProfile, signInWithGoogle, signOut } = useAuth()
+  const { user, userProfile, signOut, openAuthModal } = useAuth()
   const { theme, toggle } = useTheme()
   const [unread, setUnread] = useState(0)
   const [showMessages, setShowMessages] = useState(false)
@@ -133,12 +133,20 @@ export default function Header({ title = 'SSOKTUBE' }: { title?: string }) {
               </button>
             </div>
           ) : (
-            <button
-              onClick={signInWithGoogle}
-              className="px-3 py-1.5 bg-white text-black text-xs font-bold rounded-full hover:bg-zinc-200 transition-colors whitespace-nowrap"
-            >
-              Login
-            </button>
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => openAuthModal('login')}
+                className="px-3 py-1.5 bg-white/10 text-white text-xs font-bold rounded-full hover:bg-white/20 transition-colors whitespace-nowrap border border-white/10"
+              >
+                로그인
+              </button>
+              <button
+                onClick={() => openAuthModal('signup')}
+                className="px-3 py-1.5 bg-orange-500 text-white text-xs font-bold rounded-full hover:bg-orange-600 transition-colors whitespace-nowrap"
+              >
+                회원가입
+              </button>
+            </div>
           )}
         </div>
       </div>
