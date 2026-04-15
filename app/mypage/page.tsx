@@ -700,8 +700,8 @@ export default function MyPage() {
                 )}
               </p>
               <p className="text-[#75716e] text-xs truncate">{user.email}</p>
-              {/* 선생님 전환 버튼 — 일반 사용자만 */}
-              {userProfile?.role !== 'teacher' && userProfile?.role !== 'student' && (
+              {/* 선생님 전환 버튼 — role 없는 일반 사용자만 */}
+              {userProfile && !userProfile.role && (
                 <button
                   onClick={() => { setShowTeacherModal(true); setTeacherDoneCode(''); setTeacherError('') }}
                   className="mt-1 text-[10px] text-emerald-400 hover:text-emerald-300 transition-colors"

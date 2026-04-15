@@ -45,14 +45,28 @@ export default function ClassDashboard() {
     if (!user || !classCode) return
     setLoading(true)
     try {
-      const [cls, studentList, logs, userFolders] = await Promise.all([
+      // logs는 실패해도 대시보드는 표시
+      const [cls, studentList, userFolders] = await Promise.all([
         getClass(classCode),
-        getClassStudents(classCode),
-        getClassLogs(classCode, 1000),
-        getUserFolders(user.uid),
+        getClassStudents(classCode).catch(() => []),
+        getUserFolders(user.uid).catch(() => []),
       ])
 
-      if (!cls || cls.teacherId !== user.uid) {
+      if (!cls) {
+        // 방금 생성된 클래스라면 짧게 재시도
+        await new Promise(r => setTimeout(r, 1000))
+        const retry = await getClass(classCode).catch(() => null)
+        if (!retry || retry.teacherId !== user.uid) {
+          router.push('/')
+          return
+        }
+        setClassroom(retry)
+        setFolders(userFolders)
+        setStudents([])
+        return
+      }
+
+      if (cls.teacherId !== user.uid) {
         router.push('/')
         return
       }
@@ -60,9 +74,12 @@ export default function ClassDashboard() {
       setClassroom(cls)
       setFolders(userFolders)
 
+      // 로그 조회 (실패해도 학생 목록은 표시)
+      const logs = await getClassLogs(classCode, 1000).catch(() => [])
+
       // 학생별 활동 집계
       const rows: StudentRow[] = studentList.map((s: any) => {
-        const sLogs = logs.filter(l => l.studentId === s.uid)
+        const sLogs = logs.filter((l: ActivityLog) => l.studentId === s.uid)
         const summary = summarizeStudentLogs(sLogs)
         return {
           uid: s.uid,
@@ -79,6 +96,8 @@ export default function ClassDashboard() {
       })
 
       setStudents(rows)
+    } catch (e) {
+      console.error('[ClassDashboard] loadData error:', e)
     } finally {
       setLoading(false)
     }
@@ -132,7 +151,14 @@ export default function ClassDashboard() {
     )
   }
 
-  if (!classroom) return null
+  if (!classroom) return (
+    <div className="min-h-screen bg-[#1a1918] flex flex-col items-center justify-center gap-3 text-center px-4">
+      <p className="text-4xl">🏫</p>
+      <p className="text-white font-bold">클래스를 불러올 수 없습니다.</p>
+      <p className="text-gray-500 text-sm">클래스 코드 <span className="font-mono text-orange-400">{classCode}</span>가 존재하지 않거나 접근 권한이 없습니다.</p>
+      <Link href="/mypage" className="mt-4 px-5 py-2.5 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-xl text-sm transition-colors">마이페이지로 이동</Link>
+    </div>
+  )
 
   return (
     <div className="min-h-screen bg-[#1a1918] text-white">
