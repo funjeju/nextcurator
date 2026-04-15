@@ -116,10 +116,10 @@ service cloud.firestore {
       allow create: if request.auth != null;
     }
 
-    // classes: 로그인 유저 읽기, 교사(생성자)만 수정/삭제
+    // classes: 누구나 읽기 (서버 API에서 코드 확인용), 서버 API 생성 허용, 교사만 수정/삭제
     match /classes/{classCode} {
-      allow read: if request.auth != null;
-      allow create: if request.auth != null;
+      allow read: if true;
+      allow create: if true;
       allow update, delete: if request.auth != null && request.auth.uid == resource.data.teacherId;
     }
 

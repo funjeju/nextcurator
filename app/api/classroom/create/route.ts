@@ -26,17 +26,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: '필수 항목이 누락되었습니다.' }, { status: 400 })
     }
 
-    // idToken이 있으면 인증 헤더로, 없으면 API 키만
-    const authHeader = idToken
-      ? { 'Authorization': `Bearer ${idToken}`, 'Content-Type': 'application/json' }
-      : { 'Content-Type': 'application/json' }
-    const keyParam = idToken ? '' : `?key=${API_KEY}`
+    // idToken이 있으면 Bearer + API 키 모두 사용 (Firestore REST는 둘 다 필요)
+    const authHeader: Record<string, string> = { 'Content-Type': 'application/json' }
+    if (idToken) authHeader['Authorization'] = `Bearer ${idToken}`
 
     const classCode = await getUniqueCode()
     const now = new Date().toISOString()
 
     // Firestore에 classes 문서 생성
-    const url = `${FIRESTORE_BASE}/classes/${classCode}${keyParam}`
+    const url = `${FIRESTORE_BASE}/classes/${classCode}?key=${API_KEY}`
     const body = {
       fields: {
         classCode: { stringValue: classCode },
@@ -62,7 +60,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 교사 user 문서에 role + classCode + profileCompleted 저장
-    const userUrl = `${FIRESTORE_BASE}/users/${uid}?updateMask.fieldPaths=role&updateMask.fieldPaths=classCode&updateMask.fieldPaths=schoolName&updateMask.fieldPaths=grade&updateMask.fieldPaths=classNum&updateMask.fieldPaths=profileCompleted${keyParam ? `&key=${API_KEY}` : ''}`
+    const userUrl = `${FIRESTORE_BASE}/users/${uid}?updateMask.fieldPaths=role&updateMask.fieldPaths=classCode&updateMask.fieldPaths=schoolName&updateMask.fieldPaths=grade&updateMask.fieldPaths=classNum&updateMask.fieldPaths=profileCompleted&key=${API_KEY}`
     await fetch(userUrl, {
       method: 'PATCH',
       headers: authHeader,
