@@ -2,41 +2,39 @@ import { NextRequest, NextResponse } from 'next/server'
 import { runFirestoreQuery } from '@/lib/firestore-rest'
 import { checkIsAdmin } from '@/lib/admin'
 
+const PAGE_SIZE = 10
+
 export async function POST(req: NextRequest) {
   try {
-    const { uid, email, search = '' } = await req.json()
+    const { uid, email, search = '', page = 1 } = await req.json()
     const isAdmin = await checkIsAdmin(uid, email)
     if (!isAdmin) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    // 1. 전체 분석 기록(summaries) 가져오기
-    // 정렬(orderBy)을 제거하여 필드가 없는 데이터도 모두 나오게 함 (데이터 유실 방지)
-    const summaries = await runFirestoreQuery('summaries', { 
-      limit: 100 
+    const offset = (page - 1) * PAGE_SIZE
+
+    // 검색 시: 넓게 가져와서 필터 / 일반 조회: 페이지 단위로만
+    const fetchLimit = search ? 500 : PAGE_SIZE
+    const fetchOffset = search ? 0 : offset
+
+    const summaries = await runFirestoreQuery('summaries', {
+      limit: fetchLimit,
+      offset: fetchOffset,
+      orderBy: [{ field: { fieldPath: 'summarizedAt' }, direction: 'DESCENDING' }],
     })
 
-    // 2. 수동 정렬 (최신순 - summarizedAt 또는 createdAt 기준)
-    const sorted = summaries.sort((a: any, b: any) => {
-      const dateA = a.summarizedAt || a.createdAt || ''
-      const dateB = b.summarizedAt || b.createdAt || ''
-      return dateB.localeCompare(dateA)
-    })
-
-    // 3. 실제 저장본(saved_summaries)과 비교하기 위해 sessionId 목록 추출
-    // 전체를 다 가져오기엔 무거우므로 통계용으로만 사용하거나 부분 조회 필요
     let savedList: any[] = []
     try {
       savedList = await runFirestoreQuery('saved_summaries', { limit: 500 })
-    } catch (e) {
-      console.warn('[Admin] Failed to fetch saved_summaries (possibly 403), proceeding with empty list')
+    } catch {
+      // 403 등 실패 시 빈 배열로 진행
     }
-    
+
     const savedMap = new Map()
     savedList.forEach((s: any) => savedMap.set(s.sessionId, s))
 
-    // 4. 데이터 가공 (저장 여부 플래그 추가)
-    let processed = sorted.map((s: any) => {
+    let processed = summaries.map((s: any) => {
       const saved = savedMap.get(s.id)
       return {
         ...s,
@@ -44,20 +42,25 @@ export async function POST(req: NextRequest) {
         userDisplayName: saved?.userDisplayName || '익명 (캐시)',
         userId: saved?.userId || '',
         createdAt: s.summarizedAt || s.createdAt || '',
-        originalId: s.id
+        originalId: s.id,
       }
     })
 
     if (search) {
       const q = search.toLowerCase()
-      processed = processed.filter((s: any) => 
-        (s.title || '').toLowerCase().includes(q) || 
+      processed = processed.filter((s: any) =>
+        (s.title || '').toLowerCase().includes(q) ||
         (s.userDisplayName || '').toLowerCase().includes(q) ||
         (s.id || '').toLowerCase().includes(q)
       )
+      // 검색 결과도 페이지 단위로 자름
+      const total = processed.length
+      processed = processed.slice(offset, offset + PAGE_SIZE)
+      return NextResponse.json({ summaries: processed, total, page, pageSize: PAGE_SIZE })
     }
 
-    return NextResponse.json({ summaries: processed })
+    // 전체 건수는 별도 집계 쿼리로
+    return NextResponse.json({ summaries: processed, page, pageSize: PAGE_SIZE })
   } catch (error: any) {
     console.error('[Admin API] Error:', error.message)
     return NextResponse.json({ error: error.message }, { status: 500 })

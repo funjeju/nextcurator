@@ -24,6 +24,8 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true)
   const [isAdmin, setIsAdmin] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [page, setPage] = useState(1)
+  const [hasMore, setHasMore] = useState(true)
 
   // 환경 변수는 클라이언트에서 접근 가능하도록 NEXT_PUBLIC_ 사용
   const ADMIN_EMAIL = process.env.NEXT_PUBLIC_ADMIN_EMAIL || 'naggu1999@gmail.com'
@@ -40,21 +42,21 @@ export default function AdminDashboard() {
     }
   }, [user, authLoading, ADMIN_EMAIL])
 
-  const loadData = async () => {
+  const loadData = async (targetPage = page) => {
     setLoading(true)
     try {
       const auth = { uid: user?.uid, email: user?.email }
-      
+
       const [statsRes, listRes] = await Promise.all([
-        fetch('/api/admin/stats', { 
-          method: 'POST', 
+        fetch('/api/admin/stats', {
+          method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(auth) 
+          body: JSON.stringify(auth)
         }),
-        fetch('/api/admin/summaries', { 
-          method: 'POST', 
+        fetch('/api/admin/summaries', {
+          method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ...auth, search }) 
+          body: JSON.stringify({ ...auth, search, page: targetPage })
         })
       ])
 
@@ -62,12 +64,18 @@ export default function AdminDashboard() {
       if (listRes.ok) {
         const data = await listRes.json()
         setSummaries(data.summaries)
+        setHasMore(data.summaries.length === 10)
       }
     } catch (e) {
       console.error('Failed to load admin data:', e)
     } finally {
       setLoading(false)
     }
+  }
+
+  const goToPage = (newPage: number) => {
+    setPage(newPage)
+    loadData(newPage)
   }
 
   const handleDelete = async (id: string, title: string) => {
@@ -149,7 +157,7 @@ export default function AdminDashboard() {
                 placeholder="제목, 유저, ID 검색..."
                 value={search}
                 onChange={e => setSearch(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && loadData()}
+                onKeyDown={e => { if (e.key === 'Enter') { setPage(1); loadData(1) } }}
                 className="bg-[#1a1918] border border-white/10 rounded-xl px-4 py-2.5 pl-10 text-xs focus:outline-none focus:border-orange-500 w-64 transition-all"
               />
               <span className="absolute left-3 top-3 opacity-30">🔍</span>
@@ -221,6 +229,27 @@ export default function AdminDashboard() {
           {summaries.length === 0 && (
             <div className="py-20 text-center text-gray-500">
               데이터가 없습니다.
+            </div>
+          )}
+
+          {/* 페이지네이션 */}
+          {(page > 1 || hasMore) && (
+            <div className="flex items-center justify-center gap-3 mt-6">
+              <button
+                onClick={() => goToPage(page - 1)}
+                disabled={page === 1 || loading}
+                className="px-4 py-2 rounded-xl text-xs bg-white/5 hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              >
+                ← 이전
+              </button>
+              <span className="text-xs text-gray-500">{page} 페이지</span>
+              <button
+                onClick={() => goToPage(page + 1)}
+                disabled={!hasMore || loading}
+                className="px-4 py-2 rounded-xl text-xs bg-white/5 hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              >
+                다음 →
+              </button>
             </div>
           )}
         </div>
