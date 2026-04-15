@@ -55,8 +55,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: err }, { status: 500 })
     }
 
-    // 교사 user 문서에 role + classCode 저장
-    const userUrl = `${FIRESTORE_BASE}/users/${uid}?updateMask.fieldPaths=role&updateMask.fieldPaths=classCode&updateMask.fieldPaths=schoolName&updateMask.fieldPaths=grade&updateMask.fieldPaths=classNum&key=${API_KEY}`
+    // 교사 user 문서에 role + classCode + profileCompleted 저장
+    const userUrl = `${FIRESTORE_BASE}/users/${uid}?updateMask.fieldPaths=role&updateMask.fieldPaths=classCode&updateMask.fieldPaths=schoolName&updateMask.fieldPaths=grade&updateMask.fieldPaths=classNum&updateMask.fieldPaths=profileCompleted&key=${API_KEY}`
     await fetch(userUrl, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -67,6 +67,7 @@ export async function POST(req: NextRequest) {
           schoolName: { stringValue: schoolName },
           grade: { integerValue: String(grade) },
           classNum: { integerValue: String(classNum) },
+          profileCompleted: { booleanValue: true },
         }
       }),
     })

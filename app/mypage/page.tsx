@@ -9,11 +9,12 @@ import {
   getUserFolders, getSavedSummariesByFolder, deleteSavedSummary, updateSummaryFolder,
   getPendingFriendRequests, acceptFriendRequest, rejectFriendRequest, getFriends,
   batchUpdateSortOrder, renameFolder, deleteFolder, createSharedFolder,
-  updateFolderVisibility, cloneFolder, createFolder,
+  updateFolderVisibility, cloneFolder, createFolder, updateUserAvatar,
   Folder, SavedSummary, FriendRequest,
 } from '@/lib/db'
 import { useAuth } from '@/providers/AuthProvider'
 import { PROFILE_COMPLETE_TOKENS } from '@/lib/db'
+import { AVATARS, getAvatarBg } from '@/lib/avatar'
 import FloatingChat from '@/components/chat/FloatingChat'
 
 const CATEGORY_LABEL: Record<string, string> = {
@@ -247,6 +248,11 @@ export default function MyPage() {
   const catDropdownRef = useRef<HTMLDivElement>(null)
   const [creatingFolder, setCreatingFolder] = useState(false)
   const [newFolderName, setNewFolderName] = useState('')
+  const [showAvatarPicker, setShowAvatarPicker] = useState(false)
+  const [currentAvatar, setCurrentAvatar] = useState<string>('')
+  const [savingAvatar, setSavingAvatar] = useState(false)
+  const [aiSearchLoading, setAiSearchLoading] = useState(false)
+  const [aiSearchIds, setAiSearchIds] = useState<string[] | null>(null)
 
   // 폴더 메뉴 외부 클릭 시 닫기
   useEffect(() => {
@@ -267,6 +273,11 @@ export default function MyPage() {
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
   }, [catDropdownOpen])
+
+  // userProfile 로드되면 currentAvatar 초기화
+  useEffect(() => {
+    if (userProfile?.avatarEmoji) setCurrentAvatar(userProfile.avatarEmoji)
+  }, [userProfile])
 
   useEffect(() => {
     const fetchInit = async () => {
@@ -289,6 +300,50 @@ export default function MyPage() {
     }
     fetchInit()
   }, [user])
+
+  const handleAvatarChange = async (emoji: string) => {
+    if (!user) return
+    setSavingAvatar(true)
+    try {
+      await updateUserAvatar(user.uid, emoji)
+      setCurrentAvatar(emoji)
+      setShowAvatarPicker(false)
+    } catch {
+      alert('아바타 변경에 실패했습니다.')
+    } finally {
+      setSavingAvatar(false)
+    }
+  }
+
+  const handleAiSearch = async () => {
+    const q = searchQuery.trim()
+    if (!q) return
+    setAiSearchLoading(true)
+    try {
+      const pool = allSummaries  // 현재 로드된 전체 항목으로 검색
+      const payload = pool.map(s => ({
+        id: s.id,
+        title: s.title,
+        category: s.category,
+        tags: s.square_meta?.tags ?? [],
+        topic_cluster: s.square_meta?.topic_cluster ?? '',
+        vibe: s.square_meta?.vibe ?? '',
+      }))
+      const res = await fetch('/api/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: q, summaries: payload }),
+      })
+      const data = await res.json()
+      setAiSearchIds(data.results ?? [])
+    } catch {
+      setAiSearchIds([])
+    } finally {
+      setAiSearchLoading(false)
+    }
+  }
+
+  const clearAiSearch = () => { setSearchQuery(''); setAiSearchIds(null) }
 
   // ── 드래그 순서 변경 (특정 폴더에서만 활성화) ──
   const canDrag = activeFolder !== 'all'
@@ -470,18 +525,20 @@ export default function MyPage() {
     ? summaries
     : summaries.filter(s => s.category === selectedCategory)
 
-  const filteredSummaries = searchQuery.trim()
-    ? catFiltered.filter(s => {
-        const q = searchQuery.toLowerCase()
-        const catLabel = (CATEGORY_LABEL[s.category] ?? s.category).toLowerCase()
-        const tags = (s.square_meta?.tags ?? []).join(' ').toLowerCase()
-        return (
-          s.title.toLowerCase().includes(q) ||
-          tags.includes(q) ||
-          catLabel.includes(q)
-        )
-      })
-    : catFiltered
+  const filteredSummaries = aiSearchIds !== null
+    ? aiSearchIds.map(id => allSummaries.find(s => s.id === id)).filter(Boolean) as typeof summaries
+    : searchQuery.trim()
+      ? catFiltered.filter(s => {
+          const q = searchQuery.toLowerCase()
+          const catLabel = (CATEGORY_LABEL[s.category] ?? s.category).toLowerCase()
+          const tags = (s.square_meta?.tags ?? []).join(' ').toLowerCase()
+          return (
+            s.title.toLowerCase().includes(q) ||
+            tags.includes(q) ||
+            catLabel.includes(q)
+          )
+        })
+      : catFiltered
 
   // 현재 폴더 범위에서 실제 존재하는 카테고리만 드롭다운에 노출
   const availableCategories = CATEGORY_ORDER.filter(cat =>
@@ -509,12 +566,62 @@ export default function MyPage() {
       {user && (
         <div className="max-w-7xl mx-auto px-6 mb-6">
           <div className="flex items-center gap-4 bg-[#32302e]/60 border border-white/5 rounded-2xl px-5 py-4">
-            {/* 아바타 */}
-            {user.photoURL ? (
-              <img src={user.photoURL} alt="" className="w-11 h-11 rounded-full border border-white/10 shrink-0" />
-            ) : (
-              <div className="w-11 h-11 rounded-full bg-[#3d3a38] flex items-center justify-center text-xl shrink-0">👤</div>
-            )}
+            {/* 아바타 — Google은 photoURL, 이메일은 이모지 */}
+            <div className="relative shrink-0">
+              {user.photoURL ? (
+                <img src={user.photoURL} alt="" className="w-11 h-11 rounded-full border border-white/10" />
+              ) : currentAvatar ? (
+                <div
+                  className="w-11 h-11 rounded-full flex items-center justify-center text-2xl border border-white/10"
+                  style={{ backgroundColor: getAvatarBg(currentAvatar) }}
+                >
+                  {currentAvatar}
+                </div>
+              ) : (
+                <div className="w-11 h-11 rounded-full bg-[#3d3a38] flex items-center justify-center text-xl border border-white/10">👤</div>
+              )}
+              {/* 아바타 변경 버튼 — 이메일 사용자만 */}
+              {!user.photoURL && (
+                <button
+                  onClick={() => setShowAvatarPicker(v => !v)}
+                  className="absolute -bottom-1 -right-1 w-5 h-5 bg-[#4a4745] hover:bg-orange-500 border border-white/20 rounded-full flex items-center justify-center transition-colors"
+                  title="아바타 변경"
+                >
+                  <svg width="9" height="9" viewBox="0 0 12 12" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round">
+                    <path d="M9 1.5L10.5 3 4.5 9H3v-1.5L9 1.5z"/>
+                  </svg>
+                </button>
+              )}
+              {/* 아바타 픽커 */}
+              {showAvatarPicker && (
+                <div className="absolute top-14 left-0 z-50 bg-[#23211f] border border-white/15 rounded-2xl p-3 shadow-2xl w-52">
+                  <p className="text-[#75716e] text-[10px] font-semibold mb-2 uppercase tracking-wider">아바타 선택</p>
+                  <div className="grid grid-cols-4 gap-1.5">
+                    {AVATARS.map(a => (
+                      <button
+                        key={a.emoji}
+                        onClick={() => handleAvatarChange(a.emoji)}
+                        disabled={savingAvatar}
+                        className={`w-10 h-10 rounded-xl flex items-center justify-center text-xl transition-all border ${
+                          currentAvatar === a.emoji
+                            ? 'border-orange-500 scale-110'
+                            : 'border-transparent hover:border-white/20 hover:scale-105'
+                        }`}
+                        style={{ backgroundColor: a.bg }}
+                      >
+                        {a.emoji}
+                      </button>
+                    ))}
+                  </div>
+                  <button
+                    onClick={() => setShowAvatarPicker(false)}
+                    className="w-full mt-2 text-[#75716e] text-xs hover:text-white transition-colors py-1"
+                  >
+                    닫기
+                  </button>
+                </div>
+              )}
+            </div>
             {/* 이름 + 정보 */}
             <div className="flex-1 min-w-0">
               <p className="text-white font-bold text-sm truncate">{user.displayName || '사용자'}</p>
@@ -736,24 +843,47 @@ export default function MyPage() {
         {/* Content Grid */}
         <main className="flex-1">
           {/* 검색창 + 카테고리 드롭다운 */}
+          {aiSearchIds !== null && (
+            <div className="flex items-center gap-2 mb-2 text-[11px] text-orange-400/80">
+              ✨ AI 검색 결과 {filteredSummaries.length}개 —
+              <button onClick={clearAiSearch} className="text-[#75716e] hover:text-white">전체 보기</button>
+            </div>
+          )}
           <div className="flex items-center gap-3 mb-5">
             <div className="relative flex-1">
               <input
                 type="text"
                 value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
-                placeholder="제목, 태그, 카테고리로 검색..."
-                className="w-full h-10 pl-9 pr-4 bg-[#32302e] border border-white/10 rounded-xl text-sm text-white placeholder:text-[#75716e] focus:outline-none focus:border-orange-500/50 transition-colors"
+                onChange={e => { setSearchQuery(e.target.value); if (!e.target.value.trim()) setAiSearchIds(null) }}
+                onKeyDown={e => { if (e.key === 'Enter' && searchQuery.trim()) handleAiSearch() }}
+                placeholder="자연어로 검색... (예: 당근으로 만드는 요리 영상)"
+                className={`w-full h-10 pl-9 pr-28 bg-[#32302e] border rounded-xl text-sm text-white placeholder:text-[#75716e] focus:outline-none transition-colors ${
+                  aiSearchIds !== null ? 'border-orange-500/60' : 'border-white/10 focus:border-orange-500/50'
+                }`}
               />
               <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#75716e]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
-              {searchQuery && (
-                <button
-                  onClick={() => setSearchQuery('')}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#75716e] hover:text-white text-xs"
-                >✕</button>
-              )}
+              <div className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
+                {searchQuery && (
+                  <button onClick={clearAiSearch} className="text-[#75716e] hover:text-white text-xs">✕</button>
+                )}
+                {searchQuery.trim() && (
+                  <button
+                    onClick={handleAiSearch}
+                    disabled={aiSearchLoading}
+                    className="flex items-center gap-1 px-2 py-1 bg-orange-500 hover:bg-orange-600 text-white text-[10px] font-bold rounded-lg transition-colors disabled:opacity-60 whitespace-nowrap"
+                  >
+                    {aiSearchLoading ? (
+                      <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                      </svg>
+                    ) : '✨'}
+                    AI 검색
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* 카테고리 드롭다운 */}
@@ -855,8 +985,8 @@ export default function MyPage() {
                       )}
                       {searchQuery && (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-[#a4a09c] text-[10px]">
-                          "{searchQuery}"
-                          <button onClick={() => setSearchQuery('')} className="hover:text-white ml-0.5">✕</button>
+                          {aiSearchIds !== null ? '✨ AI 검색' : `"${searchQuery}"`}
+                          <button onClick={clearAiSearch} className="hover:text-white ml-0.5">✕</button>
                         </span>
                       )}
                       <span className="text-[#75716e]">· {filteredSummaries.length}개</span>

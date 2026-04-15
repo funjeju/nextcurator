@@ -47,6 +47,7 @@ export interface UserProfile {
   uid: string
   displayName: string
   photoURL: string
+  avatarEmoji?: string       // 이메일 가입자 전용 이모지 아바타
   email?: string
   // 추가 프로필 정보 (온보딩에서 수집)
   ageGroup?: AgeGroup
@@ -246,6 +247,27 @@ export async function initNewUserTokens(uid: string, displayName: string, photoU
     profileCompleted: false,
     updatedAt: serverTimestamp(),
   })
+}
+
+// 이메일 회원가입 직후 호출 — 이미 exists 체크 없이 avatarEmoji 포함 초기 문서 생성
+export async function setInitialUserDoc(uid: string, displayName: string, email: string, avatarEmoji: string): Promise<void> {
+  await setDoc(doc(db, 'users', uid), {
+    uid,
+    displayName,
+    photoURL: '',
+    avatarEmoji,
+    email,
+    tokens: SIGNUP_BASE_TOKENS,
+    tokensEarnedTotal: SIGNUP_BASE_TOKENS,
+    plan: 'free',
+    profileCompleted: false,
+    updatedAt: serverTimestamp(),
+  })
+}
+
+// 아바타 이모지 변경
+export async function updateUserAvatar(uid: string, avatarEmoji: string): Promise<void> {
+  await updateDoc(doc(db, 'users', uid), { avatarEmoji, updatedAt: serverTimestamp() })
 }
 
 export async function getUserPublicSummaries(userId: string): Promise<SavedSummary[]> {

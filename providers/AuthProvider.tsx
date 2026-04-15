@@ -8,7 +8,8 @@ import {
   sendPasswordResetEmail, updateProfile,
 } from 'firebase/auth'
 import { auth } from '@/lib/firebase'
-import { getUserProfile, initNewUserTokens, UserProfile } from '@/lib/db'
+import { getUserProfile, initNewUserTokens, setInitialUserDoc, UserProfile } from '@/lib/db'
+import { getRandomAvatarEmoji } from '@/lib/avatar'
 
 interface AuthContextType {
   user: User | null
@@ -141,6 +142,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signUpWithEmail = async (email: string, password: string, displayName: string): Promise<'verify_email'> => {
     const cred = await createUserWithEmailAndPassword(auth, email, password)
     await updateProfile(cred.user, { displayName })
+    // 랜덤 아바타 이모지 배정 + 초기 Firestore 문서 생성
+    const avatarEmoji = getRandomAvatarEmoji()
+    await setInitialUserDoc(cred.user.uid, displayName, email, avatarEmoji)
+    // 한국어로 인증 메일 발송
+    auth.languageCode = 'ko'
     await sendEmailVerification(cred.user, {
       url: `${typeof window !== 'undefined' ? window.location.origin : 'https://ssoktube.com'}/`,
     })
@@ -150,6 +156,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   const sendPasswordReset = async (email: string) => {
+    auth.languageCode = 'ko'
     await sendPasswordResetEmail(auth, email, {
       url: `${typeof window !== 'undefined' ? window.location.origin : 'https://ssoktube.com'}/`,
     })

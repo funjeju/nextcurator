@@ -89,7 +89,10 @@
       "Bash(grep -E \"\\\\.\\(tsx|ts\\)$\")",
       "Bash(grep -r \"role\\\\|permission\\\\|access\\\\|visibility\" /c/Users/funjeju/Desktop/aiproject/nextcurator/lib/*.ts)",
       "Bash(node_modules/.bin/tsc --noEmit)",
-      "Bash(node_modules/.bin/tsc --noEmit --skipLibCheck)"
+      "Bash(node_modules/.bin/tsc --noEmit --skipLibCheck)",
+      "Bash(npx --prefix c:/Users/funjeju/Desktop/aiproject/nextcurator tsc --project c:/Users/funjeju/Desktop/aiproject/nextcurator/tsconfig.json --noEmit)",
+      "Bash(dir \"c:\\\\Users\\\\funjeju\\\\Desktop\\\\aiproject\\\\nextcurator\\\\app\\\\api\\\\search\")",
+      "Bash(dir \"c:\\\\Users\\\\funjeju\\\\Desktop\\\\aiproject\\\\nextcurator\\\\app\\\\api\\\\embed\")"
     ]
   }
 }

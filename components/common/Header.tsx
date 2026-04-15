@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useAuth } from '@/providers/AuthProvider'
 import { getTotalUnread } from '@/lib/db'
+import { getAvatarBg } from '@/lib/avatar'
 import { useTheme } from './ThemeProvider'
 import MessagesModal from '@/components/messages/MessagesModal'
 
@@ -125,8 +126,17 @@ export default function Header({ title = 'SSOKTUBE' }: { title?: string }) {
               {/* 학생은 이름 표시, 그 외는 프로필 사진 */}
               {isStudent ? (
                 <span className="text-xs text-white font-bold">{userProfile?.studentName || userProfile?.displayName}</span>
+              ) : user.photoURL ? (
+                <img src={user.photoURL} alt="Profile" className="w-6 h-6 rounded-full border border-white/10" />
+              ) : userProfile?.avatarEmoji ? (
+                <div
+                  className="w-6 h-6 rounded-full flex items-center justify-center text-sm border border-white/10 shrink-0"
+                  style={{ backgroundColor: getAvatarBg(userProfile.avatarEmoji) }}
+                >
+                  {userProfile.avatarEmoji}
+                </div>
               ) : (
-                <img src={user.photoURL || ''} alt="Profile" className="w-6 h-6 rounded-full border border-white/10" />
+                <div className="w-6 h-6 rounded-full bg-[#3d3a38] flex items-center justify-center text-xs border border-white/10">👤</div>
               )}
               <button onClick={signOut} className="text-[11px] text-orange-400 hover:text-orange-300 whitespace-nowrap">
                 Logout

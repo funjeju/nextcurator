@@ -277,6 +277,8 @@ export default function SquarePage() {
   const [likingIds, setLikingIds] = useState<Set<string>>(new Set())
   const [messagingId, setMessagingId] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
+  const [aiSearchLoading, setAiSearchLoading] = useState(false)
+  const [aiSearchIds, setAiSearchIds] = useState<string[] | null>(null)  // null=비활성, []~=결과
   const [commentCounts, setCommentCounts] = useState<Record<string, number>>({})
   const colCount = useColumnCount()
 
@@ -365,22 +367,54 @@ export default function SquarePage() {
     }
   }
 
-  const filtered = summaries
-    .filter(s => activeCategory === 'all' || s.category === activeCategory)
-    .filter(s => {
-      if (!searchQuery.trim()) return true
-      const q = searchQuery.toLowerCase()
-      const tags = (s.square_meta?.tags ?? []).join(' ').toLowerCase()
-      const catLabel = (CATEGORIES.find(c => c.id === s.category)?.label ?? '').toLowerCase()
-      return s.title.toLowerCase().includes(q) || tags.includes(q) || catLabel.includes(q)
-    })
-    .sort((a, b) => {
-      if (sortType === 'popular') return (b.likeCount ?? 0) - (a.likeCount ?? 0)
-      if (sortType === 'views')   return (b.viewCount ?? 0) - (a.viewCount ?? 0)
-      const aT = a.createdAt?.toMillis?.() ?? 0
-      const bT = b.createdAt?.toMillis?.() ?? 0
-      return bT - aT
-    })
+  const handleAiSearch = async () => {
+    const q = searchQuery.trim()
+    if (!q) return
+    setAiSearchLoading(true)
+    try {
+      const payload = summaries.map(s => ({
+        id: s.id,
+        title: s.title,
+        category: s.category,
+        tags: s.square_meta?.tags ?? [],
+        topic_cluster: s.square_meta?.topic_cluster ?? '',
+        vibe: s.square_meta?.vibe ?? '',
+      }))
+      const res = await fetch('/api/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: q, summaries: payload }),
+      })
+      const data = await res.json()
+      setAiSearchIds(data.results ?? [])
+    } catch {
+      setAiSearchIds([])
+    } finally {
+      setAiSearchLoading(false)
+    }
+  }
+
+  const clearSearch = () => { setSearchQuery(''); setAiSearchIds(null) }
+
+  // AI 검색 결과가 있으면 관련도 순 그대로, 없으면 키워드 필터 + 정렬
+  const filtered = aiSearchIds !== null
+    ? aiSearchIds.map(id => summaries.find(s => s.id === id)).filter(Boolean) as typeof summaries
+    : summaries
+        .filter(s => activeCategory === 'all' || s.category === activeCategory)
+        .filter(s => {
+          if (!searchQuery.trim()) return true
+          const q = searchQuery.toLowerCase()
+          const tags = (s.square_meta?.tags ?? []).join(' ').toLowerCase()
+          const catLabel = (CATEGORIES.find(c => c.id === s.category)?.label ?? '').toLowerCase()
+          return s.title.toLowerCase().includes(q) || tags.includes(q) || catLabel.includes(q)
+        })
+        .sort((a, b) => {
+          if (sortType === 'popular') return (b.likeCount ?? 0) - (a.likeCount ?? 0)
+          if (sortType === 'views')   return (b.viewCount ?? 0) - (a.viewCount ?? 0)
+          const aT = a.createdAt?.toMillis?.() ?? 0
+          const bT = b.createdAt?.toMillis?.() ?? 0
+          return bT - aT
+        })
 
   const topCategories = useMemo(
     () => getUserTopCategories(likedIds, allSummaries),
@@ -459,20 +493,43 @@ export default function SquarePage() {
           <input
             type="text"
             value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            placeholder="제목, 태그, 카테고리로 검색..."
-            className="w-full h-10 pl-9 pr-4 bg-[#32302e] border border-white/10 rounded-xl text-sm text-white placeholder:text-[#75716e] focus:outline-none focus:border-orange-500/50 transition-colors"
+            onChange={e => { setSearchQuery(e.target.value); if (!e.target.value.trim()) setAiSearchIds(null) }}
+            onKeyDown={e => { if (e.key === 'Enter' && searchQuery.trim()) handleAiSearch() }}
+            placeholder="자연어로 검색... (예: 당근으로 만드는 요리 영상)"
+            className={`w-full h-10 pl-9 pr-28 bg-[#32302e] border rounded-xl text-sm text-white placeholder:text-[#75716e] focus:outline-none transition-colors ${
+              aiSearchIds !== null ? 'border-orange-500/60' : 'border-white/10 focus:border-orange-500/50'
+            }`}
           />
           <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#75716e]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
           </svg>
-          {searchQuery && (
-            <button
-              onClick={() => setSearchQuery('')}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#75716e] hover:text-white text-xs"
-            >✕</button>
-          )}
+          <div className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
+            {searchQuery && (
+              <button onClick={clearSearch} className="text-[#75716e] hover:text-white text-xs">✕</button>
+            )}
+            {searchQuery.trim() && (
+              <button
+                onClick={handleAiSearch}
+                disabled={aiSearchLoading}
+                className="flex items-center gap-1 px-2 py-1 bg-orange-500 hover:bg-orange-600 text-white text-[10px] font-bold rounded-lg transition-colors disabled:opacity-60 whitespace-nowrap"
+              >
+                {aiSearchLoading ? (
+                  <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                  </svg>
+                ) : '✨'}
+                AI 검색
+              </button>
+            )}
+          </div>
         </div>
+        {aiSearchIds !== null && (
+          <p className="text-[11px] text-orange-400/80 mb-2 flex items-center gap-1">
+            ✨ AI 검색 결과 {filtered.length}개
+            <button onClick={clearSearch} className="text-[#75716e] hover:text-white ml-1">전체 보기</button>
+          </p>
+        )}
 
         {/* 필터 바 */}
         <div className="flex flex-col gap-2 mb-5">
@@ -510,7 +567,7 @@ export default function SquarePage() {
               )
             })}
             <span className="text-[#75716e] text-xs ml-auto">
-              {searchQuery ? `"${searchQuery}" 결과 ${filtered.length}개` : `${filtered.length}개`}
+              {aiSearchIds !== null ? `AI 검색 ${filtered.length}개` : searchQuery ? `"${searchQuery}" ${filtered.length}개` : `${filtered.length}개`}
             </span>
           </div>
         </div>

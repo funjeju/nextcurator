@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useAuth } from '@/providers/AuthProvider'
 
 type View = 'login' | 'signup' | 'forgot' | 'verify_sent'
@@ -16,7 +16,14 @@ export default function AuthModal() {
   const [error, setError] = useState('')
   const [resetSent, setResetSent] = useState(false)
 
-  // authModalView 변경 시 view 동기화
+  // 모달이 열릴 때마다 view와 폼 상태를 authModalView로 리셋
+  useEffect(() => {
+    if (authModalOpen) {
+      setView(authModalView)
+      setEmail(''); setPassword(''); setPasswordConfirm(''); setDisplayName(''); setError(''); setResetSent(false)
+    }
+  }, [authModalOpen, authModalView])
+
   if (!authModalOpen) return null
 
   const resetForm = () => {
