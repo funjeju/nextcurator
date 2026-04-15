@@ -167,6 +167,7 @@ export async function POST(req: NextRequest) {
       cachedTranscript,      // 1차 호출에서 반환된 자막 캐시
       cachedVideoInfo,       // 1차 호출에서 반환된 영상 정보 캐시
       forceAutoCaption,      // true: 한국어 자막 건너뛰고 자동자막으로 추출
+      noSave,                // true: Firestore 저장 안 함 (타인 요약 임시 재분석)
     } = await req.json()
 
     if (!url) {
@@ -276,8 +277,10 @@ export async function POST(req: NextRequest) {
         transcript = result.text
         transcriptSource = result.source
         transcriptLang = result.lang
-      } catch {
-        console.log('자막 추출 실패: 영상 설명 및 댓글 요약으로 대체합니다. (Video ID:', videoId, ')')
+      } catch (e) {
+        const errMsg = (e as Error).message
+        console.warn(`[Summarize] ⚠️ 자막 추출 실패 (${videoId}): ${errMsg} — 영상 설명 및 댓글 요약으로 대체합니다.`)
+        transcriptSource = 'none'
       }
     }
 
@@ -357,12 +360,14 @@ export async function POST(req: NextRequest) {
       reportSummary: reportSummary || '',
     }
 
-    // Firestore REST API로 저장 (Client SDK보다 Vercel 서버리스에서 안정적)
-    try {
-      await saveToFirestore(sessionId, result)
-      console.log('[Summarize] ✅ Saved to Firestore summaries:', sessionId)
-    } catch (e) {
-      console.warn('[Summarize] ⚠️ Failed to save to Firestore:', e)
+    // Firestore 저장 (noSave=true 이면 임시 재분석이므로 저장 스킵)
+    if (!noSave) {
+      try {
+        await saveToFirestore(sessionId, result)
+        console.log('[Summarize] ✅ Saved to Firestore summaries:', sessionId)
+      } catch (e) {
+        console.warn('[Summarize] ⚠️ Failed to save to Firestore:', e)
+      }
     }
 
     return NextResponse.json(result)

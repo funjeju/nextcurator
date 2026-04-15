@@ -163,8 +163,8 @@ export default async function OgImage(
         }}>
           {/* 상단: 브랜드 */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 15, fontWeight: 900, color: cat.color, display: 'flex' }}>🎬</span>
-            <span style={{ fontSize: 15, fontWeight: 900, color: '#fff', display: 'flex' }}>Next Curator</span>
+            <span style={{ fontSize: 15, fontWeight: 900, color: '#fb923c', display: 'flex' }}>SSOK</span>
+            <span style={{ fontSize: 15, fontWeight: 900, color: '#fff', display: 'flex' }}>TUBE</span>
             <div style={{
               marginLeft: 8, padding: '3px 10px', borderRadius: 99,
               background: `${cat.color}22`, border: `1px solid ${cat.color}44`,
@@ -223,9 +223,9 @@ export default async function OgImage(
               </div>
             </div>
             <div style={{ fontSize: 11, color: '#52525b', display: 'flex', gap: 8 }}>
-              <span>가장 스마트한 유튜브 저장소</span>
+              <span>유튜브를 쏙, 내 지식은 쑥</span>
               <span>·</span>
-              <span>nextcurator.vercel.app</span>
+              <span>ssoktube.com</span>
             </div>
           </div>
         </div>

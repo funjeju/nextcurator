@@ -293,11 +293,11 @@ export default function UrlInput() {
           <div className="relative group flex flex-col md:flex-row gap-3">
             <div className="flex flex-1 gap-2">
               <Input
-                placeholder="YouTube, 웹페이지 URL 입력..."
+                placeholder="YouTube URL을 붙여넣으세요..."
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
-                className="flex-1 h-[56px] text-base pl-5 pr-4 bg-[#23211f] border-none text-white placeholder:text-[#75716e] rounded-[20px] focus-visible:ring-1 focus-visible:ring-orange-500/50 shadow-inner transition-all duration-300"
+                className="flex-1 h-[56px] text-base pl-5 pr-4 bg-[#1c1a18] border border-white/10 text-white placeholder:text-[#a4a09c] rounded-[20px] focus-visible:ring-1 focus-visible:ring-orange-500/60 shadow-inner transition-all duration-300 hover:border-white/20"
               />
               {/* 통합 파일 업로드 버튼 */}
               <div className="relative group/upload">

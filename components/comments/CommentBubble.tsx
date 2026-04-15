@@ -18,11 +18,15 @@ export default function CommentBubble({ sessionId, segmentId, segmentLabel, init
     <>
       <button
         onClick={() => setOpen(true)}
-        className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium transition-all bg-white/5 hover:bg-orange-500/15 hover:text-orange-300 border border-transparent hover:border-orange-500/20 text-[#75716e]"
+        className={`flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium transition-all border ${
+          count > 0
+            ? 'bg-orange-500/10 border-orange-500/25 text-orange-300 hover:bg-orange-500/20'
+            : 'bg-white/5 border-transparent text-[#75716e] hover:bg-orange-500/10 hover:text-orange-300 hover:border-orange-500/20'
+        }`}
         title={`"${segmentLabel}" 에 댓글 달기`}
       >
         <span>💬</span>
-        {count > 0 && <span className="font-bold">{count}</span>}
+        <span className="font-bold">{count}</span>
       </button>
 
       {open && (

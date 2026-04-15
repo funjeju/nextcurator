@@ -18,6 +18,8 @@ import WorksheetPanel from '@/components/worksheet/WorksheetPanel'
 import type { QuizData, WorksheetData } from '@/types/summary'
 import Header from '@/components/common/Header'
 import { SummarizeResponse } from '@/types/summary'
+import AdBanner from '@/components/ads/AdBanner'
+import SegmentedSummaryPanel from '@/components/summary/SegmentedSummaryPanel'
 import { useAuth } from '@/providers/AuthProvider'
 import { getSavedSummaryBySessionId, updateSummaryVisibility } from '@/lib/db'
 import { getLocalUserId } from '@/lib/user'
@@ -59,6 +61,7 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const fromSquare = searchParams.get('from') === 'square'
+  const isTempReanalyze = searchParams.get('temp') === '1'
   const { user } = useAuth()
   const [data, setData] = useState<SummarizeResponse | null>(null)
   const [loadError, setLoadError] = useState(false)
@@ -95,6 +98,23 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
 
   // 메타인지 자기점검
   const [metaLevel, setMetaLevel] = useState<'complete' | 'confused' | 'unknown' | null>(null)
+
+  // 시청자 반응 요약
+  const [commentAnalysis, setCommentAnalysis] = useState<any>(null)
+  const [commentAnalysisLoading, setCommentAnalysisLoading] = useState(false)
+
+  // 구간별 요약 (30분+ 영상)
+  const [segments, setSegments] = useState<any[] | null>(null)
+  const [segmentsLoading, setSegmentsLoading] = useState(false)
+  const isLongVideo = useMemo(() => {
+    if (!data?.transcript) return false
+    const matches = [...data.transcript.matchAll(/\[(\d{1,2}:\d{2}(?::\d{2})?)\]/g)]
+    if (matches.length === 0) return false
+    const last = matches[matches.length - 1][1]
+    const parts = last.split(':').map(Number)
+    const secs = parts.length === 3 ? parts[0] * 3600 + parts[1] * 60 + parts[2] : parts[0] * 60 + parts[1]
+    return secs >= 1800  // 30분 이상
+  }, [data?.transcript])
 
   useEffect(() => {
     if (!data?.videoId) return
@@ -260,7 +280,7 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
     // 뒤로가기(popstate) 감지 로직 추가
     const handlePopState = (e: PopStateEvent) => {
       if (isUnsaved) {
-        if (!confirm('저장하지 않고 이동하시겠습니까? 분석 내용은 사라집니다.')) {
+        if (!confirm('이 영상을 라이브러리에 저장하셨나요?\n저장하지 않으면 분석 내용이 사라집니다.\n\n계속 이동하려면 확인, 머물려면 취소를 누르세요.')) {
           // 이동 취소: 현재 URL 유지
           window.history.pushState(null, '', window.location.href)
         }
@@ -319,6 +339,7 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
   }
 
   // 다른 카테고리로 재요약
+  // fromSquare=true 이면 타인 요약 → 새 sessionId로 이동하되 Firestore에 저장하지 않는 임시 모드
   const handleReanalyze = async (category: string) => {
     if (!data?.transcript && !data?.videoId) return
     setReanalyzing(true)
@@ -327,12 +348,17 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
       const res = await fetch('/api/summarize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: `https://www.youtube.com/watch?v=${data.videoId}`, category }),
+        body: JSON.stringify({
+          url: `https://www.youtube.com/watch?v=${data.videoId}`,
+          category,
+          noSave: fromSquare,  // 타인 요약 재분석 시 Firestore 저장 안 함
+        }),
       })
       if (!res.ok) { const e = await res.json(); throw new Error(e.error) }
       const newData: SummarizeResponse = await res.json()
       sessionStorage.setItem(`summary_${newData.sessionId}`, JSON.stringify(newData))
-      router.push(`/result/${newData.sessionId}`)
+      // fromSquare 임시 모드: URL에 ?temp=1 추가하여 저장 유도 배너 표시
+      router.push(`/result/${newData.sessionId}${fromSquare ? '?temp=1' : ''}`)
     } catch (e) {
       alert((e as Error).message || '재요약에 실패했습니다.')
     } finally {
@@ -440,7 +466,71 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
     logStudentActivity('quiz', log)
   }, [logStudentActivity])
 
-  // 링크 복사/공유 — 모바일은 네이티브 공유 시트, PC는 클립보드 복사
+  // 시청자 반응 요약
+  const handleCommentAnalysis = async () => {
+    if (!data?.videoId || commentAnalysisLoading) return
+    setCommentAnalysisLoading(true)
+    try {
+      const res = await fetch('/api/comment-analysis', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ videoId: data.videoId, title: data.title }),
+      })
+      if (!res.ok) throw new Error('분석 실패')
+      const { analysis } = await res.json()
+      setCommentAnalysis(analysis)
+    } catch {
+      alert('댓글 분석에 실패했습니다.')
+    } finally {
+      setCommentAnalysisLoading(false)
+    }
+  }
+
+  const handleSegmentAnalysis = async () => {
+    if (!data?.transcript || segmentsLoading) return
+    setSegmentsLoading(true)
+    try {
+      const res = await fetch('/api/summarize-segments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ transcript: data.transcript }),
+      })
+      if (!res.ok) {
+        const err = await res.json()
+        if (err.error === 'too_short_for_segments') {
+          alert('구간 분석을 하기엔 영상이 너무 짧습니다.')
+          return
+        }
+        throw new Error(err.error || '구간 분석 실패')
+      }
+      const { segments: segs } = await res.json()
+      setSegments(segs)
+    } catch (e) {
+      alert('구간 분석에 실패했습니다.')
+    } finally {
+      setSegmentsLoading(false)
+    }
+  }
+
+  const handleSegmentQuiz = async (segmentIndex: number) => {
+    if (!segments) return []
+    const seg = segments[segmentIndex]
+    if (!seg) return []
+    try {
+      const res = await fetch('/api/segment-quiz', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ segment: seg, chunkText: seg.chunkText || '' }),
+      })
+      if (!res.ok) return []
+      const { quiz } = await res.json()
+      return quiz || []
+    } catch {
+      return []
+    }
+  }
+
+  // 링크 복사/공유 — 모바일은 네이티브 공유 시트 (썸네일 파일 첨부 시도), PC는 클립보드 복사
   const handleShare = async () => {
     if (!data) return
     setSharing(true)
@@ -448,8 +538,24 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
     const isMobile = typeof navigator !== 'undefined' && navigator.maxTouchPoints > 0
     try {
       if (isMobile && navigator.share) {
-        // 모바일: 네이티브 공유 시트 (URL만 전달 — 이미지 제외)
-        await navigator.share({ title: data.title, url: pageUrl })
+        // 썸네일을 File로 변환해서 같이 공유 시도 (지원 브라우저만)
+        let files: File[] | undefined
+        if (data.thumbnail && navigator.canShare) {
+          try {
+            const imgRes = await fetch(`/api/proxy-image?url=${encodeURIComponent(data.thumbnail)}`)
+            if (imgRes.ok) {
+              const blob = await imgRes.blob()
+              const file = new File([blob], 'thumbnail.jpg', { type: 'image/jpeg' })
+              if (navigator.canShare({ files: [file] })) files = [file]
+            }
+          } catch { /* 썸네일 첨부 실패 시 URL만 공유 */ }
+        }
+        await navigator.share({
+          title: data.title,
+          text: `${data.title} — SSOKTUBE AI 요약`,
+          url: pageUrl,
+          ...(files ? { files } : {}),
+        })
       } else {
         // PC: 클립보드 복사
         await navigator.clipboard.writeText(pageUrl)
@@ -502,7 +608,7 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
-      <Header title="🎬 Next Curator" />
+      <Header />
 
       <div className="max-w-2xl mx-auto px-4 py-2 flex flex-col gap-6">
 
@@ -528,6 +634,23 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
             </div>
           </div>
         ) : null}
+
+        {/* 임시 재분석 배너 */}
+        {isTempReanalyze && (
+          <div className="flex items-center gap-3 bg-amber-500/10 border border-amber-500/20 rounded-2xl px-4 py-3">
+            <span className="text-amber-400 text-base shrink-0">🔍</span>
+            <div className="flex-1 min-w-0">
+              <p className="text-amber-300 text-sm font-semibold">임시 분석 결과</p>
+              <p className="text-amber-400/70 text-xs">이 분석은 나만 볼 수 있습니다. 원본 데이터는 변경되지 않았습니다.</p>
+            </div>
+            <button
+              onClick={() => setShowSaveModal(true)}
+              className="shrink-0 px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-full transition-colors"
+            >
+              내 라이브러리에 저장
+            </button>
+          </div>
+        )}
 
         {/* 영상 정보 */}
         <div>
@@ -577,6 +700,12 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
         <div className="min-h-[300px]">
           {activeTab === 'summary' && (
             <div className="flex flex-col gap-4">
+              {data.transcriptSource === 'none' && (
+                <div className="flex items-start gap-2.5 px-4 py-3 rounded-2xl bg-yellow-500/8 border border-yellow-500/20 text-yellow-300 text-sm">
+                  <span className="shrink-0 mt-0.5">⚠️</span>
+                  <span>이 영상은 자막을 가져오지 못했습니다. 제목·채널 정보·영상 설명을 기반으로 요약했으며, 내용이 부정확할 수 있습니다.</span>
+                </div>
+              )}
               <SummaryShell
                 category={data.category}
                 summary={data.summary}
@@ -651,15 +780,127 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
             </div>
           )}
 
+          {/* 시청자 반응 요약 — YouTube 영상만, summary 탭 */}
+          {activeTab === 'summary' && data.videoId && (
+            <div className="mt-4">
+              {!commentAnalysis ? (
+                <button
+                  onClick={handleCommentAnalysis}
+                  disabled={commentAnalysisLoading}
+                  className="w-full py-3.5 rounded-2xl border border-dashed border-amber-500/40 bg-amber-500/5 hover:bg-amber-500/10 text-amber-400 hover:text-amber-300 font-semibold text-sm transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  {commentAnalysisLoading ? (
+                    <><svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>댓글 분석 중...</>
+                  ) : (
+                    <>💬 시청자 반응 요약 보기</>
+                  )}
+                </button>
+              ) : (
+                <div className="bg-[#2a2826] border border-amber-500/15 rounded-2xl p-5 flex flex-col gap-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-amber-400 font-bold text-sm flex items-center gap-2">💬 시청자 반응 요약</h3>
+                    <button onClick={() => setCommentAnalysis(null)} className="text-[#75716e] hover:text-white text-xs transition-colors">닫기</button>
+                  </div>
+                  {/* 감성 비율 */}
+                  <div className="flex items-center gap-3">
+                    <span className={`px-3 py-1 rounded-full text-xs font-bold border ${
+                      commentAnalysis.overall_sentiment === '긍정적' ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' :
+                      commentAnalysis.overall_sentiment === '부정적' ? 'bg-red-500/15 text-red-400 border-red-500/30' :
+                      'bg-amber-500/15 text-amber-400 border-amber-500/30'
+                    }`}>{commentAnalysis.overall_sentiment}</span>
+                    <div className="flex-1 h-2 bg-[#32302e] rounded-full overflow-hidden flex">
+                      <div className="h-full bg-emerald-500 transition-all" style={{ width: `${commentAnalysis.sentiment_ratio?.positive ?? 0}%` }} />
+                      <div className="h-full bg-amber-500" style={{ width: `${commentAnalysis.sentiment_ratio?.neutral ?? 0}%` }} />
+                      <div className="h-full bg-red-500" style={{ width: `${commentAnalysis.sentiment_ratio?.negative ?? 0}%` }} />
+                    </div>
+                    <span className="text-xs text-[#75716e]">{commentAnalysis.sentiment_ratio?.positive}% 긍정</span>
+                  </div>
+                  {/* 요약 */}
+                  <p className="text-[#e2e2e2] text-sm leading-relaxed">{commentAnalysis.summary}</p>
+                  {/* 대표 반응 */}
+                  {commentAnalysis.top_reactions?.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {commentAnalysis.top_reactions.map((r: string, i: number) => (
+                        <span key={i} className="px-2.5 py-1 bg-[#32302e] border border-white/10 rounded-full text-xs text-[#a4a09c]">{r}</span>
+                      ))}
+                    </div>
+                  )}
+                  {/* 주요 의견 */}
+                  {commentAnalysis.key_opinions?.length > 0 && (
+                    <div className="flex flex-col gap-2">
+                      {commentAnalysis.key_opinions.map((op: any, i: number) => (
+                        <div key={i} className="flex items-start gap-2">
+                          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20 shrink-0 mt-0.5">{op.count_hint}</span>
+                          <p className="text-[#a4a09c] text-xs">{op.opinion}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {/* 인상적인 댓글 */}
+                  {commentAnalysis.notable_comment && (
+                    <blockquote className="border-l-2 border-amber-500/40 pl-3 text-xs text-[#75716e] italic">
+                      &quot;{commentAnalysis.notable_comment}&quot;
+                    </blockquote>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* 구간별 분석 — 30분+ 영상이고 summary 탭에서만 */}
+          {activeTab === 'summary' && isLongVideo && (
+            <div className="rounded-2xl border border-indigo-500/20 bg-indigo-500/5 p-4 flex flex-col gap-3">
+              {segments ? (
+                <SegmentedSummaryPanel
+                  segments={segments}
+                  onSeek={handleSeek}
+                  onRequestQuiz={handleSegmentQuiz}
+                />
+              ) : (
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-white text-sm font-semibold">구간별 심층 분석 가능</p>
+                    <p className="text-[#a4a09c] text-xs mt-0.5">30분 이상 영상입니다. 10분 단위로 나눠 각 구간을 분석하고 퀴즈를 풀 수 있어요.</p>
+                  </div>
+                  <button
+                    onClick={handleSegmentAnalysis}
+                    disabled={segmentsLoading}
+                    className="shrink-0 flex items-center gap-1.5 px-4 py-2.5 bg-indigo-500 hover:bg-indigo-400 text-white text-sm font-bold rounded-2xl transition-all disabled:opacity-50"
+                  >
+                    {segmentsLoading ? (
+                      <>
+                        <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                        </svg>
+                        분석 중...
+                      </>
+                    ) : '🗂 구간 분석'}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* 메타인지 자기점검 — summary 탭에서만 표시 */}
           {activeTab === 'summary' && (
             <MetaCheckButtons metaLevel={metaLevel} onSelect={handleMeta} />
           )}
 
+          {/* 광고 — summary 탭 하단 */}
+          {activeTab === 'summary' && (
+            <AdBanner adSlot="RESULT_BOTTOM" adFormat="horizontal" className="mt-2" />
+          )}
+
           {activeTab === 'transcript' && (
             <div className="bg-[#2a2826] rounded-2xl p-6 border border-white/5 space-y-3 shadow-lg h-[500px] overflow-y-auto">
               <h2 className="text-xl font-bold border-b border-white/10 pb-4 mb-4">전체 자막</h2>
-              {data.transcript ? (() => {
+              {data.transcriptSource === 'none' ? (
+                <div className="flex flex-col items-center gap-3 py-14 text-center">
+                  <span className="text-3xl">🙈</span>
+                  <p className="text-zinc-400 text-sm">자막을 가져올 수 없는 영상입니다.<br />자막이 비활성화되어 있거나 처리 중 오류가 발생했을 수 있습니다.</p>
+                </div>
+              ) : data.transcript ? (() => {
                 const lines = data.transcript.split('\n')
                 const parsed: { ts: string; text: string }[] = []
                 for (const line of lines) {

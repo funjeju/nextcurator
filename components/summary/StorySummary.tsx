@@ -1,8 +1,10 @@
 'use client'
 
+import { useState } from 'react'
 import { StorySummary as StorySummaryType } from '@/types/summary'
 import TimestampBadge from './TimestampBadge'
 import CommentBubble from '@/components/comments/CommentBubble'
+import TranslateButton from './TranslateButton'
 
 interface Props {
   data: StorySummaryType
@@ -11,10 +13,26 @@ interface Props {
   commentCounts?: Record<string, number>
   onComment?: (segmentId: string, segmentLabel: string) => void
   hideTimestamp?: boolean
+  showTranslate?: boolean
 }
 
-export default function StorySummary({ data, onSeek, sessionId, commentCounts = {}, hideTimestamp }: Props) {
+function buildWebtoonPrompt(title: string, genre: string, event: string, characters: { name: string; desc: string }[]): string {
+  const charDesc = characters.slice(0, 3).map(c => `${c.name}(${c.desc})`).join(', ')
+  return `Webtoon panel illustration, ${genre} style, vibrant colors, expressive characters.\n\nScene: "${event}"\n\nCharacters: ${charDesc || 'main characters'}\nTitle context: "${title}"\n\nArt style: Korean webtoon, detailed backgrounds, cinematic composition, dramatic lighting`
+}
+
+export default function StorySummary({ data, onSeek, sessionId, commentCounts = {}, hideTimestamp, showTranslate }: Props) {
+  const [copiedIdx, setCopiedIdx] = useState<number | null>(null)
   const hasTimestamps = !hideTimestamp && data.timeline?.some(t => t.timestamp && t.timestamp !== '00:00')
+
+  const handleCopyWebtoon = async (event: string, idx: number) => {
+    const prompt = buildWebtoonPrompt(data.title, data.genre, event, data.characters || [])
+    try {
+      await navigator.clipboard.writeText(prompt)
+      setCopiedIdx(idx)
+      setTimeout(() => setCopiedIdx(null), 2000)
+    } catch { /* ignore */ }
+  }
   return (
     <div className="space-y-6 bg-[#32302e]/80 backdrop-blur-3xl p-6 md:p-8 rounded-[32px] border border-white/5 shadow-2xl mt-4">
 
@@ -69,6 +87,20 @@ export default function StorySummary({ data, onSeek, sessionId, commentCounts = 
                       )}
                     </div>
                     <p className="text-[#e2e2e2] leading-relaxed text-[15px]">{item.event}</p>
+                    <div className="flex items-center gap-2 flex-wrap mt-1">
+                      {showTranslate && <TranslateButton text={item.event} />}
+                      <button
+                        onClick={() => handleCopyWebtoon(item.event, i)}
+                        className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium border transition-all ${
+                          copiedIdx === i
+                            ? 'bg-pink-500/15 border-pink-500/30 text-pink-400'
+                            : 'bg-[#32302e] border-white/10 text-[#75716e] hover:text-pink-300 hover:border-pink-500/30'
+                        }`}
+                        title="이 장면의 웹툰 이미지 생성 프롬프트를 클립보드에 복사"
+                      >
+                        {copiedIdx === i ? '✅ 복사됨' : '🎨 웹툰 프롬프트'}
+                      </button>
+                    </div>
                   </div>
                 </div>
               )

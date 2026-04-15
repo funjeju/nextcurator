@@ -1,22 +1,33 @@
-import { db } from './firebase'
-import { getDoc, doc } from 'firebase/firestore'
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL   // 서버 전용 (NEXT_PUBLIC_ 아님)
+const API_KEY = process.env.NEXT_PUBLIC_FIREBASE_API_KEY!
 
 /**
- * 전역 관리자 이메일 설정 (환경 변수)
+ * Firebase ID 토큰을 검증하고 관리자 여부를 반환합니다.
+ * 클라이언트가 보낸 이메일을 신뢰하지 않고, Firebase Auth에서 직접 확인합니다.
  */
-const ADMIN_EMAIL = process.env.NEXT_PUBLIC_ADMIN_EMAIL || 'naggu1999@gmail.com'
+export async function checkIsAdminByToken(idToken: string): Promise<boolean> {
+  if (!idToken || !ADMIN_EMAIL) return false
 
-/**
- * 서버 사이드에서 유저가 관리자인지 확인하는 간단한 로직 (MVP용)
- * 실제 운영시에는 Firebase Admin SDK를 통한 ID 토큰 검증이 필요합니다.
- */
+  try {
+    const res = await fetch(
+      `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${API_KEY}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idToken }),
+      }
+    )
+    if (!res.ok) return false
+    const data = await res.json()
+    const email: string = data?.users?.[0]?.email ?? ''
+    return email === ADMIN_EMAIL
+  } catch {
+    return false
+  }
+}
+
+/** @deprecated 클라이언트 제공 email 신뢰 방식 — 레거시 호환용 */
 export async function checkIsAdmin(uid: string, email?: string): Promise<boolean> {
-  if (!uid) return false
-
-  // 1. 이메일 기반 체크
-  if (email && email === ADMIN_EMAIL) return true
-
-  // 2. DB 역할 기반 체크 (REST API 등으로 서버에서 조회 가능하도록 구성 필요)
-  // 여기서는 단순히 환경 변수 이메일 매칭을 우선합니다.
-  return false
+  if (!uid || !email || !ADMIN_EMAIL) return false
+  return email === ADMIN_EMAIL
 }

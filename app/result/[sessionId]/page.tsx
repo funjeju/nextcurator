@@ -28,22 +28,36 @@ async function getOgData(sessionId: string) {
     const thumbnail = getString(fields.thumbnail)
     const channel = getString(fields.channel)
     const category = getString(fields.category)
+    const videoPublishedAt = getString(fields.videoPublishedAt)
 
     const CATEGORY_FEATURED: Record<string, string> = {
-      recipe:  '🍳 요리 AI 요약 | 재료 · 단계별 조리법 · 핵심 팁',
-      english: '🔤 영어학습 AI 요약 | 핵심 표현 · 단어장 · 학습 포인트',
-      learning:'📐 학습 AI 요약 | 핵심 개념 · 포인트 정리 · 예시',
-      news:    '🗞️ 뉴스 AI 요약 | 3줄 요약 · 육하원칙 · 시사점',
-      selfdev: '💪 자기계발 AI 요약 | 핵심 메시지 · 인사이트 · 실천 체크리스트',
-      travel:  '🧳 여행 AI 요약 | 추천 장소 · 동선 · 실용 정보',
-      story:   '🍿 스토리 AI 요약 | 인물 · 타임라인 · 핵심 요약',
-      tips:    '💡 팁 AI 요약 | 팁 카드 · Top 3 · 준비물 정리',
-      report:  '📋 보고서 AI 요약 | 목차 · 섹션별 분석 · 핵심 결론',
+      recipe:  '요리 AI 요약 | 재료 · 단계별 조리법 · 핵심 팁',
+      english: '영어학습 AI 요약 | 핵심 표현 · 단어장 · 학습 포인트',
+      learning:'학습 AI 요약 | 핵심 개념 · 포인트 정리 · 예시',
+      news:    '뉴스 AI 요약 | 3줄 요약 · 육하원칙 · 시사점',
+      selfdev: '자기계발 AI 요약 | 핵심 메시지 · 인사이트 · 실천 체크리스트',
+      travel:  '여행 AI 요약 | 추천 장소 · 동선 · 실용 정보',
+      story:   '스토리 AI 요약 | 인물 · 타임라인 · 핵심 요약',
+      tips:    '팁 AI 요약 | 팁 카드 · Top 3 · 준비물 정리',
+      report:  '보고서 AI 요약 | 목차 · 섹션별 분석 · 핵심 결론',
     }
 
-    const description = `가장 스마트한 유튜브 저장소 · ${CATEGORY_FEATURED[category] ?? 'AI 요약'} | ${channel}`
+    const CATEGORY_KEYWORDS: Record<string, string[]> = {
+      recipe:  ['요리 레시피', '요리 방법', '쿠킹'],
+      english: ['영어 학습', '영어 표현', '영어 공부'],
+      learning:['학습', '공부', '개념 정리'],
+      news:    ['뉴스 요약', '시사', '최신 뉴스'],
+      selfdev: ['자기계발', '동기부여', '성장'],
+      travel:  ['여행', '여행지 추천', '여행 정보'],
+      story:   ['스토리', '영화', '드라마'],
+      tips:    ['꿀팁', '생활 팁', 'How-to'],
+      report:  ['보고서', '분석', '리서치'],
+    }
 
-    return { title, thumbnail, channel, category, description }
+    const description = `${CATEGORY_FEATURED[category] ?? 'AI 요약'} — ${title} (${channel}) | SSOKTUBE`
+    const keywords = [...(CATEGORY_KEYWORDS[category] ?? []), 'AI 요약', '유튜브 요약', '유튜브', title, channel]
+
+    return { title, thumbnail, channel, category, videoPublishedAt, description, keywords }
   } catch {
     return null
   }
@@ -57,21 +71,26 @@ export async function generateMetadata(
 
   if (!og?.title) {
     return {
-      title: 'Next Curator',
-      description: '가장 스마트한 유튜브 저장소',
+      title: 'SSOKTUBE',
+      description: '유튜브를 쏙, 내 지식은 쑥',
     }
   }
 
-  const pageTitle = `${og.title} | Next Curator`
+  const pageTitle = og.title
 
   return {
     title: pageTitle,
     description: og.description,
+    keywords: og.keywords,
+    alternates: {
+      canonical: `https://ssoktube.com/result/${sessionId}`,
+    },
     openGraph: {
       title: og.title,
       description: og.description,
       type: 'article',
-      siteName: 'Next Curator — 가장 스마트한 유튜브 저장소',
+      url: `https://ssoktube.com/result/${sessionId}`,
+      siteName: 'SSOKTUBE',
       // images는 opengraph-image.tsx가 자동으로 제공하므로 별도 지정 안 함
     },
     twitter: {
@@ -95,20 +114,30 @@ export default async function ResultPage(
     "headline": og.title,
     "description": og.description,
     "image": og.thumbnail,
+    "url": `https://ssoktube.com/result/${sessionId}`,
     "author": {
       "@type": "Organization",
-      "name": "Next Curator"
+      "name": "SSOKTUBE",
+      "url": "https://ssoktube.com"
     },
     "publisher": {
       "@type": "Organization",
-      "name": "Next Curator"
+      "name": "SSOKTUBE",
+      "url": "https://ssoktube.com",
+      "logo": {
+        "@type": "ImageObject",
+        "url": "https://ssoktube.com/icon.png"
+      }
     },
+    ...(og.videoPublishedAt && {
+      "datePublished": og.videoPublishedAt,
+    }),
     "mainEntity": {
       "@type": "VideoObject",
       "name": og.title,
       "description": og.description,
       "thumbnailUrl": og.thumbnail,
-      "uploadDate": "2026-04-12T00:00:00Z", // 실제 날짜 데이터 필요 시 고도화 가능
+      ...(og.videoPublishedAt && { "uploadDate": og.videoPublishedAt }),
     }
   } : null
 

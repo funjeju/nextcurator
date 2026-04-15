@@ -6,6 +6,7 @@ import { Separator } from '@/components/ui/separator'
 import TimestampBadge from './TimestampBadge'
 import CopyButton from './CopyButton'
 import CommentBubble from '@/components/comments/CommentBubble'
+import TranslateButton from './TranslateButton'
 
 interface Props {
   data: TipsSummaryType
@@ -14,6 +15,7 @@ interface Props {
   commentCounts?: Record<string, number>
   onComment?: (segmentId: string, segmentLabel: string) => void
   hideTimestamp?: boolean
+  showTranslate?: boolean
 }
 
 const DIFFICULTY_STYLE: Record<string, string> = {
@@ -22,7 +24,7 @@ const DIFFICULTY_STYLE: Record<string, string> = {
   '어려움': 'bg-red-500/15 text-red-400 border-red-500/30',
 }
 
-export default function TipsSummary({ data, onSeek, sessionId, commentCounts = {} }: Props) {
+export default function TipsSummary({ data, onSeek, sessionId, commentCounts = {}, showTranslate }: Props) {
   const copyText = `[${data.topic}]\n\n핵심 메시지: ${data.key_message}\n\n팁 목록:\n${data.tips.map(t => `${t.number}. ${t.title} — ${t.desc}`).join('\n')}\n\n바로 적용할 Top 3:\n${data.top3.map((t, i) => `${i + 1}. ${t}`).join('\n')}${data.tools.length > 0 ? `\n\n준비물: ${data.tools.join(', ')}` : ''}`
 
   return (
@@ -75,6 +77,7 @@ export default function TipsSummary({ data, onSeek, sessionId, commentCounts = {
                       )}
                     </div>
                     <p className="text-zinc-400 text-sm leading-relaxed">{tip.desc}</p>
+                    {showTranslate && <TranslateButton text={tip.desc} />}
                   </div>
                 </div>
               )

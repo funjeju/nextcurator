@@ -14,12 +14,19 @@ export default function Home() {
 
       <div className="flex flex-col items-center gap-6 w-full max-w-3xl relative z-10">
         {/* Title: 모바일에서는 헤더 로고가 있으므로 숨김 */}
-        <div className="text-center flex flex-col gap-2">
-          <h1 className="hidden md:block text-[3.5rem] font-bold tracking-tight text-white">
-            🎬 Next Curator
-          </h1>
-          <p className="text-[#a4a09c] text-base md:text-lg font-medium tracking-wide">
-            가장 스마트한 유튜브 저장소
+        <div className="text-center flex flex-col gap-3">
+          {/* 데스크탑: 풀 로고 */}
+          <div className="hidden md:flex flex-col items-center gap-2">
+            <h1 className="text-[3.2rem] font-black tracking-tighter text-white leading-none">
+              <span className="text-orange-400">SSOK</span>TUBE
+            </h1>
+            <p className="text-xl font-bold text-white/90 tracking-wide">
+              유튜브를 <span className="text-orange-400">쏙</span>, 내 지식은 <span className="text-emerald-400">쑥</span>
+            </p>
+          </div>
+          {/* 모바일: 슬로건만 */}
+          <p className="md:hidden text-base font-bold text-white/90 tracking-wide">
+            유튜브를 <span className="text-orange-400">쏙</span>, 내 지식은 <span className="text-emerald-400">쑥</span>
           </p>
         </div>
 

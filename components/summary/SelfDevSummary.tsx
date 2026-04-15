@@ -7,6 +7,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import TimestampBadge from './TimestampBadge'
 import CopyButton from './CopyButton'
 import CommentBubble from '@/components/comments/CommentBubble'
+import TranslateButton from './TranslateButton'
 
 interface Props {
   data: SelfDevSummaryType
@@ -15,9 +16,10 @@ interface Props {
   commentCounts?: Record<string, number>
   onComment?: (segmentId: string, segmentLabel: string) => void
   hideTimestamp?: boolean
+  showTranslate?: boolean
 }
 
-export default function SelfDevSummary({ data, onSeek, sessionId, commentCounts = {} }: Props) {
+export default function SelfDevSummary({ data, onSeek, sessionId, commentCounts = {}, showTranslate }: Props) {
   const copyText = `핵심 메시지 [${data.core_message.timestamp}]:\n"${data.core_message.text}"\n\n주요 인사이트:\n${data.insights.map(i => `[${i.timestamp}] ${i.point}`).join('\n')}\n\n실천 체크리스트:\n${data.checklist.map(c => `□ ${c}`).join('\n')}\n\n명언:\n${data.quotes.map(q => `[${q.timestamp}] "${q.text}"`).join('\n')}`
 
   return (
@@ -56,7 +58,10 @@ export default function SelfDevSummary({ data, onSeek, sessionId, commentCounts 
                       <CommentBubble sessionId={sessionId} segmentId={segId} segmentLabel={`인사이트 ${i + 1}`} initialCount={commentCounts[segId] ?? 0} />
                     )}
                   </div>
-                  <p className="text-zinc-200 text-sm">{insight.point}</p>
+                  <div className="flex flex-col gap-1">
+                    <p className="text-zinc-200 text-sm">{insight.point}</p>
+                    {showTranslate && <TranslateButton text={insight.point} />}
+                  </div>
                 </div>
               )
             })}

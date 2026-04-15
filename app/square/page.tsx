@@ -9,6 +9,7 @@ import { useAuth } from '@/providers/AuthProvider'
 import { formatRelativeDate } from '@/lib/formatDate'
 import { useRouter } from 'next/navigation'
 import FloatingChat from '@/components/chat/FloatingChat'
+import AdBanner from '@/components/ads/AdBanner'
 
 const CATEGORIES = [
   { id: 'all',     label: '전체' },
@@ -244,6 +245,15 @@ function RecommendationCard({ slot }: { slot: RecSlot }) {
 
 // 광고 카드 — 일반 카드 사이즈, 나중에 실제 광고 SDK로 교체
 function AdCard({ slot }: { slot: AdSlotItem }) {
+  const hasAdsense = !!process.env.NEXT_PUBLIC_ADSENSE_CLIENT
+  if (hasAdsense) {
+    return (
+      <div key={slot.slotId} className="rounded-[18px] overflow-hidden">
+        <AdBanner adSlot="SQUARE_CARD" adFormat="rectangle" />
+      </div>
+    )
+  }
+  // AdSense 미설정 시 플레이스홀더
   return (
     <div
       key={slot.slotId}

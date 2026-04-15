@@ -7,6 +7,7 @@ import { Table, TableBody, TableCell, TableRow } from '@/components/ui/table'
 import TimestampBadge from './TimestampBadge'
 import CopyButton from './CopyButton'
 import CommentBubble from '@/components/comments/CommentBubble'
+import TranslateButton from './TranslateButton'
 
 interface Props {
   data: NewsSummaryType
@@ -15,9 +16,10 @@ interface Props {
   commentCounts?: Record<string, number>
   onComment?: (segmentId: string, segmentLabel: string) => void
   hideTimestamp?: boolean
+  showTranslate?: boolean
 }
 
-export default function NewsSummary({ data, onSeek, sessionId, commentCounts = {} }: Props) {
+export default function NewsSummary({ data, onSeek, sessionId, commentCounts = {}, showTranslate }: Props) {
   const fiveW = [
     { key: '누가', value: data.five_w.who },
     { key: '언제', value: data.five_w.when },
@@ -49,6 +51,7 @@ export default function NewsSummary({ data, onSeek, sessionId, commentCounts = {
             )}
           </div>
           <p className="text-zinc-200 text-sm leading-relaxed">{data.three_line_summary}</p>
+          {showTranslate && <TranslateButton text={data.three_line_summary} className="mt-2" />}
         </div>
 
         {/* 육하원칙 */}
@@ -100,7 +103,10 @@ export default function NewsSummary({ data, onSeek, sessionId, commentCounts = {
                   return (
                     <div key={i} id={`seg-${segId}`} className="flex items-start gap-3">
                       <TimestampBadge timestamp={imp.timestamp} onSeek={onSeek} />
-                      <p className="text-zinc-200 text-sm flex-1">{imp.point}</p>
+                      <div className="flex-1 flex flex-col gap-1">
+                        <p className="text-zinc-200 text-sm">{imp.point}</p>
+                        {showTranslate && <TranslateButton text={imp.point} />}
+                      </div>
                       {sessionId && (
                         <CommentBubble sessionId={sessionId} segmentId={segId} segmentLabel={`시사점 ${i + 1}`} initialCount={commentCounts[segId] ?? 0} />
                       )}

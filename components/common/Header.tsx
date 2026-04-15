@@ -4,10 +4,14 @@ import React, { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useAuth } from '@/providers/AuthProvider'
 import { getTotalUnread } from '@/lib/db'
+import { useTheme } from './ThemeProvider'
+import MessagesModal from '@/components/messages/MessagesModal'
 
-export default function Header({ title = '🎬 Next Curator' }: { title?: string }) {
+export default function Header({ title = 'SSOKTUBE' }: { title?: string }) {
   const { user, userProfile, signInWithGoogle, signOut } = useAuth()
+  const { theme, toggle } = useTheme()
   const [unread, setUnread] = useState(0)
+  const [showMessages, setShowMessages] = useState(false)
 
   useEffect(() => {
     if (!user) { setUnread(0); return }
@@ -32,8 +36,8 @@ export default function Header({ title = '🎬 Next Curator' }: { title?: string
     <div className="sticky top-0 z-50 bg-[#252423]/90 backdrop-blur-xl border-b border-white/5 py-2.5 px-4 md:px-8 mb-6">
       <div className="max-w-7xl mx-auto flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <Link href="/" onClick={handleNav} className="text-sm font-bold tracking-tight text-white hover:opacity-80 transition-opacity whitespace-nowrap">
-            {title}
+          <Link href="/" onClick={handleNav} className="text-sm font-black tracking-tight hover:opacity-80 transition-opacity whitespace-nowrap">
+            <span className="text-orange-400">SSOK</span><span className="text-white">TUBE</span>
           </Link>
           <nav className="hidden md:flex items-center gap-4 text-sm font-medium">
             {/* 학생 계정: 수업자료 바로가기 */}
@@ -58,16 +62,7 @@ export default function Header({ title = '🎬 Next Curator' }: { title?: string
               <>
                 <Link href="/mypage" onClick={handleNav} className="text-[#a4a09c] hover:text-white transition-colors">My Page</Link>
                 <Link href="/square" onClick={handleNav} className="text-[#a4a09c] hover:text-white transition-colors">Square</Link>
-                {/* 미로그인: 학생/교사 전용 입장 */}
-                {!user && (
-                  <Link href="/classroom/join" onClick={handleNav} className="text-blue-400 hover:text-blue-300 transition-colors text-xs">
-                    📖 학생 입장
-                  </Link>
-                )}
               </>
-            )}
-            {user?.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL && (
-              <Link href="/admin" onClick={handleNav} className="text-orange-400 hover:text-orange-300 transition-colors">Admin</Link>
             )}
             {/* 교사: 클래스 없으면 개설 유도 */}
             {isTeacher && !classCode && (
@@ -79,6 +74,26 @@ export default function Header({ title = '🎬 Next Curator' }: { title?: string
         </div>
 
         <div className="flex items-center gap-1.5">
+          {/* 다크/라이트 모드 토글 */}
+          <button
+            onClick={toggle}
+            className="w-8 h-8 flex items-center justify-center rounded-full text-[#a4a09c] hover:text-white hover:bg-white/8 transition-all"
+            title={theme === 'dark' ? '라이트 모드로 전환' : '다크 모드로 전환'}
+          >
+            {theme === 'dark' ? (
+              /* 해 아이콘 — 라이트로 전환 */
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="4"/>
+                <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>
+              </svg>
+            ) : (
+              /* 달 아이콘 — 다크로 전환 */
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+              </svg>
+            )}
+          </button>
+
           {/* 모바일 */}
           {isStudent ? (
             <Link href="/mypage" onClick={handleNav} className="md:hidden text-[11px] text-blue-400 whitespace-nowrap px-1.5 py-1 rounded-md hover:bg-white/5 transition-colors">수업</Link>
@@ -95,14 +110,17 @@ export default function Header({ title = '🎬 Next Curator' }: { title?: string
             <div className="flex items-center gap-1.5 ml-1 pl-1.5 border-l border-white/10 md:border-none md:ml-0 md:pl-0">
               {/* 학생 계정: 메시지 아이콘 숨김 */}
               {!isStudent && (
-                <Link href="/messages" onClick={handleNav} className="relative text-[#a4a09c] hover:text-white transition-colors p-1">
+                <button
+                  onClick={() => setShowMessages(v => !v)}
+                  className="relative text-[#a4a09c] hover:text-white transition-colors p-1"
+                >
                   <span className="text-sm">✉️</span>
                   {unread > 0 && (
                     <span className="absolute top-0 right-0 bg-orange-500 text-white text-[7px] font-bold w-3 h-3 rounded-full flex items-center justify-center">
                       {unread > 9 ? '9+' : unread}
                     </span>
                   )}
-                </Link>
+                </button>
               )}
               {/* 학생은 이름 표시, 그 외는 프로필 사진 */}
               {isStudent ? (
@@ -115,24 +133,20 @@ export default function Header({ title = '🎬 Next Curator' }: { title?: string
               </button>
             </div>
           ) : (
-            <div className="flex items-center gap-2">
-              <Link
-                href="/classroom/login"
-                onClick={handleNav}
-                className="px-3 py-1.5 bg-blue-500/10 text-blue-400 border border-blue-500/20 text-xs font-bold rounded-full hover:bg-blue-500/20 transition-colors whitespace-nowrap"
-              >
-                학생 로그인
-              </Link>
-              <button
-                onClick={signInWithGoogle}
-                className="px-3 py-1.5 bg-white text-black text-xs font-bold rounded-full hover:bg-zinc-200 transition-colors whitespace-nowrap"
-              >
-                Login
-              </button>
-            </div>
+            <button
+              onClick={signInWithGoogle}
+              className="px-3 py-1.5 bg-white text-black text-xs font-bold rounded-full hover:bg-zinc-200 transition-colors whitespace-nowrap"
+            >
+              Login
+            </button>
           )}
         </div>
       </div>
+
+      {/* 쪽지함 팝업 */}
+      {showMessages && user && (
+        <MessagesModal onClose={() => setShowMessages(false)} />
+      )}
     </div>
   )
 }

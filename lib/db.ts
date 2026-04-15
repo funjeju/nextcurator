@@ -522,31 +522,27 @@ export async function getFriends(myUid: string): Promise<{ uid: string; displayN
  */
 export async function getVisibleFolders(targetUserId: string, isOwner: boolean = false, isFriend: boolean = false) {
   const foldersRef = collection(db, 'folders')
-  
-  // 1. 보안 규칙 엄격 준수: 본인이 아니면 'public' 또는 'friends'를 명시한 쿼리만 허용됨.
+
+  // 본인: 전체 조회
   if (isOwner) {
-    // 본인은 인덱스 없이 userId만으로 전체 조회 가능
     const q = query(foldersRef, where('userId', '==', targetUserId))
     const snap = await getDocs(q)
-    return snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Folder))
+    return snap.docs.map(d => ({ id: d.id, ...d.data() } as Folder))
   }
 
-  // 2. 타인은 반드시 visibility 필터가 쿼리에 포함되어야 함 (Permission Denied 방지)
-  const q = query(foldersRef, where('visibility', '==', 'public'))
-  const snap = await getDocs(q)
-  const allPublic = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Folder))
-  
-  const folders = allPublic.filter(f => f.userId === targetUserId)
-  
-  if (isFriend) {
-    const qf = query(foldersRef, where('visibility', '==', 'friends'))
-    const snapf = await getDocs(qf)
-    const friendsFolders = snapf.docs
-      .map(doc => ({ id: doc.id, ...doc.data() } as Folder))
-      .filter(f => f.userId === targetUserId)
-    return [...folders, ...friendsFolders]
-  }
+  // 타인: userId + visibility 복합 쿼리 (보안 규칙 준수 + Permission Denied 방지)
+  // ※ Firestore 복합 인덱스 필요: folders (userId ASC, visibility ASC)
+  const [snapPublic, snapFriends] = await Promise.all([
+    getDocs(query(foldersRef, where('userId', '==', targetUserId), where('visibility', '==', 'public'))),
+    isFriend
+      ? getDocs(query(foldersRef, where('userId', '==', targetUserId), where('visibility', '==', 'friends')))
+      : Promise.resolve(null),
+  ])
 
+  const folders: Folder[] = snapPublic.docs.map(d => ({ id: d.id, ...d.data() } as Folder))
+  if (snapFriends) {
+    snapFriends.docs.forEach(d => folders.push({ id: d.id, ...d.data() } as Folder))
+  }
   return folders
 }
 

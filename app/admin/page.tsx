@@ -45,18 +45,19 @@ export default function AdminDashboard() {
   const loadData = async (targetPage = page) => {
     setLoading(true)
     try {
-      const auth = { uid: user?.uid, email: user?.email }
+      const idToken = user ? await user.getIdToken() : ''
+      const authHeader = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${idToken}` }
 
       const [statsRes, listRes] = await Promise.all([
         fetch('/api/admin/stats', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(auth)
+          headers: authHeader,
+          body: JSON.stringify({})
         }),
         fetch('/api/admin/summaries', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ...auth, search, page: targetPage })
+          headers: authHeader,
+          body: JSON.stringify({ search, page: targetPage })
         })
       ])
 
@@ -83,10 +84,11 @@ export default function AdminDashboard() {
 
     setDeletingId(id)
     try {
+      const idToken = user ? await user.getIdToken() : ''
       const res = await fetch('/api/admin/delete', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ uid: user?.uid, email: user?.email, id })
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${idToken}` },
+        body: JSON.stringify({ id })
       })
 
       if (res.ok) {

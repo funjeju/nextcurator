@@ -87,7 +87,9 @@
       "Bash(git commit -m ' *)",
       "Bash(firebase projects:list)",
       "Bash(grep -E \"\\\\.\\(tsx|ts\\)$\")",
-      "Bash(grep -r \"role\\\\|permission\\\\|access\\\\|visibility\" /c/Users/funjeju/Desktop/aiproject/nextcurator/lib/*.ts)"
+      "Bash(grep -r \"role\\\\|permission\\\\|access\\\\|visibility\" /c/Users/funjeju/Desktop/aiproject/nextcurator/lib/*.ts)",
+      "Bash(node_modules/.bin/tsc --noEmit)",
+      "Bash(node_modules/.bin/tsc --noEmit --skipLibCheck)"
     ]
   }
 }

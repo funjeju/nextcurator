@@ -296,6 +296,150 @@ JSON 형식:
   return extractJSON(text) as import('@/types/summary').QuizData
 }
 
+// ─────────────────────────────────────────────
+// 구간별 요약 (30분+ 영상)
+// ─────────────────────────────────────────────
+
+export interface SegmentSummary {
+  index: number
+  startTimestamp: string
+  endTimestamp: string
+  headline: string
+  keyPoints: string[]
+}
+
+export interface SegmentQuizQuestion {
+  question: string
+  options: string[]
+  answer: number  // 0-based index
+}
+
+/**
+ * 타임스탬프 문자열 → 초
+ */
+function tsToSec(ts: string): number {
+  const parts = ts.split(':').map(Number)
+  if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2]
+  if (parts.length === 2) return parts[0] * 60 + parts[1]
+  return 0
+}
+
+/**
+ * 자막에서 마지막 타임스탬프를 파싱하여 영상 길이(초) 추정
+ */
+export function estimateVideoDuration(transcript: string): number {
+  const matches = [...transcript.matchAll(/\[(\d{1,2}:\d{2}(?::\d{2})?)\]/g)]
+  if (matches.length === 0) return 0
+  return tsToSec(matches[matches.length - 1][1])
+}
+
+/**
+ * 자막을 chunkMinutes 단위 구간으로 분할
+ * 각 구간: { start, end, text }
+ */
+export function splitTranscriptIntoChunks(
+  transcript: string,
+  chunkMinutes = 10
+): { start: string; end: string; text: string }[] {
+  const lines = transcript.split('\n').filter(l => l.trim())
+  const chunkSec = chunkMinutes * 60
+
+  // [timestamp] text 형태의 줄 파싱
+  const parsed: { sec: number; ts: string; text: string }[] = []
+  for (const line of lines) {
+    const m = line.match(/^\[(\d{1,2}:\d{2}(?::\d{2})?)\]\s(.+)/)
+    if (m) parsed.push({ sec: tsToSec(m[1]), ts: m[1], text: m[2] })
+    else if (parsed.length > 0) {
+      // 타임스탬프 없는 라인은 이전 구간에 붙임
+      parsed[parsed.length - 1].text += ' ' + line.trim()
+    }
+  }
+
+  if (parsed.length === 0) {
+    // 타임스탬프 없는 자막 → 단일 청크
+    return [{ start: '00:00', end: '', text: transcript.slice(0, 50000) }]
+  }
+
+  const totalSec = parsed[parsed.length - 1].sec
+  const numChunks = Math.max(1, Math.ceil(totalSec / chunkSec))
+  const chunks: { start: string; end: string; text: string }[] = []
+
+  for (let i = 0; i < numChunks; i++) {
+    const startSec = i * chunkSec
+    const endSec = (i + 1) * chunkSec
+    const lines = parsed.filter(p => p.sec >= startSec && p.sec < endSec)
+    if (lines.length === 0) continue
+    chunks.push({
+      start: lines[0].ts,
+      end: lines[lines.length - 1].ts,
+      text: lines.map(l => `[${l.ts}] ${l.text}`).join('\n'),
+    })
+  }
+
+  return chunks.length > 0 ? chunks : [{ start: '00:00', end: '', text: transcript.slice(0, 50000) }]
+}
+
+const segmentModel = genAI.getGenerativeModel({
+  model: 'gemini-2.5-flash',
+  systemInstruction: 'You are a JSON generator. Always respond with valid JSON only. No explanation, no markdown, no code blocks. Start with { and end with }.',
+  generationConfig: {
+    temperature: 0.2,
+    maxOutputTokens: 2048,
+    // @ts-expect-error thinkingConfig not yet in types but supported
+    thinkingConfig: { thinkingBudget: 0 },
+  },
+})
+
+/**
+ * 단일 구간 요약 생성
+ */
+export async function generateSegmentSummary(
+  chunk: { start: string; end: string; text: string },
+  index: number
+): Promise<SegmentSummary> {
+  const result = await segmentModel.generateContent(`다음은 영상의 ${chunk.start}~${chunk.end} 구간 자막입니다.
+이 구간을 분석해서 JSON으로 정리하세요.
+
+{"headline":"이 구간의 핵심 제목 (20자 이내)","keyPoints":["포인트1 (1-2문장)","포인트2","포인트3"]}
+
+자막:
+${chunk.text.slice(0, 25000)}`)
+
+  const text = result.response.text().trim()
+  const parsed = extractJSON(text) as { headline: string; keyPoints: string[] }
+  return {
+    index,
+    startTimestamp: chunk.start,
+    endTimestamp: chunk.end,
+    headline: parsed.headline || `${chunk.start} ~ ${chunk.end}`,
+    keyPoints: (parsed.keyPoints || []).slice(0, 5),
+  }
+}
+
+/**
+ * 구간별 퀴즈 생성 (2~3문항)
+ */
+export async function generateSegmentQuiz(
+  segment: SegmentSummary,
+  chunkText: string
+): Promise<SegmentQuizQuestion[]> {
+  const result = await segmentModel.generateContent(`다음 구간 내용을 바탕으로 이해도 확인 퀴즈 3문제를 만드세요.
+각 문제는 4개의 보기 중 1개가 정답인 객관식입니다.
+
+{"questions":[{"question":"질문","options":["보기1","보기2","보기3","보기4"],"answer":0}]}
+
+구간 요약:
+${segment.headline}
+${segment.keyPoints.join('\n')}
+
+자막:
+${chunkText.slice(0, 10000)}`)
+
+  const text = result.response.text().trim()
+  const parsed = extractJSON(text) as { questions: SegmentQuizQuestion[] }
+  return (parsed.questions || []).slice(0, 3)
+}
+
 export async function classifyFolder(videoTitle: string, tags: string[], existingFolders: string[]): Promise<{ suggestedFolder: string, isNew: boolean }> {
   const result = await classifyModel.generateContent(`You are a smart YouTube library organizer.
 The user wants to save a summarized video.

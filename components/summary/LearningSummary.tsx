@@ -6,6 +6,7 @@ import { Separator } from '@/components/ui/separator'
 import TimestampBadge from './TimestampBadge'
 import CopyButton from './CopyButton'
 import CommentBubble from '@/components/comments/CommentBubble'
+import TranslateButton from './TranslateButton'
 
 interface Props {
   data: LearningSummaryType
@@ -14,9 +15,10 @@ interface Props {
   commentCounts?: Record<string, number>
   onComment?: (segmentId: string, segmentLabel: string) => void
   hideTimestamp?: boolean
+  showTranslate?: boolean
 }
 
-export default function LearningSummary({ data, onSeek, sessionId, commentCounts = {} }: Props) {
+export default function LearningSummary({ data, onSeek, sessionId, commentCounts = {}, showTranslate }: Props) {
   const copyText = `${data.subject}\n\n핵심 개념:\n${data.concepts.map(c => `[${c.timestamp}] ${c.name}: ${c.desc}`).join('\n')}\n\n핵심 포인트:\n${data.key_points.map(p => `[${p.timestamp}] • ${p.point}`).join('\n')}\n\n예시:\n${data.examples.map(e => `[${e.timestamp}] ${e.desc}`).join('\n')}`
 
   return (
@@ -44,6 +46,7 @@ export default function LearningSummary({ data, onSeek, sessionId, commentCounts
                     {sessionId && (
                       <CommentBubble sessionId={sessionId} segmentId={segId} segmentLabel={`개념 - ${concept.name}`} initialCount={commentCounts[segId] ?? 0} />
                     )}
+                    {showTranslate && <TranslateButton text={`${concept.name}: ${concept.desc}`} />}
                   </div>
                   <p className="text-zinc-300 text-sm">{concept.desc}</p>
                 </div>
@@ -63,7 +66,10 @@ export default function LearningSummary({ data, onSeek, sessionId, commentCounts
               return (
                 <div key={i} id={`seg-${segId}`} className="flex items-start gap-3">
                   <TimestampBadge timestamp={kp.timestamp} onSeek={onSeek} />
-                  <p className="text-zinc-200 text-sm flex-1">• {kp.point}</p>
+                  <div className="flex-1 flex flex-col gap-1">
+                    <p className="text-zinc-200 text-sm">• {kp.point}</p>
+                    {showTranslate && <TranslateButton text={kp.point} />}
+                  </div>
                   {sessionId && (
                     <CommentBubble sessionId={sessionId} segmentId={segId} segmentLabel={`핵심 포인트 ${i + 1}`} initialCount={commentCounts[segId] ?? 0} />
                   )}

@@ -42,8 +42,17 @@ export default function VoiceControl({ playerRef, steps }: Props) {
   const [feedback, setFeedback]             = useState('')
   const [supported, setSupported]           = useState(false)
   const [permission, setPermission]         = useState<PermissionState>('unknown')
-  const recognitionRef                      = useRef<any>(null)
-  const feedbackTimer                       = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [keepOn, setKeepOn]                 = useState(false)
+
+  const recognitionRef  = useRef<any>(null)
+  const feedbackTimer   = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const streamRef       = useRef<MediaStream | null>(null)
+  // Sync ref so onend closure always sees latest keepOn value
+  const keepOnRef       = useRef(false)
+  const listeningRef    = useRef(false)
+
+  useEffect(() => { keepOnRef.current = keepOn }, [keepOn])
+  useEffect(() => { listeningRef.current = listening }, [listening])
 
   // SpeechRecognition 지원 여부 + 기존 권한 상태 확인
   useEffect(() => {
@@ -51,7 +60,7 @@ export default function VoiceControl({ playerRef, steps }: Props) {
     if (!SR) return
     setSupported(true)
 
-    // Permissions API로 현재 마이크 권한 상태 확인 (지원하는 브라우저만)
+    // Permissions API로 현재 마이크 권한 상태 확인 (지원하는 브라우저만 — iOS Safari 미지원)
     navigator.permissions?.query({ name: 'microphone' as PermissionName })
       .then(result => {
         setPermission(result.state === 'granted' ? 'granted' : result.state === 'denied' ? 'denied' : 'unknown')
@@ -62,12 +71,18 @@ export default function VoiceControl({ playerRef, steps }: Props) {
       .catch(() => {
         // Permissions API 미지원 (iOS Safari 등) → unknown 유지
       })
+
+    // cleanup: keep-on 중 언마운트 시 스트림 해제
+    return () => {
+      recognitionRef.current?.abort()
+      streamRef.current?.getTracks().forEach(t => t.stop())
+    }
   }, [])
 
   const showFeedback = useCallback((msg: string) => {
     setFeedback(msg)
     if (feedbackTimer.current) clearTimeout(feedbackTimer.current)
-    feedbackTimer.current = setTimeout(() => setFeedback(''), 3000)
+    if (msg) feedbackTimer.current = setTimeout(() => setFeedback(''), 3000)
   }, [])
 
   const executeCommand = useCallback((text: string) => {
@@ -114,11 +129,13 @@ export default function VoiceControl({ playerRef, steps }: Props) {
 
     const rec = new SR()
     rec.lang = 'ko-KR'
+    // iOS Safari는 continuous=true를 제대로 지원하지 않으므로 false로 유지하고
+    // keep-on 모드에서는 onend 후 수동으로 재시작
     rec.continuous = false
     rec.interimResults = false
     recognitionRef.current = rec
 
-    rec.onstart  = () => { setListening(true); setTranscript(''); setFeedback('') }
+    rec.onstart  = () => { setListening(true); listeningRef.current = true; setTranscript(''); setFeedback('') }
     rec.onresult = (e: any) => {
       const text = e.results[0][0].transcript
       setTranscript(text)
@@ -128,23 +145,51 @@ export default function VoiceControl({ playerRef, steps }: Props) {
       if (e.error === 'not-allowed') {
         setPermission('denied')
         showFeedback('🔒 마이크 권한이 차단됐어요')
+        keepOnRef.current = false
+        setKeepOn(false)
       } else if (e.error === 'no-speech') {
-        showFeedback('🔇 음성이 감지되지 않았어요')
+        // keep-on 중에는 no-speech를 무시하고 재시작
+        if (!keepOnRef.current) showFeedback('🔇 음성이 감지되지 않았어요')
+      } else if (e.error === 'aborted') {
+        // 사용자가 직접 중단 — 무시
       } else {
         showFeedback(`❌ ${e.error}`)
       }
       setListening(false)
+      listeningRef.current = false
     }
-    rec.onend = () => setListening(false)
+    rec.onend = () => {
+      setListening(false)
+      listeningRef.current = false
+      if (keepOnRef.current) {
+        // keep-on 모드: 300ms 후 재시작 (iOS에서 연속 호출 시 crash 방지)
+        setTimeout(() => {
+          if (keepOnRef.current) startRecognition()
+        }, 300)
+      } else {
+        // keep-on 꺼진 경우: 오디오 스트림 해제
+        streamRef.current?.getTracks().forEach(t => t.stop())
+        streamRef.current = null
+      }
+    }
 
-    try { rec.start() } catch { setListening(false) }
+    try { rec.start() } catch { setListening(false); listeningRef.current = false }
   }, [executeCommand, showFeedback])
 
+  const stopAll = useCallback(() => {
+    keepOnRef.current = false
+    setKeepOn(false)
+    recognitionRef.current?.abort()
+    setListening(false)
+    listeningRef.current = false
+    streamRef.current?.getTracks().forEach(t => t.stop())
+    streamRef.current = null
+  }, [])
+
   const handleMicClick = useCallback(async () => {
-    // 이미 듣는 중 → 중지
-    if (listening) {
-      recognitionRef.current?.stop()
-      setListening(false)
+    // 이미 활성화(listening 또는 keep-on) → 전체 중단
+    if (listening || keepOn) {
+      stopAll()
       return
     }
 
@@ -160,13 +205,14 @@ export default function VoiceControl({ playerRef, steps }: Props) {
       return
     }
 
-    // 권한 미확인 (첫 사용 or iOS) → getUserMedia로 권한 요청 후 시작
+    // 권한 미확인 (첫 사용 or iOS) → getUserMedia로 권한 요청
     setPermission('requesting')
     showFeedback('🎙 마이크 권한을 요청하는 중...')
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      // 권한 허용됨 — 스트림은 필요 없으므로 즉시 해제
-      stream.getTracks().forEach(t => t.stop())
+      // 스트림을 즉시 해제하지 않고 ref에 보관
+      // iOS에서 오디오 하드웨어를 "warm" 상태로 유지해 SpeechRecognition 안정화
+      streamRef.current = stream
       setPermission('granted')
       showFeedback('')
       startRecognition()
@@ -179,9 +225,21 @@ export default function VoiceControl({ playerRef, steps }: Props) {
         setPermission('unknown')
       }
     }
-  }, [listening, permission, startRecognition, showFeedback])
+  }, [listening, keepOn, permission, startRecognition, stopAll, showFeedback])
+
+  const handleKeepOnToggle = useCallback(() => {
+    if (keepOn) {
+      stopAll()
+    } else {
+      keepOnRef.current = true
+      setKeepOn(true)
+      if (!listening) handleMicClick()
+    }
+  }, [keepOn, listening, stopAll, handleMicClick])
 
   if (!supported) return null
+
+  const isActive = listening || keepOn
 
   return (
     <div className="fixed bottom-6 left-6 z-50 flex flex-col items-start gap-2">
@@ -198,11 +256,27 @@ export default function VoiceControl({ playerRef, steps }: Props) {
       )}
 
       {/* 첫 사용 툴팁 — 권한 미확인 상태에서만 */}
-      {permission === 'unknown' && !listening && !feedback && (
+      {permission === 'unknown' && !isActive && !feedback && (
         <div className="bg-[#1c1a18] border border-orange-500/20 rounded-2xl px-3.5 py-2.5 shadow-xl max-w-[200px]">
           <p className="text-orange-300 text-[11px] leading-snug font-medium">마이크 권한을 요청해요</p>
           <p className="text-[#75716e] text-[10px] leading-snug mt-0.5">허용하면 바로 음성 제어 시작!</p>
         </div>
+      )}
+
+      {/* keep-on 토글 버튼 */}
+      {permission !== 'denied' && (
+        <button
+          onClick={handleKeepOnToggle}
+          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-semibold border transition-all ${
+            keepOn
+              ? 'bg-red-500/15 border-red-500/30 text-red-400'
+              : 'bg-[#32302e] border-white/10 text-[#75716e] hover:border-orange-500/30 hover:text-orange-300'
+          }`}
+          title="계속 듣기 모드 — 명령 후 자동으로 다시 인식 시작"
+        >
+          <span className={`w-1.5 h-1.5 rounded-full ${keepOn ? 'bg-red-400 animate-pulse' : 'bg-[#75716e]'}`} />
+          {keepOn ? '연속 듣기 켜짐' : '연속 듣기'}
+        </button>
       )}
 
       {/* 마이크 버튼 */}
@@ -213,19 +287,21 @@ export default function VoiceControl({ playerRef, steps }: Props) {
             ? 'bg-[#32302e] border border-red-500/30 opacity-60'
             : listening
             ? 'bg-red-500 scale-110 shadow-red-500/30'
+            : keepOn
+            ? 'bg-orange-500/20 border border-orange-500/40'
             : permission === 'requesting'
             ? 'bg-orange-500/20 border border-orange-500/40 animate-pulse'
             : 'bg-[#32302e] hover:bg-[#3d3a38] border border-white/10 hover:border-orange-500/40'
         }`}
         title={
-          permission === 'denied'   ? '마이크 권한이 차단됨 — 브라우저 설정에서 허용해주세요' :
-          listening                 ? '음성 인식 중 (탭해서 중지)' :
+          permission === 'denied'     ? '마이크 권한이 차단됨 — 브라우저 설정에서 허용해주세요' :
+          listening                   ? '음성 인식 중 (탭해서 중지)' :
+          keepOn                      ? '연속 듣기 활성 (탭해서 중지)' :
           permission === 'requesting' ? '권한 요청 중...' :
           '음성 명령 (탭 후 말하기)'
         }
       >
         {permission === 'denied' ? (
-          /* 차단 아이콘 */
           <svg className="w-6 h-6 text-red-400/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
           </svg>
@@ -233,6 +309,14 @@ export default function VoiceControl({ playerRef, steps }: Props) {
           <span className="relative flex items-center justify-center">
             <span className="absolute w-10 h-10 rounded-full bg-red-400/30 animate-ping" />
             <svg className="w-6 h-6 text-white relative" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+              <path d="M19 10v2a7 7 0 0 1-14 0v-2H3v2a9 9 0 0 0 8 8.94V23h2v-2.06A9 9 0 0 0 21 12v-2h-2z"/>
+            </svg>
+          </span>
+        ) : keepOn ? (
+          <span className="relative flex items-center justify-center">
+            <span className="absolute w-10 h-10 rounded-full bg-orange-400/20 animate-pulse" />
+            <svg className="w-6 h-6 text-orange-300 relative" fill="currentColor" viewBox="0 0 24 24">
               <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
               <path d="M19 10v2a7 7 0 0 1-14 0v-2H3v2a9 9 0 0 0 8 8.94V23h2v-2.06A9 9 0 0 0 21 12v-2h-2z"/>
             </svg>
@@ -249,6 +333,7 @@ export default function VoiceControl({ playerRef, steps }: Props) {
       <p className="text-[#75716e] text-[10px] pl-1">
         {permission === 'denied'     ? '🔒 권한 차단됨' :
          listening                   ? '듣는 중...' :
+         keepOn                      ? '🔴 연속 대기 중' :
          permission === 'requesting' ? '권한 요청 중...' :
          '🎙 음성 제어'}
       </p>

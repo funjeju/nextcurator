@@ -12,6 +12,15 @@ import TipsSummary from './TipsSummary'
 import VoiceSummary from './VoiceSummary'
 import ReportSummary from './ReportSummary'
 
+/** 텍스트에 한글 비율이 낮으면 외국어로 판단 */
+function isLikelyForeign(summary: SummaryData): boolean {
+  const text = JSON.stringify(summary)
+  const hangul = (text.match(/[\uAC00-\uD7AF\u1100-\u11FF\u3130-\u318F]/g) || []).length
+  const latin  = (text.match(/[a-zA-Z]/g) || []).length
+  // 영문자 수가 한글 수의 2배 이상이면 외국어 요약으로 판단
+  return latin > hangul * 2 && latin > 50
+}
+
 interface Props {
   category: Category
   summary: SummaryData
@@ -24,7 +33,8 @@ interface Props {
 
 export default function SummaryShell({ category, summary, onSeek, sessionId, commentCounts, onComment, transcriptSource }: Props) {
   const hideTimestamp = transcriptSource === 'pdf' || transcriptSource === 'web'
-  const sharedProps = { sessionId, commentCounts, onComment, hideTimestamp }
+  const showTranslate = isLikelyForeign(summary)
+  const sharedProps = { sessionId, commentCounts, onComment, hideTimestamp, showTranslate }
   switch (category) {
     case 'recipe':
       return <RecipeSummary data={summary as RecipeSummaryType} onSeek={onSeek} {...sharedProps} />

@@ -9,7 +9,7 @@ import {
   getUserFolders, getSavedSummariesByFolder, deleteSavedSummary, updateSummaryFolder,
   getPendingFriendRequests, acceptFriendRequest, rejectFriendRequest, getFriends,
   batchUpdateSortOrder, renameFolder, deleteFolder, createSharedFolder,
-  updateFolderVisibility, cloneFolder,
+  updateFolderVisibility, cloneFolder, createFolder,
   Folder, SavedSummary, FriendRequest,
 } from '@/lib/db'
 import { useAuth } from '@/providers/AuthProvider'
@@ -245,6 +245,8 @@ export default function MyPage() {
   const [selectedCategory, setSelectedCategory] = useState('all')
   const [catDropdownOpen, setCatDropdownOpen] = useState(false)
   const catDropdownRef = useRef<HTMLDivElement>(null)
+  const [creatingFolder, setCreatingFolder] = useState(false)
+  const [newFolderName, setNewFolderName] = useState('')
 
   // 폴더 메뉴 외부 클릭 시 닫기
   useEffect(() => {
@@ -395,6 +397,21 @@ export default function MyPage() {
     setFolders(prev => prev.map(f => f.id === id ? { ...f, name: renameValue.trim() } : f))
     setRenamingId(null)
     setFolderMenuId(null)
+  }
+
+  // 새 폴더 생성
+  const handleCreateFolder = async () => {
+    const name = newFolderName.trim()
+    if (!name) return
+    const uid = getLocalUserId()
+    try {
+      const created = await createFolder(uid, name)
+      setFolders(prev => [...prev, created])
+      setNewFolderName('')
+      setCreatingFolder(false)
+    } catch {
+      alert('폴더 생성에 실패했습니다.')
+    }
   }
 
   const handleToggleVisibility = async (f: Folder) => {
@@ -568,7 +585,51 @@ export default function MyPage() {
 
         {/* Sidebar: Folders */}
         <aside className="w-full md:w-64 shrink-0 flex flex-col gap-4">
-          <h2 className="text-lg font-bold text-white mb-2">폴더 목록</h2>
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="text-lg font-bold text-white">폴더 목록</h2>
+            <button
+              onClick={() => { setCreatingFolder(true); setNewFolderName('') }}
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-orange-500/15 text-orange-400 hover:bg-orange-500/25 text-xs font-bold transition-colors"
+              title="새 폴더 만들기"
+            >
+              + 새 폴더
+            </button>
+          </div>
+
+          {/* 새 폴더 인라인 입력 */}
+          {creatingFolder && (
+            <div className="flex gap-1 mb-2">
+              <input
+                autoFocus
+                value={newFolderName}
+                onChange={e => setNewFolderName(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') handleCreateFolder()
+                  if (e.key === 'Escape') { setCreatingFolder(false); setNewFolderName('') }
+                }}
+                placeholder="폴더 이름..."
+                className="flex-1 bg-[#1c1a18] border border-orange-500/50 rounded-lg px-3 py-1.5 text-sm text-white placeholder:text-[#75716e] focus:outline-none min-w-0"
+              />
+              <button
+                onClick={handleCreateFolder}
+                disabled={!newFolderName.trim()}
+                className="text-orange-400 text-xs px-2 py-1 rounded-lg hover:bg-orange-500/10 disabled:opacity-40 transition-colors"
+              >✓</button>
+              <button
+                onClick={() => { setCreatingFolder(false); setNewFolderName('') }}
+                className="text-[#75716e] text-xs px-2 py-1 rounded-lg hover:bg-white/5 transition-colors"
+              >✕</button>
+            </div>
+          )}
+          {/* 공개 설정 범례 */}
+          <div className="flex items-center gap-3 mb-3 text-[10px] text-[#75716e] bg-[#32302e]/50 rounded-lg px-3 py-2">
+            <span className="flex items-center gap-1"><span>🔒</span><span>나만</span></span>
+            <span className="text-white/10">·</span>
+            <span className="flex items-center gap-1"><span>👥</span><span>친구만</span></span>
+            <span className="text-white/10">·</span>
+            <span className="flex items-center gap-1"><span>🌐</span><span>전체공개</span></span>
+            <span className="ml-auto text-[9px] text-white/20">클릭으로 변경</span>
+          </div>
           <div className="flex flex-row md:flex-col gap-2 overflow-x-auto md:overflow-visible pb-2 scrollbar-none">
             <button
               onClick={() => handleFolderClick('all')}
@@ -614,19 +675,19 @@ export default function MyPage() {
                       </span>
                     </button>
 
-                    {/* 공개 범위 토글 뱃지 */}
+                    {/* 공개 범위 토글 아이콘 */}
                     <button
                       onClick={(e) => { e.stopPropagation(); handleToggleVisibility(f) }}
-                      className={`absolute right-10 top-1/2 -translate-y-1/2 px-2 py-1 rounded-md text-[10px] font-bold transition-all shadow-sm ${
-                        f.visibility === 'public' 
-                          ? 'bg-orange-500 text-white border border-orange-400' 
+                      className={`absolute right-10 top-1/2 -translate-y-1/2 w-7 h-7 flex items-center justify-center rounded-lg text-sm transition-all ${
+                        f.visibility === 'public'
+                          ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30'
                           : f.visibility === 'friends'
-                            ? 'bg-blue-600 text-white border border-blue-500'
-                            : 'bg-[#3d3a38] text-[#75716e] border border-white/10'
+                            ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+                            : 'bg-[#3d3a38] text-[#75716e] border border-white/5'
                       }`}
-                      title={f.visibility === 'public' ? '누구나 주소로 볼 수 있음' : f.visibility === 'friends' ? '친구만 볼 수 있음' : '나만 보기'}
+                      title={f.visibility === 'public' ? '전체공개 (클릭하여 변경)' : f.visibility === 'friends' ? '친구만 (클릭하여 변경)' : '나만 보기 (클릭하여 변경)'}
                     >
-                      {f.visibility === 'public' ? '🌐 전체공개' : f.visibility === 'friends' ? '👥 친구만' : '🔒 나만보기'}
+                      {f.visibility === 'public' ? '🌐' : f.visibility === 'friends' ? '👥' : '🔒'}
                     </button>
                   </div>
                 )}

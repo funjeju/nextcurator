@@ -30,6 +30,7 @@ export default function ProfilePage() {
   const router = useRouter()
 
   const [profile, setProfile] = useState<UserProfile | null>(null)
+  const [actualUid, setActualUid] = useState<string>('')
   const [folders, setFolders] = useState<Folder[]>([])
   const [loading, setLoading] = useState(true)
   const [friendStatus, setFriendStatus] = useState<FriendStatus>('none')
@@ -55,11 +56,12 @@ export default function ProfilePage() {
         setProfile(p)
         setFriendStatus(status)
 
-        // 친구 여부에 따라 폴더 목록 가져오기 
+        // 친구 여부에 따라 폴더 목록 가져오기
         // URL의 userId가 이메일일 수 있으므로, 프로필에서 얻은 진짜 UID(p.uid)를 우선 사용합니다.
-        const actualUid = p?.uid || userId
+        const resolvedUid = p?.uid || userId
+        setActualUid(resolvedUid)
         const isFriend = status === 'friends'
-        const f = await getVisibleFolders(actualUid, isMyProfile, isFriend)
+        const f = await getVisibleFolders(resolvedUid, isMyProfile, isFriend)
         setFolders(f)
       } catch (e) {
         console.error(e)
@@ -75,7 +77,7 @@ export default function ProfilePage() {
     setSelectedFolder(f)
     setItemsLoading(true)
     try {
-      const items = await getSavedSummariesByFolder(userId, f.id)
+      const items = await getSavedSummariesByFolder(actualUid, f.id)
       setFolderItems(items)
     } catch (e) {
       console.error(e)
@@ -95,7 +97,7 @@ export default function ProfilePage() {
       await cloneFolder(
         selectedFolder.id,
         profile?.displayName || '익명',
-        userId,
+        actualUid,
         newName,
         user.uid,
         { displayName: user.displayName || '익명', photoURL: user.photoURL || '' }
@@ -143,14 +145,14 @@ export default function ProfilePage() {
         await acceptFriendRequest(userId, user.uid)
         setFriendStatus('friends')
         // 폴더 목록 갱신 (권한에 맞게)
-        const f = await getVisibleFolders(userId, true)
+        const f = await getVisibleFolders(actualUid, true)
         setFolders(f)
       } else if (friendStatus === 'friends') {
         if (!confirm('친구를 삭제하시겠습니까?')) return
         await removeFriend(user.uid, userId)
         setFriendStatus('none')
         // 폴더 목록 갱신 (공개 전용으로)
-        const f = await getVisibleFolders(userId, false)
+        const f = await getVisibleFolders(actualUid, false)
         setFolders(f)
       }
     } catch (e: any) {

@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { runFirestoreQuery } from '@/lib/firestore-rest'
-import { checkIsAdmin } from '@/lib/admin'
+import { checkIsAdminByToken } from '@/lib/admin'
 
 const PAGE_SIZE = 10
 
 export async function POST(req: NextRequest) {
   try {
-    const { uid, email, search = '', page = 1 } = await req.json()
-    const isAdmin = await checkIsAdmin(uid, email)
+    const { search = '', page = 1 } = await req.json()
+    const idToken = req.headers.get('Authorization')?.replace('Bearer ', '') ?? ''
+    const isAdmin = await checkIsAdminByToken(idToken)
     if (!isAdmin) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
