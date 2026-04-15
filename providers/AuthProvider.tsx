@@ -45,6 +45,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUserProfile(profile)
       // 프로필 미완성이면 온보딩 모달 띄움
       setNeedsProfile(!profile?.profileCompleted)
+
+      // 학생 계정이면 로그인 로그 기록 (세션당 1회)
+      if (profile?.role === 'student' && profile.classCode) {
+        const sessionKey = `login_logged_${u.uid}_${new Date().toDateString()}`
+        if (!sessionStorage.getItem(sessionKey)) {
+          sessionStorage.setItem(sessionKey, '1')
+          const isMobile = typeof navigator !== 'undefined' && navigator.maxTouchPoints > 0
+          fetch('/api/classroom/activity', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              studentId: u.uid,
+              studentName: profile.studentName || profile.displayName || '',
+              classCode: profile.classCode,
+              type: 'login',
+              value: { device: isMobile ? 'mobile' : 'desktop' },
+            }),
+          }).catch(() => {})
+        }
+      }
     } catch (e) {
       console.error('Failed to load user profile:', e)
     }

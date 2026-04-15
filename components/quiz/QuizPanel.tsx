@@ -3,12 +3,19 @@
 import { useState } from 'react'
 import { QuizData, QuizQuestion } from '@/types/summary'
 
+export interface QuizAnswerLog {
+  questionIdx: number
+  selected: string
+  correct: boolean
+}
+
 interface Props {
   quiz: QuizData
   onClose: () => void
+  onAnswer?: (log: QuizAnswerLog) => void   // 문제별 정답 여부 콜백
 }
 
-export default function QuizPanel({ quiz, onClose }: Props) {
+export default function QuizPanel({ quiz, onClose, onAnswer }: Props) {
   const [idx, setIdx] = useState(0)
   const [flipped, setFlipped] = useState(false)
   const [selected, setSelected] = useState<string | null>(null)
@@ -19,7 +26,8 @@ export default function QuizPanel({ quiz, onClose }: Props) {
   const q = quiz.questions[idx]
   const total = quiz.questions.length
 
-  const next = (correct: boolean) => {
+  const next = (correct: boolean, chosenOption?: string) => {
+    onAnswer?.({ questionIdx: idx, selected: chosenOption ?? (correct ? '알았어' : '몰랐어'), correct })
     const newAnswers = [...answers, correct]
     setAnswers(newAnswers)
     if (correct) setScore(s => s + 1)
@@ -87,9 +95,9 @@ export default function QuizPanel({ quiz, onClose }: Props) {
         {/* 문제 */}
         <div className="p-5 flex flex-col gap-4 min-h-[360px]">
           {q.type === 'flashcard' ? (
-            <FlashCard q={q} flipped={flipped} onFlip={() => setFlipped(true)} onNext={next} />
+            <FlashCard q={q} flipped={flipped} onFlip={() => setFlipped(true)} onNext={(correct) => next(correct)} />
           ) : (
-            <MultipleChoice q={q} selected={selected} onSelect={setSelected} onNext={next} />
+            <MultipleChoice q={q} selected={selected} onSelect={setSelected} onNext={(correct) => next(correct, selected ?? '')} />
           )}
         </div>
       </div>

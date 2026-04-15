@@ -408,6 +408,38 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
     } catch { /* 로그 실패는 조용히 */ }
   }
 
+  // 학생 계정 공통 로그 헬퍼
+  const logStudentActivity = useCallback(async (type: string, value: Record<string, any>) => {
+    if (!user || !data) return
+    const { getUserProfile } = await import('@/lib/db')
+    const p = await getUserProfile(user.uid)
+    if (p?.role !== 'student' || !p.classCode) return
+    fetch('/api/classroom/activity', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        studentId: user.uid,
+        studentName: p.studentName || p.displayName || '',
+        classCode: p.classCode,
+        type,
+        videoId: data.videoId,
+        sessionId: data.sessionId,
+        videoTitle: data.title,
+        value,
+      }),
+    }).catch(() => {})
+  }, [user, data])
+
+  // 시청 완료율 로그
+  const handleWatchLog = useCallback((log: { durationSec: number; percentWatched: number; completed: boolean }) => {
+    logStudentActivity('play', log)
+  }, [logStudentActivity])
+
+  // 퀴즈 정답 로그
+  const handleQuizAnswer = useCallback((log: { questionIdx: number; selected: string; correct: boolean }) => {
+    logStudentActivity('quiz', log)
+  }, [logStudentActivity])
+
   // 링크 복사/공유 — 모바일은 네이티브 공유 시트, PC는 클립보드 복사
   const handleShare = async () => {
     if (!data) return
@@ -478,7 +510,7 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
         {data.videoId ? (
           <div className="sticky top-[68px] md:top-[76px] z-40 bg-zinc-950 pb-4 shadow-[0_15px_20px_-10px_rgba(9,9,11,1)]">
             <div className="rounded-xl overflow-hidden shadow-2xl border border-white/10 ring-1 ring-black/50">
-              <YoutubePlayer videoId={data.videoId} onPlayerReady={handlePlayerReady} />
+              <YoutubePlayer videoId={data.videoId} onPlayerReady={handlePlayerReady} onWatchLog={handleWatchLog} />
             </div>
           </div>
         ) : (data as any).sourceUrl || (data as any).sourceType === 'pdf' ? (
@@ -827,7 +859,7 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
         </div>
       </div>
 
-      {quiz && <QuizPanel quiz={quiz} onClose={() => setQuiz(null)} />}
+      {quiz && <QuizPanel quiz={quiz} onClose={() => setQuiz(null)} onAnswer={handleQuizAnswer} />}
       {worksheet && <WorksheetPanel worksheet={worksheet} onClose={() => setWorksheet(null)} />}
 
       {/* 레시피 음성 제어 — YouTube 영상이 있을 때만 */}
