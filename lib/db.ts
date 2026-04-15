@@ -266,9 +266,14 @@ export async function setInitialUserDoc(uid: string, displayName: string, email:
   })
 }
 
-// 아바타 이모지 변경
+// 아바타 이모지 변경 (문서 없으면 생성)
 export async function updateUserAvatar(uid: string, avatarEmoji: string): Promise<void> {
-  await updateDoc(doc(db, 'users', uid), { avatarEmoji, updatedAt: serverTimestamp() })
+  await setDoc(doc(db, 'users', uid), { avatarEmoji, updatedAt: serverTimestamp() }, { merge: true })
+}
+
+// 프로필 사진 URL 변경
+export async function updateUserPhotoURL(uid: string, photoURL: string): Promise<void> {
+  await setDoc(doc(db, 'users', uid), { photoURL, updatedAt: serverTimestamp() }, { merge: true })
 }
 
 export async function getUserPublicSummaries(userId: string): Promise<SavedSummary[]> {

@@ -17,6 +17,7 @@ import { PROFILE_COMPLETE_TOKENS } from '@/lib/db'
 import { AVATARS, getAvatarBg } from '@/lib/avatar'
 import { naturalSearch } from '@/lib/nlp-search'
 import FloatingChat from '@/components/chat/FloatingChat'
+import AvatarUploadModal from '@/components/profile/AvatarUploadModal'
 
 /** 두 벡터의 코사인 유사도 (−1 ~ 1) */
 function cosineSimilarity(a: number[], b: number[]): number {
@@ -262,7 +263,10 @@ export default function MyPage() {
   const [creatingFolder, setCreatingFolder] = useState(false)
   const [newFolderName, setNewFolderName] = useState('')
   const [showAvatarPicker, setShowAvatarPicker] = useState(false)
+  const [showAvatarMenu, setShowAvatarMenu] = useState(false)
+  const [showPhotoUpload, setShowPhotoUpload] = useState(false)
   const [currentAvatar, setCurrentAvatar] = useState<string>('')
+  const [currentPhotoURL, setCurrentPhotoURL] = useState<string>('')
   const [savingAvatar, setSavingAvatar] = useState(false)
   // 선생님 전환 모달
   const [showTeacherModal, setShowTeacherModal] = useState(false)
@@ -632,10 +636,10 @@ export default function MyPage() {
       {user && (
         <div className="max-w-7xl mx-auto px-6 mb-6">
           <div className="flex items-center gap-4 bg-[#32302e]/60 border border-white/5 rounded-2xl px-5 py-4">
-            {/* 아바타 — Google은 photoURL, 이메일은 이모지 */}
+            {/* 아바타 */}
             <div className="relative shrink-0">
-              {user.photoURL ? (
-                <img src={user.photoURL} alt="" className="w-11 h-11 rounded-full border border-white/10" />
+              {(currentPhotoURL || user.photoURL) ? (
+                <img src={currentPhotoURL || user.photoURL!} alt="" className="w-11 h-11 rounded-full border border-white/10 object-cover" />
               ) : currentAvatar ? (
                 <div
                   className="w-11 h-11 rounded-full flex items-center justify-center text-2xl border border-white/10"
@@ -646,10 +650,9 @@ export default function MyPage() {
               ) : (
                 <div className="w-11 h-11 rounded-full bg-[#3d3a38] flex items-center justify-center text-xl border border-white/10">👤</div>
               )}
-              {/* 아바타 변경 버튼 — 이메일 사용자만 */}
-              {!user.photoURL && (
-                <button
-                  onClick={() => setShowAvatarPicker(v => !v)}
+              {/* 아바타 변경 버튼 (항상 표시) */}
+              <button
+                  onClick={() => setShowAvatarMenu(v => !v)}
                   className="absolute -bottom-1 -right-1 w-5 h-5 bg-[#4a4745] hover:bg-orange-500 border border-white/20 rounded-full flex items-center justify-center transition-colors"
                   title="아바타 변경"
                 >
@@ -657,8 +660,30 @@ export default function MyPage() {
                     <path d="M9 1.5L10.5 3 4.5 9H3v-1.5L9 1.5z"/>
                   </svg>
                 </button>
+              {/* 아바타 변경 메뉴 */}
+              {showAvatarMenu && (
+                <div className="absolute top-14 left-0 z-50 bg-[#23211f] border border-white/15 rounded-2xl shadow-2xl w-44 py-1.5 overflow-hidden">
+                  <button
+                    onClick={() => { setShowAvatarMenu(false); setShowAvatarPicker(true) }}
+                    className="w-full text-left px-4 py-2.5 text-sm text-[#a4a09c] hover:bg-[#32302e] hover:text-white transition-colors flex items-center gap-2"
+                  >
+                    <span>😊</span> 이모지 아바타
+                  </button>
+                  <button
+                    onClick={() => { setShowAvatarMenu(false); setShowPhotoUpload(true) }}
+                    className="w-full text-left px-4 py-2.5 text-sm text-[#a4a09c] hover:bg-[#32302e] hover:text-white transition-colors flex items-center gap-2"
+                  >
+                    <span>📷</span> 사진 업로드
+                  </button>
+                  <button
+                    onClick={() => setShowAvatarMenu(false)}
+                    className="w-full text-left px-4 py-2.5 text-xs text-[#75716e] hover:text-white transition-colors"
+                  >
+                    닫기
+                  </button>
+                </div>
               )}
-              {/* 아바타 픽커 */}
+              {/* 이모지 픽커 */}
               {showAvatarPicker && (
                 <div className="absolute top-14 left-0 z-50 bg-[#23211f] border border-white/15 rounded-2xl p-3 shadow-2xl w-52">
                   <p className="text-[#75716e] text-[10px] font-semibold mb-2 uppercase tracking-wider">아바타 선택</p>
@@ -1241,6 +1266,19 @@ export default function MyPage() {
       )}
 
       <FloatingChat summaries={allSummaries} source="mypage" userId={user?.uid || getLocalUserId()} />
+
+      {/* 사진 업로드 모달 */}
+      {showPhotoUpload && user && (
+        <AvatarUploadModal
+          userId={user.uid}
+          onClose={() => setShowPhotoUpload(false)}
+          onSuccess={(url) => {
+            setCurrentPhotoURL(url)
+            setCurrentAvatar('')
+            setShowPhotoUpload(false)
+          }}
+        />
+      )}
 
       {/* 선생님 전환 모달 */}
       {showTeacherModal && (

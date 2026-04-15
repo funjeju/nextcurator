@@ -93,12 +93,16 @@ export async function POST(req: NextRequest) {
     }
 
     const uid = signUpData.localId
+    const newUserToken = signUpData.idToken  // 신규 계정의 ID 토큰 (Firestore 인증용)
 
-    // 4. Firestore users 문서 생성
+    // 4. Firestore users 문서 생성 (신규 계정 토큰으로 인증)
     const userUrl = `${FIRESTORE_BASE}/users/${uid}?key=${API_KEY}`
-    await fetch(userUrl, {
+    const userRes = await fetch(userUrl, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(newUserToken ? { 'Authorization': `Bearer ${newUserToken}` } : {}),
+      },
       body: JSON.stringify({
         fields: {
           uid: { stringValue: uid },
@@ -117,6 +121,13 @@ export async function POST(req: NextRequest) {
         }
       }),
     })
+
+    if (!userRes.ok) {
+      const errText = await userRes.text()
+      console.error('[Enroll] users 문서 생성 실패:', errText)
+      // Auth 계정은 생성됐지만 문서 저장 실패 → 오류 반환
+      return NextResponse.json({ error: '학생 정보 저장에 실패했습니다. 다시 시도해주세요.' }, { status: 500 })
+    }
 
     // 5. 교사의 masterFolder가 있으면 자동 복제
     if (classroom.masterFolderId && classroom.teacherId) {

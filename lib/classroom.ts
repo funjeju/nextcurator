@@ -117,13 +117,15 @@ export async function setMasterFolder(classCode: string, folderId: string): Prom
 // ─────────────────────────────────────────────
 
 export async function getClassStudents(classCode: string): Promise<any[]> {
+  // role 필터를 제거해 복합 인덱스 불필요 → classCode만으로 조회 후 클라이언트 필터
   const q = query(
     collection(db, 'users'),
     where('classCode', '==', classCode),
-    where('role', '==', 'student')
   )
   const snap = await getDocs(q)
-  return snap.docs.map(d => ({ uid: d.id, ...d.data() }))
+  return snap.docs
+    .map(d => ({ uid: d.id, ...d.data() }))
+    .filter((u: any) => u.role === 'student')
 }
 
 // ─────────────────────────────────────────────
