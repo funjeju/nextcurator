@@ -41,7 +41,7 @@ function EmojiOverlay({ items }: { items: FloatingEmoji[] }) {
 }
 
 // ── 메인 컴포넌트 ──────────────────────────────────────────────────────────────
-export default function RoomClient({ roomId }: { roomId: string }) {
+export default function RoomClient({ roomId, onClose }: { roomId: string; onClose?: () => void }) {
   const router = useRouter()
   const { user } = useAuth()
   const uid = user?.uid || getLocalUserId()
@@ -110,7 +110,7 @@ export default function RoomClient({ roomId }: { roomId: string }) {
   useEffect(() => {
     if (!joined) return
     const unsub1 = subscribeRoom(roomId, r => {
-      if (!r || (r as any).closed) { alert('방이 종료됐습니다.'); router.push('/'); return }
+      if (!r || (r as any).closed) { alert('방이 종료됐습니다.'); onClose ? onClose() : router.push('/'); return }
       setRoom(r)
       // 참여자: 호스트가 보낸 플레이어 상태 동기화
       if (!isHost && playerRef.current && !isSyncing.current) {
@@ -318,7 +318,7 @@ export default function RoomClient({ roomId }: { roomId: string }) {
     } else {
       await leaveRoom(roomId, uid, displayName)
     }
-    router.push('/')
+    onClose ? onClose() : router.push('/')
   }
 
   // ── 렌더: 로딩 / 오류 ────────────────────────────────────────────────────────
@@ -378,7 +378,7 @@ export default function RoomClient({ roomId }: { roomId: string }) {
 
   // ── 렌더: 메인 룸 ────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-[#1c1a18] text-white flex flex-col">
+    <div className={`${onClose ? 'fixed inset-0 z-[200]' : 'min-h-screen'} bg-[#1c1a18] text-white flex flex-col`}>
       {/* 상단 헤더 */}
       <div className="shrink-0 h-12 flex items-center gap-3 px-4 bg-[#1c1a18] border-b border-white/10 z-30">
         <span className="text-orange-500 font-black text-sm">NC</span>
@@ -388,7 +388,11 @@ export default function RoomClient({ roomId }: { roomId: string }) {
 
         {/* 초대 링크 */}
         <button
-          onClick={() => { navigator.clipboard.writeText(window.location.href); alert('초대 링크 복사됨!') }}
+          onClick={() => {
+            const inviteUrl = `${window.location.origin}/room/${roomId}`
+            navigator.clipboard.writeText(inviteUrl)
+            alert('초대 링크 복사됨!')
+          }}
           className="shrink-0 px-3 h-8 rounded-lg bg-[#32302e] hover:bg-[#3d3a38] text-xs text-[#a4a09c] hover:text-white transition-colors flex items-center gap-1.5"
         >
           🔗 초대

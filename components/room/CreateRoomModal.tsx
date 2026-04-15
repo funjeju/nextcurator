@@ -12,9 +12,10 @@ interface Props {
   title: string
   thumbnail: string
   onClose: () => void
+  onRoomCreated?: (roomId: string) => void
 }
 
-export default function CreateRoomModal({ sessionId, videoId, title, thumbnail, onClose }: Props) {
+export default function CreateRoomModal({ sessionId, videoId, title, thumbnail, onClose, onRoomCreated }: Props) {
   const router = useRouter()
   const { user } = useAuth()
   const [password, setPassword] = useState('')
@@ -35,7 +36,11 @@ export default function CreateRoomModal({ sessionId, videoId, title, thumbnail, 
         password: usePassword ? password : '',
       })
       onClose()
-      router.push(`/room/${roomId}`)
+      if (onRoomCreated) {
+        onRoomCreated(roomId)
+      } else {
+        router.push(`/room/${roomId}`)
+      }
     } catch (e) {
       console.error('[CreateRoom] failed:', e)
       alert(`방 생성에 실패했습니다.\n${(e as Error)?.message || String(e)}`)

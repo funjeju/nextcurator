@@ -14,6 +14,7 @@ import SummaryPdfTemplate from '@/components/pdf/SummaryPdfTemplate'
 import QuizPanel from '@/components/quiz/QuizPanel'
 import DocentChat from '@/components/chat/DocentChat'
 import CreateRoomModal from '@/components/room/CreateRoomModal'
+import RoomClient from '@/app/room/[roomId]/RoomClient'
 import WorksheetPanel from '@/components/worksheet/WorksheetPanel'
 import type { QuizData, WorksheetData } from '@/types/summary'
 import Header from '@/components/common/Header'
@@ -69,6 +70,7 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
   const playerRef = useRef<YT.Player | null>(null)
   const [showSaveModal, setShowSaveModal] = useState(false)
   const [showRoomModal, setShowRoomModal] = useState(false)
+  const [activeRoomId, setActiveRoomId] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'summary' | 'transcript' | 'segments' | 'reanalyze'>('summary')
   const [sharing, setSharing] = useState(false)
   const [shareCopied, setShareCopied] = useState(false)
@@ -635,11 +637,27 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
 
         {/* 영상 정보 */}
         <div>
-          <div className="flex items-center gap-2 mb-2 flex-wrap">
-            <Badge variant="outline" className={`text-xs ${catInfo.color}`}>
-              {catInfo.icon} {catInfo.label}
-            </Badge>
-            <span className="text-zinc-500 text-sm">{data.channel}</span>
+          <div className="flex items-center justify-between gap-2 mb-2">
+            <div className="flex items-center gap-2 flex-wrap min-w-0">
+              <Badge variant="outline" className={`text-xs ${catInfo.color} shrink-0`}>
+                {catInfo.icon} {catInfo.label}
+              </Badge>
+              <span className="text-zinc-500 text-sm truncate">{data.channel}</span>
+            </div>
+            {/* 댓글 바로가기 — 카테고리 우측 상단 */}
+            <button
+              onClick={handleCommentIconClick}
+              className="shrink-0 flex items-center gap-1.5 px-2.5 h-7 rounded-lg bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white transition-colors text-xs relative"
+              title="댓글 보기"
+            >
+              <span>💬</span>
+              <span>{commentCount > 0 ? `${commentCount}` : '댓글'}</span>
+              {commentCount > 0 && (
+                <span className="absolute -top-1 -right-1 min-w-[14px] h-3.5 px-0.5 rounded-full bg-orange-500 text-white text-[8px] font-bold flex items-center justify-center leading-none">
+                  {commentCount}
+                </span>
+              )}
+            </button>
           </div>
           <h1 className="text-lg font-bold text-zinc-100">{data.title}</h1>
           <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1.5">
@@ -940,20 +958,6 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
             </button>
           )}
 
-          {/* 댓글 버튼 */}
-          <button
-            onClick={handleCommentIconClick}
-            className="h-12 w-12 border border-white/10 bg-[#32302e] text-white hover:bg-[#3d3a38] hover:border-white/20 transition-all rounded-xl flex items-center justify-center relative"
-            title="댓글 보기"
-          >
-            <span className="text-lg leading-none">💬</span>
-            {commentCount > 0 && (
-              <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-orange-500 text-white text-[9px] font-bold flex items-center justify-center">
-                {commentCount}
-              </span>
-            )}
-          </button>
-
           {/* PDF 다운로드 버튼 */}
           <button
             onClick={handleDownloadPdf}
@@ -1053,6 +1057,14 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
           title={data.title}
           thumbnail={data.thumbnail ?? ''}
           onClose={() => setShowRoomModal(false)}
+          onRoomCreated={(roomId) => setActiveRoomId(roomId)}
+        />
+      )}
+
+      {activeRoomId && (
+        <RoomClient
+          roomId={activeRoomId}
+          onClose={() => setActiveRoomId(null)}
         />
       )}
 
