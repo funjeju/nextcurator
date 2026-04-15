@@ -20,13 +20,11 @@ export async function POST(req: NextRequest) {
     const url = `${FIRESTORE_BASE}/summaries/${id}?key=${API_KEY}`
     const res = await fetch(url, { method: 'DELETE' })
 
-    if (!res.ok) {
-      // 이미 삭제되었을 수도 있으므로 실패하더라도 계속 진행하거나 로그 남김
-      console.warn(`[Admin] Summary ${id} delete failed or already gone: ${res.status}`)
+    if (!res.ok && res.status !== 404) {
+      const errBody = await res.text()
+      console.error(`[Admin] Summary ${id} delete failed: ${res.status} ${errBody}`)
+      return NextResponse.json({ error: `Firestore delete failed: ${res.status}` }, { status: 500 })
     }
-
-    // 2. 만약 저장된 항목(saved_summaries)이 있다면 그것도 함께 삭제할지는 선택사항.
-    // 여기서는 캐시 삭제를 명확히 하여 '재분석'이 가능하게 만드는 것을 우선합니다.
 
     return NextResponse.json({ success: true })
   } catch (error: any) {

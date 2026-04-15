@@ -91,10 +91,10 @@ export default function AdminDashboard() {
 
       if (res.ok) {
         setSummaries(prev => prev.filter(s => s.id !== id))
-        // 통계 갱신
-        loadData()
+        setStats(prev => prev ? { ...prev, totalSummaries: prev.totalSummaries - 1 } : prev)
       } else {
-        alert('삭제에 실패했습니다.')
+        const errData = await res.json().catch(() => ({}))
+        alert(`삭제 실패: ${errData.error || res.status}`)
       }
     } catch {
       alert('오류가 발생했습니다.')
