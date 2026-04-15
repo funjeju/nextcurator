@@ -1,12 +1,13 @@
 /**
- * Cloudflare Worker: YouTube Caption Proxy (v7)
+ * Cloudflare Worker: YouTube Caption Proxy (v8)
  *
- * 역할: YouTube watch 페이지에서 공식/자동생성 자막 직접 추출
- *       자막이 없거나 실패하면 명확한 에러 코드 반환 → Next.js가 SocialKit STT로 넘김
+ * 전략:
+ * 1. InnerTube API (POST) — YouTube 공식 내부 API, 데이터센터 IP 차단 적음
+ * 2. watch 페이지 스크래핑 — InnerTube 실패 시 폴백
  *
  * 에러 코드:
  *   NO_CAPTIONS  (404) → 자막 트랙 자체가 없는 영상 → SocialKit STT 필요
- *   FETCH_FAILED (502) → YouTube 접근 실패(일시적) → SocialKit 폴백
+ *   FETCH_FAILED (502) → YouTube 접근 실패 → SocialKit 폴백
  */
 
 const CORS_HEADERS = {
@@ -16,6 +17,9 @@ const CORS_HEADERS = {
 }
 
 const LANG_PRIORITY = ['ko', 'en', 'ja', 'zh-Hans', 'zh-Hant', 'es', 'fr', 'de', 'id', 'th']
+
+// YouTube InnerTube API 키 (공개값, YouTube 웹 클라이언트가 사용)
+const INNERTUBE_API_KEY = 'AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8'
 
 export default {
   async fetch(request, _env) {
@@ -30,33 +34,88 @@ export default {
       return json({ error: 'INVALID_VIDEO_ID' }, 400)
     }
 
+    const errors = []
+
+    // 전략 1: InnerTube API (더 안정적)
+    try {
+      const transcript = await fetchViaInnerTube(videoId)
+      return json({ transcript })
+    } catch (e) {
+      const msg = e.message
+      errors.push(`innertube: ${msg}`)
+      if (msg === 'NO_CAPTIONS') {
+        console.warn(`[Worker] No captions for ${videoId}`)
+        return json({ error: 'NO_CAPTIONS', videoId }, 404)
+      }
+      console.warn(`[Worker] InnerTube failed for ${videoId}: ${msg}`)
+    }
+
+    // 전략 2: watch 페이지 스크래핑 폴백
     try {
       const transcript = await fetchViaWatchPage(videoId)
       return json({ transcript })
     } catch (e) {
       const msg = e.message
-
-      // 자막 트랙 자체가 없는 경우 → SocialKit STT 필요함을 명시
+      errors.push(`watchpage: ${msg}`)
       if (msg === 'NO_CAPTION_TRACKS' || msg === 'EMPTY_TRACKS') {
-        console.warn(`[Worker] No captions for ${videoId}: ${msg}`)
         return json({ error: 'NO_CAPTIONS', videoId }, 404)
       }
-
-      // 그 외 일시적 오류 (YouTube 접근 실패, 파싱 오류 등)
-      console.error(`[Worker] Fetch failed for ${videoId}: ${msg}`)
-      return json({ error: 'FETCH_FAILED', detail: msg }, 502)
     }
+
+    console.error(`[Worker] All strategies failed for ${videoId}:`, errors)
+    return json({ error: 'FETCH_FAILED', details: errors }, 502)
   },
 }
 
 // ─────────────────────────────────────────────
-// watch 페이지 직접 스크래핑 → 자막 추출
+// 전략 1: YouTube InnerTube API
+// 브라우저가 실제로 사용하는 내부 API → 데이터센터 IP 차단 적음
+// ─────────────────────────────────────────────
+async function fetchViaInnerTube(videoId) {
+  const res = await fetch(
+    `https://www.youtube.com/youtubei/v1/player?key=${INNERTUBE_API_KEY}`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'X-YouTube-Client-Name': '1',
+        'X-YouTube-Client-Version': '2.20231121.08.00',
+      },
+      body: JSON.stringify({
+        videoId,
+        context: {
+          client: {
+            clientName: 'WEB',
+            clientVersion: '2.20231121.08.00',
+            hl: 'en',
+          },
+        },
+      }),
+      signal: AbortSignal.timeout(15000),
+    }
+  )
+
+  if (!res.ok) throw new Error(`HTTP_${res.status}`)
+
+  const data = await res.json()
+
+  const tracks = data?.captions?.playerCaptionsTracklistRenderer?.captionTracks
+  if (!tracks || tracks.length === 0) {
+    throw new Error('NO_CAPTIONS')
+  }
+
+  return await fetchTranscriptFromTracks(tracks)
+}
+
+// ─────────────────────────────────────────────
+// 전략 2: watch 페이지 직접 스크래핑
 // ─────────────────────────────────────────────
 async function fetchViaWatchPage(videoId) {
   const res = await fetch(`https://www.youtube.com/watch?v=${videoId}&hl=en`, {
     headers: {
-      'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
-      'Accept': 'text/html',
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
       'Accept-Language': 'en-US,en;q=0.9',
     },
     cf: { cacheTtl: 0 },
@@ -67,12 +126,8 @@ async function fetchViaWatchPage(videoId) {
 
   const html = await res.text()
 
-  if (html.includes('consent.youtube.com')) {
-    throw new Error('CONSENT_PAGE')
-  }
-  if (html.length < 50000) {
-    throw new Error('SUSPICIOUS_SHORT_RESPONSE')
-  }
+  if (html.includes('consent.youtube.com')) throw new Error('CONSENT_PAGE')
+  if (html.length < 50000) throw new Error('SUSPICIOUS_SHORT_RESPONSE')
 
   // ytInitialPlayerResponse JSON 파싱 (1차)
   const playerMatch = html.match(/ytInitialPlayerResponse\s*=\s*(\{.+?\});(?:\s*var\s|\s*<\/script>|\s*window\[)/)
@@ -80,9 +135,7 @@ async function fetchViaWatchPage(videoId) {
     try {
       const playerData = JSON.parse(playerMatch[1])
       const tracks = playerData?.captions?.playerCaptionsTracklistRenderer?.captionTracks
-      if (tracks?.length) {
-        return await fetchTranscriptFromTracks(tracks)
-      }
+      if (tracks?.length) return await fetchTranscriptFromTracks(tracks)
     } catch {
       // JSON 파싱 실패 → 정규식 폴백
     }
