@@ -702,8 +702,51 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
             <div className="rounded-xl overflow-hidden shadow-2xl border border-white/10 ring-1 ring-black/50">
               <YoutubePlayer videoId={data.videoId} onPlayerReady={handlePlayerReady} onWatchLog={handleWatchLog} />
             </div>
-            {/* 배속 컨트롤 */}
-            <div className="flex items-center justify-end px-1 pt-2">
+            {/* 배속 + 북마크 컨트롤 */}
+            <div className="flex items-center justify-end gap-2 px-1 pt-2">
+              {/* 현재 시점 북마크 */}
+              <div className="relative">
+                <button
+                  onClick={handleBookmarkClick}
+                  className={`flex items-center gap-1 px-3 h-7 rounded-lg text-xs transition-colors border ${
+                    showBookmarkPanel
+                      ? 'bg-yellow-500/20 border-yellow-500/40 text-yellow-400'
+                      : 'bg-white/5 hover:bg-yellow-500/15 border-white/5 hover:border-yellow-500/30 text-zinc-400 hover:text-yellow-400'
+                  }`}
+                  title="현재 시점 북마크"
+                >
+                  🔖 <span>북마크</span>
+                </button>
+                {showBookmarkPanel && (
+                  <div className="absolute bottom-9 right-0 w-72 bg-[#1c1a18] border border-yellow-500/20 rounded-2xl p-4 shadow-2xl z-50">
+                    <div className="flex items-center justify-between mb-3">
+                      <p className="text-yellow-400 text-xs font-bold">🔖 북마크 추가</p>
+                      <button onClick={() => setShowBookmarkPanel(false)} className="text-zinc-500 hover:text-white text-sm">✕</button>
+                    </div>
+                    <div className="flex items-center gap-2 mb-3">
+                      <span className="text-orange-400 font-mono text-sm font-bold bg-orange-500/10 px-2 py-1 rounded-lg border border-orange-500/20">
+                        {secsToLabel(bookmarkSec)}
+                      </span>
+                      <span className="text-zinc-500 text-xs">현재 재생 위치</span>
+                    </div>
+                    <textarea
+                      value={bookmarkMemo}
+                      onChange={e => setBookmarkMemo(e.target.value)}
+                      placeholder="메모 추가 (선택)"
+                      rows={2}
+                      className="w-full bg-[#2a2826] border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:border-yellow-500/40 resize-none mb-3"
+                      autoFocus
+                    />
+                    <button
+                      onClick={handleBookmarkSave}
+                      disabled={bookmarkSaving || bookmarkSaved}
+                      className="w-full py-2 bg-yellow-500 hover:bg-yellow-400 disabled:bg-zinc-700 disabled:text-zinc-500 text-black text-sm font-bold rounded-xl transition-colors"
+                    >
+                      {bookmarkSaved ? '✓ 저장됨' : bookmarkSaving ? '저장 중...' : '저장'}
+                    </button>
+                  </div>
+                )}
+              </div>
               <div className="relative">
                 <button
                   onClick={() => setShowSpeedMenu(v => !v)}
