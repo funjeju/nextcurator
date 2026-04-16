@@ -169,8 +169,6 @@ export default function TravelWishlist({ userId }: { userId: string }) {
         thumbnail,
         sourceType: selectedPlace ? 'map' : 'manual',
       })
-      const lat = selectedPlace ? parseFloat(selectedPlace.y) : undefined
-      const lng = selectedPlace ? parseFloat(selectedPlace.x) : undefined
       const newSpot: TravelSpot = {
         id, userId, regionId: selectedId,
         name: spotName.trim(),
