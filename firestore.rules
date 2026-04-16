@@ -123,6 +123,18 @@ service cloud.firestore {
       allow update, delete: if request.auth != null && request.auth.uid == resource.data.teacherId;
     }
 
+    // travel_regions: 본인 지역 폴더 CRUD
+    match /travel_regions/{regionId} {
+      allow read, create: if request.auth != null && request.auth.uid == request.resource.data.userId;
+      allow update, delete: if request.auth != null && request.auth.uid == resource.data.userId;
+    }
+
+    // travel_spots: 본인 스팟 CRUD
+    match /travel_spots/{spotId} {
+      allow read, create: if request.auth != null && request.auth.uid == request.resource.data.userId;
+      allow update, delete: if request.auth != null && request.auth.uid == resource.data.userId;
+    }
+
     // activity_logs: 학생 본인 생성, 본인 및 담당 교사 읽기
     match /activity_logs/{logId} {
       allow create: if request.auth != null && request.auth.uid == request.resource.data.studentId;

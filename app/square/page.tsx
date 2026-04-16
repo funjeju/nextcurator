@@ -278,6 +278,7 @@ export default function SquarePage() {
   const [likingIds, setLikingIds] = useState<Set<string>>(new Set())
   const [messagingId, setMessagingId] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
+  const [committedQuery, setCommittedQuery] = useState('')
   const [commentCounts, setCommentCounts] = useState<Record<string, number>>({})
   const colCount = useColumnCount()
 
@@ -369,7 +370,7 @@ export default function SquarePage() {
   const categoryFiltered = summaries
     .filter(s => activeCategory === 'all' || s.category === activeCategory)
 
-  const searched = searchQuery.trim()
+  const searched = committedQuery.trim()
     ? naturalSearch(
         categoryFiltered.map(s => ({
           ...s,
@@ -377,9 +378,17 @@ export default function SquarePage() {
           tags: s.square_meta?.tags ?? [],
           topicCluster: s.square_meta?.topic_cluster ?? '',
         })),
-        searchQuery,
+        committedQuery,
       )
     : categoryFiltered
+
+  const handleSearch = () => {
+    setCommittedQuery(searchQuery)
+  }
+  const handleClear = () => {
+    setSearchQuery('')
+    setCommittedQuery('')
+  }
 
   const filtered = searched
     .sort((a, b) => {
@@ -463,23 +472,34 @@ export default function SquarePage() {
       <div className="max-w-7xl mx-auto px-3 pb-12">
 
         {/* 검색창 */}
-        <div className="relative mb-3">
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            placeholder="검색... (예: 당근 요리, 영어 발음 팁)"
-            className="w-full h-10 pl-9 pr-4 bg-[#32302e] border border-white/10 rounded-xl text-sm text-white placeholder:text-[#75716e] focus:outline-none focus:border-orange-500/50 transition-colors"
-          />
-          <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#75716e]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-          </svg>
-          {searchQuery && (
-            <button
-              onClick={() => setSearchQuery('')}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#75716e] hover:text-white text-xs"
-            >✕</button>
-          )}
+        <div className="flex gap-2 mb-3">
+          <div className="relative flex-1">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') handleSearch() }}
+              placeholder="검색어 입력 후 버튼을 누르세요 (예: 당근 요리, 영어 발음 팁)"
+              className={`w-full h-10 pl-9 pr-8 bg-[#32302e] border rounded-xl text-sm text-white placeholder:text-[#75716e] focus:outline-none transition-colors ${
+                committedQuery ? 'border-orange-500/50' : 'border-white/10 focus:border-orange-500/40'
+              }`}
+            />
+            <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#75716e]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            {(searchQuery || committedQuery) && (
+              <button
+                onClick={handleClear}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#75716e] hover:text-white text-xs"
+              >✕</button>
+            )}
+          </div>
+          <button
+            onClick={handleSearch}
+            className="h-10 px-4 bg-orange-500 hover:bg-orange-600 text-white text-sm font-bold rounded-xl transition-colors shrink-0"
+          >
+            검색
+          </button>
         </div>
 
         {/* 필터 바 */}
@@ -518,7 +538,7 @@ export default function SquarePage() {
               )
             })}
             <span className="text-[#75716e] text-xs ml-auto">
-              {searchQuery ? `"${searchQuery}" 결과 ${filtered.length}개` : `${filtered.length}개`}
+              {committedQuery ? `"${committedQuery}" 결과 ${filtered.length}개` : `${filtered.length}개`}
             </span>
           </div>
         </div>

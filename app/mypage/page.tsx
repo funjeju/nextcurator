@@ -20,17 +20,6 @@ import FloatingChat from '@/components/chat/FloatingChat'
 import AvatarUploadModal from '@/components/profile/AvatarUploadModal'
 import TravelWishlist from '@/components/travel/TravelWishlist'
 
-/** 두 벡터의 코사인 유사도 (−1 ~ 1) */
-function cosineSimilarity(a: number[], b: number[]): number {
-  let dot = 0, normA = 0, normB = 0
-  for (let i = 0; i < a.length; i++) {
-    dot   += a[i] * b[i]
-    normA += a[i] * a[i]
-    normB += b[i] * b[i]
-  }
-  const denom = Math.sqrt(normA) * Math.sqrt(normB)
-  return denom === 0 ? 0 : dot / denom
-}
 
 const CATEGORY_LABEL: Record<string, string> = {
   recipe: '🍳 요리',
@@ -258,6 +247,7 @@ export default function MyPage() {
   const [savingOrder, setSavingOrder] = useState(false)
   const [pendingCount, setPendingCount] = useState(0)
   const [searchQuery, setSearchQuery] = useState('')
+  const [committedQuery, setCommittedQuery] = useState('')
   const [selectedCategory, setSelectedCategory] = useState('all')
   const [catDropdownOpen, setCatDropdownOpen] = useState(false)
   const catDropdownRef = useRef<HTMLDivElement>(null)
@@ -277,9 +267,6 @@ export default function MyPage() {
   const [teacherSaving, setTeacherSaving] = useState(false)
   const [teacherError, setTeacherError] = useState('')
   const [teacherDoneCode, setTeacherDoneCode] = useState('')
-  const [aiSearchLoading, setAiSearchLoading] = useState(false)
-  const [aiSearchIds, setAiSearchIds] = useState<string[] | null>(null)
-  const [aiSearchNoEmbed, setAiSearchNoEmbed] = useState(false)  // 임베딩 없는 항목 존재 여부
   // 회원탈퇴
   const [showWithdrawModal, setShowWithdrawModal] = useState(false)
   const [withdrawConfirm, setWithdrawConfirm] = useState('')
@@ -404,47 +391,14 @@ export default function MyPage() {
     }
   }
 
-  const handleAiSearch = async () => {
-    const q = searchQuery.trim()
-    if (!q) return
-    setAiSearchLoading(true)
-    setAiSearchNoEmbed(false)
-    try {
-      // 1. 쿼리를 벡터로 변환
-      const res = await fetch('/api/embed-query', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: q }),
-      })
-      if (!res.ok) throw new Error('embed-query failed')
-      const { embedding: queryVec } = await res.json() as { embedding: number[] }
-
-      // 2. 저장된 영상들과 코사인 유사도 계산
-      const THRESHOLD = 0.55
-      const withoutEmbed: string[] = []
-
-      const scored = allSummaries
-        .map(s => {
-          if (!s.embedding || s.embedding.length === 0) {
-            withoutEmbed.push(s.id)
-            return null
-          }
-          const score = cosineSimilarity(queryVec, s.embedding)
-          return { id: s.id, score }
-        })
-        .filter((x): x is { id: string; score: number } => x !== null && x.score >= THRESHOLD)
-        .sort((a, b) => b.score - a.score)
-
-      setAiSearchNoEmbed(withoutEmbed.length > 0)
-      setAiSearchIds(scored.map(x => x.id))
-    } catch {
-      setAiSearchIds([])
-    } finally {
-      setAiSearchLoading(false)
-    }
+  const handleSearch = () => {
+    setCommittedQuery(searchQuery)
   }
 
-  const clearAiSearch = () => { setSearchQuery(''); setAiSearchIds(null); setAiSearchNoEmbed(false) }
+  const clearSearch = () => {
+    setSearchQuery('')
+    setCommittedQuery('')
+  }
 
   // ── 드래그 순서 변경 (특정 폴더에서만 활성화) ──
   const canDrag = activeFolder !== 'all'
@@ -626,19 +580,17 @@ export default function MyPage() {
     ? summaries
     : summaries.filter(s => s.category === selectedCategory)
 
-  const filteredSummaries = aiSearchIds !== null
-    ? aiSearchIds.map(id => allSummaries.find(s => s.id === id)).filter(Boolean) as typeof summaries
-    : searchQuery.trim()
-      ? naturalSearch(
-          catFiltered.map(s => ({
-            ...s,
-            categoryLabel: CATEGORY_LABEL[s.category] ?? s.category,
-            tags: s.square_meta?.tags ?? [],
-            topicCluster: s.square_meta?.topic_cluster ?? '',
-          })),
-          searchQuery,
-        )
-      : catFiltered
+  const filteredSummaries = committedQuery.trim()
+    ? naturalSearch(
+        catFiltered.map(s => ({
+          ...s,
+          categoryLabel: CATEGORY_LABEL[s.category] ?? s.category,
+          tags: s.square_meta?.tags ?? [],
+          topicCluster: s.square_meta?.topic_cluster ?? '',
+        })),
+        committedQuery,
+      )
+    : catFiltered
 
   // 현재 폴더 범위에서 실제 존재하는 카테고리만 드롭다운에 노출
   const availableCategories = CATEGORY_ORDER.filter(cat =>
@@ -1012,54 +964,37 @@ export default function MyPage() {
         {/* Content Grid */}
         <main className="flex-1">
           {/* 검색창 + 카테고리 드롭다운 */}
-          {aiSearchIds !== null && (
+          {committedQuery && (
             <div className="flex items-center gap-2 mb-2 text-[11px] text-orange-400/80">
-              ✨ AI 검색 결과 {filteredSummaries.length}개 —
-              <button onClick={clearAiSearch} className="text-[#75716e] hover:text-white">전체 보기</button>
+              <span>"{committedQuery}" 검색 결과 {filteredSummaries.length}개</span>
+              <button onClick={clearSearch} className="text-[#75716e] hover:text-white">전체 보기</button>
             </div>
           )}
-          {aiSearchNoEmbed && aiSearchIds !== null && (
-            <div className="flex items-center gap-2 mb-2 px-3 py-2 bg-[#2a2826] rounded-xl border border-white/5">
-              <span className="text-sm">ℹ️</span>
-              <p className="text-[#75716e] text-xs">일부 오래된 영상은 임베딩이 없어 검색 대상에서 제외됐어요.</p>
-            </div>
-          )}
-          <div className="flex items-center gap-3 mb-5">
+          <div className="flex items-center gap-2 mb-5">
             <div className="relative flex-1">
               <input
                 type="text"
                 value={searchQuery}
-                onChange={e => { setSearchQuery(e.target.value); if (!e.target.value.trim()) setAiSearchIds(null) }}
-                onKeyDown={e => { if (e.key === 'Enter' && searchQuery.trim()) handleAiSearch() }}
-                placeholder="자연어로 검색... (예: 당근으로 만드는 요리 영상)"
-                className={`w-full h-10 pl-9 pr-28 bg-[#32302e] border rounded-xl text-sm text-white placeholder:text-[#75716e] focus:outline-none transition-colors ${
-                  aiSearchIds !== null ? 'border-orange-500/60' : 'border-white/10 focus:border-orange-500/50'
+                onChange={e => setSearchQuery(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') handleSearch() }}
+                placeholder="검색어 입력 후 검색 버튼을 누르세요"
+                className={`w-full h-10 pl-9 pr-8 bg-[#32302e] border rounded-xl text-sm text-white placeholder:text-[#75716e] focus:outline-none transition-colors ${
+                  committedQuery ? 'border-orange-500/50' : 'border-white/10 focus:border-orange-500/50'
                 }`}
               />
               <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#75716e]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
-              <div className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
-                {searchQuery && (
-                  <button onClick={clearAiSearch} className="text-[#75716e] hover:text-white text-xs">✕</button>
-                )}
-                {searchQuery.trim() && (
-                  <button
-                    onClick={handleAiSearch}
-                    disabled={aiSearchLoading}
-                    className="flex items-center gap-1 px-2 py-1 bg-orange-500 hover:bg-orange-600 text-white text-[10px] font-bold rounded-lg transition-colors disabled:opacity-60 whitespace-nowrap"
-                  >
-                    {aiSearchLoading ? (
-                      <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
-                      </svg>
-                    ) : '✨'}
-                    AI 검색
-                  </button>
-                )}
-              </div>
+              {(searchQuery || committedQuery) && (
+                <button onClick={clearSearch} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#75716e] hover:text-white text-xs">✕</button>
+              )}
             </div>
+            <button
+              onClick={handleSearch}
+              className="h-10 px-4 bg-orange-500 hover:bg-orange-600 text-white text-sm font-bold rounded-xl transition-colors shrink-0"
+            >
+              검색
+            </button>
 
             {/* 카테고리 드롭다운 */}
             <div ref={catDropdownRef} className="relative shrink-0">
@@ -1158,10 +1093,10 @@ export default function MyPage() {
                           <button onClick={() => setSelectedCategory('all')} className="hover:text-white ml-0.5">✕</button>
                         </span>
                       )}
-                      {searchQuery && (
+                      {committedQuery && (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-[#a4a09c] text-[10px]">
-                          {aiSearchIds !== null ? '✨ AI 검색' : `"${searchQuery}"`}
-                          <button onClick={clearAiSearch} className="hover:text-white ml-0.5">✕</button>
+                          &quot;{committedQuery}&quot;
+                          <button onClick={clearSearch} className="hover:text-white ml-0.5">✕</button>
                         </span>
                       )}
                       <span className="text-[#75716e]">· {filteredSummaries.length}개</span>
