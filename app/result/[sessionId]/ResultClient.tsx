@@ -498,19 +498,24 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
     logStudentActivity('quiz', log)
     // 오답이면 에빙하우스 복습 스케줄에 추가
     if (!log.correct && user && userProfile?.classCode) {
-      fetch('/api/review-schedule', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          studentId: user.uid,
-          classCode: userProfile.classCode,
-          sessionId: data.sessionId,
-          videoId: data.videoId || '',
-          videoTitle: data.title,
-          questionIdx: log.questionIdx,
-          question: log.question,
-        }),
-      }).catch(() => {})
+      const sessionId = data?.sessionId
+      const videoId = data?.videoId || ''
+      const videoTitle = data?.title ?? ''
+      if (sessionId) {
+        fetch('/api/review-schedule', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            studentId: user.uid,
+            classCode: userProfile.classCode,
+            sessionId,
+            videoId,
+            videoTitle,
+            questionIdx: log.questionIdx,
+            question: log.question,
+          }),
+        }).catch(() => {})
+      }
     }
   }, [logStudentActivity, user, userProfile, data])
 

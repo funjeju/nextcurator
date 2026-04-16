@@ -133,7 +133,7 @@ export default function UrlInput() {
             userId: user.uid,
             userDisplayName: user.displayName || '',
             userPhotoURL: user.photoURL || '',
-            folderId: null,
+            folderId: undefined,
             sessionId: data.sessionId,
             videoId: data.videoId || '',
             title: data.title,
