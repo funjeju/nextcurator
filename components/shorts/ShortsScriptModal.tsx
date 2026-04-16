@@ -37,6 +37,59 @@ function formatDuration(secs: number): string {
   return secs < 60 ? `${secs}초` : `${Math.floor(secs / 60)}분 ${secs % 60}초`
 }
 
+function secsToSrtTime(secs: number): string {
+  const h = Math.floor(secs / 3600)
+  const m = Math.floor((secs % 3600) / 60)
+  const s = Math.floor(secs % 60)
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')},000`
+}
+
+function buildFullSrt(transcript: string): string {
+  const lines = transcript.split('\n')
+  const parsed: { seconds: number; ts: string; text: string }[] = []
+  for (const line of lines) {
+    const m = line.match(/^\[(\d{1,2}:\d{2}(?::\d{2})?)\]\s(.+)/)
+    if (m) {
+      const parts = m[1].split(':').map(Number)
+      const seconds = parts.length === 3
+        ? parts[0] * 3600 + parts[1] * 60 + parts[2]
+        : parts[0] * 60 + parts[1]
+      parsed.push({ seconds, ts: m[1], text: m[2].trim() })
+    }
+  }
+  return parsed.map((p, i) => {
+    const endSecs = parsed[i + 1]?.seconds ?? (p.seconds + 5)
+    return `${i + 1}\n${secsToSrtTime(p.seconds)} --> ${secsToSrtTime(endSecs)}\n${p.text}`
+  }).join('\n\n')
+}
+
+function buildClipsSrt(segments: ShortsSegment[]): string {
+  let index = 1
+  const entries: string[] = []
+  for (const seg of segments) {
+    const lines = seg.script.replace(/\\n/g, '\n').split('\n').filter(l => l.trim())
+    if (lines.length === 0) continue
+    const secsPerLine = Math.max(1, seg.duration_seconds / lines.length)
+    lines.forEach((line, i) => {
+      const startSecs = seg.start_seconds + i * secsPerLine
+      const endSecs = seg.start_seconds + (i + 1) * secsPerLine
+      entries.push(`${index}\n${secsToSrtTime(startSecs)} --> ${secsToSrtTime(endSecs)}\n${line.trim()}`)
+      index++
+    })
+  }
+  return entries.join('\n\n')
+}
+
+function downloadSrt(content: string, filename: string) {
+  const blob = new Blob(['\ufeff' + content], { type: 'text/plain;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
 interface Props {
   data: SummarizeResponse
   onClose: () => void
@@ -254,35 +307,63 @@ export default function ShortsScriptModal({ data, onClose }: Props) {
 
         {/* 푸터 */}
         {result && (
-          <div className="shrink-0 flex gap-2 px-6 py-4 border-t border-white/5">
-            <button
-              onClick={generate}
-              className="px-4 h-10 rounded-xl bg-white/5 hover:bg-white/10 text-zinc-400 text-xs transition-colors"
-            >
-              🔄 다시 추출
-            </button>
-            <div className="flex-1" />
-            <button
-              onClick={handleSave}
-              disabled={saving || saved}
-              className={`px-4 h-10 rounded-xl text-xs font-bold transition-colors disabled:opacity-60 ${
-                saved
-                  ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                  : 'bg-white/8 border border-white/10 text-zinc-300 hover:bg-white/15'
-              }`}
-            >
-              {saving ? '저장 중...' : saved ? '✓ 저장됨' : '💾 저장'}
-            </button>
-            <button
-              onClick={copyAll}
-              className={`px-5 h-10 rounded-xl text-xs font-bold transition-colors ${
-                copiedAll
-                  ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                  : 'bg-gradient-to-r from-pink-500 to-orange-500 text-white hover:opacity-90'
-              }`}
-            >
-              {copiedAll ? '✓ 전체 복사됨' : '📋 전체 스크립트 복사'}
-            </button>
+          <div className="shrink-0 flex flex-col gap-2 px-6 py-4 border-t border-white/5">
+            {/* SRT 다운로드 행 */}
+            <div className="flex gap-2">
+              <button
+                onClick={() => {
+                  if (!data.transcript || data.transcript.trim().length < 100) {
+                    alert('전체 자막 데이터가 없습니다.')
+                    return
+                  }
+                  const safe = (data.title ?? 'subtitle').replace(/[^\w가-힣]/g, '_').slice(0, 30)
+                  downloadSrt(buildFullSrt(data.transcript), `${safe}_전체자막.srt`)
+                }}
+                className="flex-1 h-9 rounded-xl bg-white/5 hover:bg-white/10 text-zinc-400 text-xs transition-colors border border-white/8 font-semibold"
+              >
+                📥 전체 SRT
+              </button>
+              <button
+                onClick={() => {
+                  const safe = (data.title ?? 'clips').replace(/[^\w가-힣]/g, '_').slice(0, 30)
+                  downloadSrt(buildClipsSrt(result.segments), `${safe}_핵심클립.srt`)
+                }}
+                className="flex-1 h-9 rounded-xl bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-400 text-xs transition-colors border border-indigo-500/20 font-semibold"
+              >
+                ✂️ 핵심클립 SRT
+              </button>
+            </div>
+            {/* 저장·복사 행 */}
+            <div className="flex gap-2">
+              <button
+                onClick={generate}
+                className="px-4 h-10 rounded-xl bg-white/5 hover:bg-white/10 text-zinc-400 text-xs transition-colors"
+              >
+                🔄 다시 추출
+              </button>
+              <div className="flex-1" />
+              <button
+                onClick={handleSave}
+                disabled={saving || saved}
+                className={`px-4 h-10 rounded-xl text-xs font-bold transition-colors disabled:opacity-60 ${
+                  saved
+                    ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                    : 'bg-white/8 border border-white/10 text-zinc-300 hover:bg-white/15'
+                }`}
+              >
+                {saving ? '저장 중...' : saved ? '✓ 저장됨' : '💾 저장'}
+              </button>
+              <button
+                onClick={copyAll}
+                className={`px-5 h-10 rounded-xl text-xs font-bold transition-colors ${
+                  copiedAll
+                    ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                    : 'bg-gradient-to-r from-pink-500 to-orange-500 text-white hover:opacity-90'
+                }`}
+              >
+                {copiedAll ? '✓ 전체 복사됨' : '📋 전체 스크립트 복사'}
+              </button>
+            </div>
           </div>
         )}
       </div>

@@ -1,7 +1,7 @@
 import { db } from './firebase'
 import {
   collection, doc, addDoc, getDocs, deleteDoc,
-  query, where, orderBy, serverTimestamp,
+  query, where, serverTimestamp,
 } from 'firebase/firestore'
 
 export interface SavedShortsSegment {
@@ -34,10 +34,10 @@ export async function getSavedShortsScripts(userId: string): Promise<SavedShorts
   const q = query(
     collection(db, 'shorts_scripts'),
     where('userId', '==', userId),
-    orderBy('createdAt', 'desc'),
   )
   const snap = await getDocs(q)
-  return snap.docs.map(d => ({ id: d.id, ...d.data() } as SavedShortsScript))
+  const list = snap.docs.map(d => ({ id: d.id, ...d.data() } as SavedShortsScript))
+  return list.sort((a, b) => (b.createdAt?.seconds ?? 0) - (a.createdAt?.seconds ?? 0))
 }
 
 export async function saveShortsScript(

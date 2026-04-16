@@ -1,7 +1,7 @@
 import { db } from './firebase'
 import {
   collection, doc, addDoc, getDocs, updateDoc, deleteDoc,
-  query, where, orderBy, serverTimestamp, writeBatch, increment,
+  query, where, serverTimestamp, writeBatch, increment,
 } from 'firebase/firestore'
 
 export interface TravelRegion {
@@ -35,10 +35,14 @@ export async function getRegions(userId: string): Promise<TravelRegion[]> {
   const q = query(
     collection(db, 'travel_regions'),
     where('userId', '==', userId),
-    orderBy('createdAt', 'desc'),
   )
   const snap = await getDocs(q)
-  return snap.docs.map(d => ({ id: d.id, ...d.data() } as TravelRegion))
+  const list = snap.docs.map(d => ({ id: d.id, ...d.data() } as TravelRegion))
+  return list.sort((a, b) => {
+    const at = a.createdAt?.seconds ?? 0
+    const bt = b.createdAt?.seconds ?? 0
+    return bt - at
+  })
 }
 
 export async function createRegion(userId: string, name: string, emoji = '📍'): Promise<string> {
@@ -73,10 +77,14 @@ export async function getSpots(userId: string, regionId: string): Promise<Travel
     collection(db, 'travel_spots'),
     where('userId', '==', userId),
     where('regionId', '==', regionId),
-    orderBy('createdAt', 'asc'),
   )
   const snap = await getDocs(q)
-  return snap.docs.map(d => ({ id: d.id, ...d.data() } as TravelSpot))
+  const list = snap.docs.map(d => ({ id: d.id, ...d.data() } as TravelSpot))
+  return list.sort((a, b) => {
+    const at = a.createdAt?.seconds ?? 0
+    const bt = b.createdAt?.seconds ?? 0
+    return at - bt
+  })
 }
 
 export async function addSpot(

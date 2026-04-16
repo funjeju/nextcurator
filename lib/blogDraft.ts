@@ -1,7 +1,7 @@
 import { db } from './firebase'
 import {
   collection, doc, addDoc, getDocs, deleteDoc,
-  query, where, orderBy, serverTimestamp,
+  query, where, serverTimestamp,
 } from 'firebase/firestore'
 
 export interface BlogSection {
@@ -34,10 +34,10 @@ export async function getSavedBlogDrafts(userId: string): Promise<SavedBlogDraft
   const q = query(
     collection(db, 'blog_drafts'),
     where('userId', '==', userId),
-    orderBy('createdAt', 'desc'),
   )
   const snap = await getDocs(q)
-  return snap.docs.map(d => ({ id: d.id, ...d.data() } as SavedBlogDraft))
+  const list = snap.docs.map(d => ({ id: d.id, ...d.data() } as SavedBlogDraft))
+  return list.sort((a, b) => (b.createdAt?.seconds ?? 0) - (a.createdAt?.seconds ?? 0))
 }
 
 export async function saveBlogDraft(
