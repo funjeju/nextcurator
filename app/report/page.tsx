@@ -100,7 +100,7 @@ export default function ReportPage() {
   const filtered = search.trim()
     ? mySummaries.filter(s =>
         s.title.toLowerCase().includes(search.toLowerCase()) ||
-        s.channel.toLowerCase().includes(search.toLowerCase())
+        (s.channel ?? '').toLowerCase().includes(search.toLowerCase())
       )
     : mySummaries
 

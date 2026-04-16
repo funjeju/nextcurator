@@ -10,6 +10,19 @@ import ItineraryWizardModal from './ItineraryWizardModal'
 
 const EMOJI_OPTIONS = ['📍', '🏖️', '🏔️', '🏙️', '🌿', '🍜', '🎡', '🛕', '🗼', '🌊']
 
+interface KakaoPlace {
+  id: string
+  place_name: string
+  road_address_name: string
+  address_name: string
+  category_name: string
+  category_group_name: string
+  phone: string
+  x: string  // longitude
+  y: string  // latitude
+  place_url: string
+}
+
 export default function TravelWishlist({ userId }: { userId: string }) {
   const [regions, setRegions] = useState<TravelRegion[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -27,8 +40,17 @@ export default function TravelWishlist({ userId }: { userId: string }) {
   const [renameValue, setRenameValue] = useState('')
   const [renameEmoji, setRenameEmoji] = useState('📍')
 
-  // 스팟 수동 추가
+  // 스팟 추가 모드
   const [addingSpot, setAddingSpot] = useState(false)
+  const [addMode, setAddMode] = useState<'search' | 'manual'>('search')
+
+  // 장소 검색
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchResults, setSearchResults] = useState<KakaoPlace[]>([])
+  const [searching, setSearching] = useState(false)
+  const [selectedPlace, setSelectedPlace] = useState<KakaoPlace | null>(null)
+
+  // 수동 입력
   const [spotName, setSpotName] = useState('')
   const [spotAddress, setSpotAddress] = useState('')
   const [spotDesc, setSpotDesc] = useState('')
@@ -93,29 +115,79 @@ export default function TravelWishlist({ userId }: { userId: string }) {
     }
   }
 
+  const handlePlaceSearch = async () => {
+    if (!searchQuery.trim()) return
+    setSearching(true)
+    setSearchResults([])
+    try {
+      const res = await fetch(`/api/place-search?q=${encodeURIComponent(searchQuery.trim())}`)
+      const data = await res.json()
+      setSearchResults(data.documents || [])
+    } catch {
+      alert('검색에 실패했습니다.')
+    } finally {
+      setSearching(false)
+    }
+  }
+
+  const handleSelectPlace = (place: KakaoPlace) => {
+    setSelectedPlace(place)
+    setSpotName(place.place_name)
+    setSpotAddress(place.road_address_name || place.address_name)
+    setSpotDesc('')
+  }
+
+  const resetAddForm = () => {
+    setAddingSpot(false)
+    setAddMode('search')
+    setSearchQuery('')
+    setSearchResults([])
+    setSelectedPlace(null)
+    setSpotName('')
+    setSpotAddress('')
+    setSpotDesc('')
+  }
+
   const handleAddSpot = async () => {
     if (!selectedId || !spotName.trim()) return
     setSavingSpot(true)
     try {
+      const lat = selectedPlace ? parseFloat(selectedPlace.y) : undefined
+      const lng = selectedPlace ? parseFloat(selectedPlace.x) : undefined
+      const thumbnail = (lat && lng)
+        ? `/api/place-map?lat=${lat}&lng=${lng}`
+        : undefined
+
       const id = await addSpot(userId, selectedId, {
         name: spotName.trim(),
         address: spotAddress.trim() || undefined,
         description: spotDesc.trim() || undefined,
-        sourceType: 'manual',
+        lat,
+        lng,
+        placeId: selectedPlace?.id,
+        placeUrl: selectedPlace?.place_url,
+        thumbnail,
+        sourceType: selectedPlace ? 'map' : 'manual',
       })
+      const lat = selectedPlace ? parseFloat(selectedPlace.y) : undefined
+      const lng = selectedPlace ? parseFloat(selectedPlace.x) : undefined
       const newSpot: TravelSpot = {
         id, userId, regionId: selectedId,
         name: spotName.trim(),
         address: spotAddress.trim() || undefined,
         description: spotDesc.trim() || undefined,
-        sourceType: 'manual',
+        lat,
+        lng,
+        placeId: selectedPlace?.id,
+        placeUrl: selectedPlace?.place_url,
+        thumbnail: (lat && lng) ? `/api/place-map?lat=${lat}&lng=${lng}` : undefined,
+        sourceType: selectedPlace ? 'map' : 'manual',
         visited: false,
         createdAt: null,
       }
       setSpots(prev => [...prev, newSpot])
       setRegions(prev => prev.map(r => r.id === selectedId ? { ...r, spotCount: r.spotCount + 1 } : r))
-      setSpotName(''); setSpotAddress(''); setSpotDesc('')
-      setAddingSpot(false)
+      resetAddForm()
     } finally {
       setSavingSpot(false)
     }
@@ -268,10 +340,10 @@ export default function TravelWishlist({ userId }: { userId: string }) {
                 </h3>
               </div>
               <button
-                onClick={() => { setAddingSpot(v => !v); setSpotName(''); setSpotAddress(''); setSpotDesc('') }}
+                onClick={() => { setAddingSpot(v => !v); if (addingSpot) resetAddForm() }}
                 className="text-xs px-3 py-2 rounded-xl bg-cyan-500/15 text-cyan-400 hover:bg-cyan-500/25 font-bold transition-colors shrink-0"
               >
-                + 스팟 추가
+                {addingSpot ? '✕ 닫기' : '+ 스팟 추가'}
               </button>
               {spots.length > 0 && (
                 <button
@@ -283,44 +355,154 @@ export default function TravelWishlist({ userId }: { userId: string }) {
               )}
             </div>
 
-            {/* 스팟 수동 추가 폼 */}
+            {/* 스팟 추가 폼 */}
             {addingSpot && (
               <div className="mb-4 bg-[#23211f] border border-cyan-500/30 rounded-2xl p-4 space-y-3">
-                <p className="text-cyan-400 text-xs font-semibold">새 스팟 추가</p>
-                <input
-                  autoFocus value={spotName}
-                  onChange={e => setSpotName(e.target.value)}
-                  placeholder="장소명 *"
-                  className="w-full bg-[#1c1a18] border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:border-cyan-500/40"
-                />
-                <input
-                  value={spotAddress}
-                  onChange={e => setSpotAddress(e.target.value)}
-                  placeholder="주소 (선택)"
-                  className="w-full bg-[#1c1a18] border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:border-cyan-500/40"
-                />
-                <textarea
-                  value={spotDesc}
-                  onChange={e => setSpotDesc(e.target.value)}
-                  placeholder="메모 (선택)"
-                  rows={2}
-                  className="w-full bg-[#1c1a18] border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:border-cyan-500/40 resize-none"
-                />
-                <div className="flex gap-2">
+                {/* 모드 탭 */}
+                <div className="flex gap-1 bg-black/20 rounded-xl p-1">
                   <button
-                    onClick={handleAddSpot}
-                    disabled={!spotName.trim() || savingSpot}
-                    className="flex-1 py-2.5 bg-cyan-500 hover:bg-cyan-600 disabled:bg-zinc-700 disabled:text-zinc-500 text-white text-sm font-bold rounded-xl transition-colors"
+                    onClick={() => { setAddMode('search'); setSelectedPlace(null); setSpotName(''); setSpotAddress('') }}
+                    className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${addMode === 'search' ? 'bg-cyan-500 text-white' : 'text-zinc-400 hover:text-white'}`}
                   >
-                    {savingSpot ? '저장 중...' : '저장'}
+                    🔍 지도 검색
                   </button>
                   <button
-                    onClick={() => setAddingSpot(false)}
-                    className="px-4 py-2.5 bg-white/5 text-zinc-400 text-sm rounded-xl hover:bg-white/10 transition-colors"
+                    onClick={() => { setAddMode('manual'); setSelectedPlace(null); setSearchResults([]) }}
+                    className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${addMode === 'manual' ? 'bg-cyan-500 text-white' : 'text-zinc-400 hover:text-white'}`}
                   >
-                    취소
+                    ✏️ 직접 입력
                   </button>
                 </div>
+
+                {/* 지도 검색 모드 */}
+                {addMode === 'search' && !selectedPlace && (
+                  <>
+                    <div className="flex gap-2">
+                      <input
+                        autoFocus
+                        value={searchQuery}
+                        onChange={e => setSearchQuery(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') handlePlaceSearch() }}
+                        placeholder="장소 이름으로 검색 (예: 경복궁, 성산일출봉)"
+                        className="flex-1 bg-[#1c1a18] border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:border-cyan-500/40"
+                      />
+                      <button
+                        onClick={handlePlaceSearch}
+                        disabled={!searchQuery.trim() || searching}
+                        className="px-4 py-2.5 bg-cyan-500 hover:bg-cyan-600 disabled:bg-zinc-700 disabled:text-zinc-500 text-white text-xs font-bold rounded-xl transition-colors shrink-0"
+                      >
+                        {searching ? '...' : '검색'}
+                      </button>
+                    </div>
+
+                    {/* 검색 결과 */}
+                    {searchResults.length > 0 && (
+                      <div className="space-y-1.5 max-h-72 overflow-y-auto">
+                        {searchResults.map(place => (
+                          <button
+                            key={place.id}
+                            onClick={() => handleSelectPlace(place)}
+                            className="w-full text-left flex items-start gap-3 p-3 bg-[#1c1a18] hover:bg-cyan-500/10 border border-white/5 hover:border-cyan-500/30 rounded-xl transition-all"
+                          >
+                            {/* 지도 미리보기 썸네일 */}
+                            <img
+                              src={`/api/place-map?lat=${place.y}&lng=${place.x}`}
+                              alt=""
+                              className="w-14 h-10 rounded-lg object-cover shrink-0 bg-zinc-800"
+                              loading="lazy"
+                            />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-white text-sm font-semibold truncate">{place.place_name}</p>
+                              <p className="text-zinc-400 text-xs truncate mt-0.5">{place.road_address_name || place.address_name}</p>
+                              {place.category_group_name && (
+                                <span className="inline-block mt-1 text-[10px] px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-400/80">
+                                  {place.category_group_name}
+                                </span>
+                              )}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
+                    {searchResults.length === 0 && searchQuery && !searching && (
+                      <p className="text-zinc-500 text-xs text-center py-2">검색 결과가 없습니다.</p>
+                    )}
+                  </>
+                )}
+
+                {/* 장소 선택 후 확인 */}
+                {addMode === 'search' && selectedPlace && (
+                  <>
+                    <div className="flex gap-3 items-start bg-cyan-500/10 border border-cyan-500/20 rounded-xl p-3">
+                      <img
+                        src={`/api/place-map?lat=${selectedPlace.y}&lng=${selectedPlace.x}`}
+                        alt=""
+                        className="w-20 h-14 rounded-lg object-cover shrink-0 bg-zinc-800"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-cyan-300 text-xs font-bold mb-1">선택된 장소</p>
+                        <p className="text-white text-sm font-semibold">{selectedPlace.place_name}</p>
+                        <p className="text-zinc-400 text-xs mt-0.5">{selectedPlace.road_address_name || selectedPlace.address_name}</p>
+                        <p className="text-zinc-600 text-[10px] mt-0.5">
+                          GPS {parseFloat(selectedPlace.y).toFixed(5)}, {parseFloat(selectedPlace.x).toFixed(5)}
+                        </p>
+                      </div>
+                      <button onClick={() => { setSelectedPlace(null); setSpotName(''); setSpotAddress('') }} className="text-zinc-500 hover:text-white text-xs shrink-0">✕</button>
+                    </div>
+                    <textarea
+                      value={spotDesc}
+                      onChange={e => setSpotDesc(e.target.value)}
+                      placeholder="메모 (선택)"
+                      rows={2}
+                      className="w-full bg-[#1c1a18] border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:border-cyan-500/40 resize-none"
+                    />
+                  </>
+                )}
+
+                {/* 직접 입력 모드 */}
+                {addMode === 'manual' && (
+                  <>
+                    <input
+                      autoFocus value={spotName}
+                      onChange={e => setSpotName(e.target.value)}
+                      placeholder="장소명 *"
+                      className="w-full bg-[#1c1a18] border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:border-cyan-500/40"
+                    />
+                    <input
+                      value={spotAddress}
+                      onChange={e => setSpotAddress(e.target.value)}
+                      placeholder="주소 (선택)"
+                      className="w-full bg-[#1c1a18] border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:border-cyan-500/40"
+                    />
+                    <textarea
+                      value={spotDesc}
+                      onChange={e => setSpotDesc(e.target.value)}
+                      placeholder="메모 (선택)"
+                      rows={2}
+                      className="w-full bg-[#1c1a18] border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:border-cyan-500/40 resize-none"
+                    />
+                  </>
+                )}
+
+                {/* 저장 버튼 — 장소가 선택됐거나 직접입력 모드에서 이름 있을 때 */}
+                {(selectedPlace || (addMode === 'manual' && spotName.trim())) && (
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleAddSpot}
+                      disabled={savingSpot}
+                      className="flex-1 py-2.5 bg-cyan-500 hover:bg-cyan-600 disabled:bg-zinc-700 disabled:text-zinc-500 text-white text-sm font-bold rounded-xl transition-colors"
+                    >
+                      {savingSpot ? '저장 중...' : '✓ 찜 목록에 추가'}
+                    </button>
+                    <button
+                      onClick={resetAddForm}
+                      className="px-4 py-2.5 bg-white/5 text-zinc-400 text-sm rounded-xl hover:bg-white/10 transition-colors"
+                    >
+                      취소
+                    </button>
+                  </div>
+                )}
               </div>
             )}
 
@@ -369,7 +551,7 @@ export default function TravelWishlist({ userId }: { userId: string }) {
                         <div className="flex items-center gap-1 shrink-0">
                           {/* 카카오맵 */}
                           <a
-                            href={kakaoMapUrl(s.address || s.name)}
+                            href={s.placeUrl || kakaoMapUrl(s.address || s.name)}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="w-7 h-7 rounded-lg bg-yellow-500/20 flex items-center justify-center text-yellow-400 hover:bg-yellow-500/30 transition-colors text-xs"
@@ -409,6 +591,11 @@ export default function TravelWishlist({ userId }: { userId: string }) {
                       )}
                       {s.sourceType === 'youtube' && (
                         <span className="inline-block mt-1 text-[10px] px-1.5 py-0.5 rounded bg-red-500/10 text-red-400/70">유튜브</span>
+                      )}
+                      {s.sourceType === 'map' && s.lat && s.lng && (
+                        <p className="text-zinc-600 text-[10px] mt-0.5">
+                          GPS {s.lat.toFixed(5)}, {s.lng.toFixed(5)}
+                        </p>
                       )}
                     </div>
                   </div>

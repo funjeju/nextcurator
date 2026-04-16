@@ -21,7 +21,11 @@ export interface TravelSpot {
   address?: string
   description?: string
   thumbnail?: string
-  sourceType: 'youtube' | 'manual'
+  lat?: number
+  lng?: number
+  placeId?: string       // 카카오 장소 ID
+  placeUrl?: string      // 카카오 장소 상세 페이지
+  sourceType: 'youtube' | 'manual' | 'map'
   sourceVideoId?: string
   sourceSessionId?: string
   videoTimestamp?: string

@@ -1197,11 +1197,11 @@ export default function MyPage() {
                   <p className="text-[#75716e] text-sm">다른 카테고리나 검색어를 시도해보세요</p>
                 </div>
               ) : (
-                <div className="columns-1 sm:columns-2 lg:columns-3 gap-6 space-y-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                   {filteredSummaries.map((item, idx) => (
                     <div
                       key={item.id}
-                      className={`break-inside-avoid relative group transition-all ${
+                      className={`relative group transition-all ${
                         canDrag ? 'cursor-default' : ''
                       } ${dragOverId === item.id && dragId !== item.id ? 'ring-2 ring-orange-500 ring-offset-2 ring-offset-[#252423] rounded-[24px]' : ''}`}
                       draggable={canDrag}
