@@ -40,6 +40,22 @@ export default function CommentSection({
       .finally(() => setLoading(false))
   }, [sessionId])
 
+  // 세그먼트 말풍선에서 댓글 추가 시 실시간 반영
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const comment = (e as CustomEvent<Comment>).detail
+      if (comment.sessionId !== sessionId) return
+      setComments(prev => {
+        if (prev.some(c => c.id === comment.id)) return prev
+        const updated = [...prev, comment]
+        onCountChange?.(updated.filter(c => !c.parentId).length)
+        return updated
+      })
+    }
+    window.addEventListener('segment-comment-added', handler)
+    return () => window.removeEventListener('segment-comment-added', handler)
+  }, [sessionId, onCountChange])
+
   // 세그먼트 포커스 시 스크롤 + 인풋 포커스
   useEffect(() => {
     if (focusSegmentId) {
@@ -102,7 +118,7 @@ export default function CommentSection({
           💬 댓글
           <span className="text-sm text-[#75716e] font-normal">{topLevel.length}개</span>
         </h3>
-        <span className="text-[10px] text-[#75716e] bg-[#32302e] px-2 py-1 rounded-full">단락 댓글은 요약 내 말풍선에서</span>
+        <span className="text-[10px] text-[#75716e] bg-[#32302e] px-2 py-1 rounded-full">📌 단락명 클릭 시 해당 위치로 이동</span>
       </div>
 
       {/* 입력폼 */}

@@ -47,6 +47,8 @@ export default function SegmentCommentPopup({ sessionId, segmentId, segmentLabel
       setComments(prev => [...prev, newComment])
       setText('')
       onCommentAdded()
+      // 하단 댓글 섹션에 실시간 반영
+      window.dispatchEvent(new CustomEvent('segment-comment-added', { detail: newComment }))
     } catch {
       alert('댓글 작성에 실패했습니다.')
     } finally {

@@ -12,6 +12,8 @@ interface DocentChatProps {
   title: string
   category: string
   summaryData: unknown   // SummaryData JSON
+  playerRef?: React.RefObject<YT.Player | null>
+  transcript?: string   // 원본 자막 전문
 }
 
 // 카테고리별 첫 질문 제안
@@ -28,7 +30,53 @@ const SUGGESTIONS: Record<string, string[]> = {
 
 const DEFAULT_SUGGESTIONS = ['이 내용에서 가장 중요한 포인트가 뭐야?', '이해가 안 되는 부분을 설명해줘', '관련해서 더 알아볼 만한 내용이 있어?']
 
-export default function DocentChat({ title, category, summaryData }: DocentChatProps) {
+/** 초 → "M:SS" 포맷 */
+function fmtTime(sec: number): string {
+  const m = Math.floor(sec / 60)
+  const s = Math.floor(sec % 60)
+  return `${m}:${String(s).padStart(2, '0')}`
+}
+
+/**
+ * transcript 전문에서 현재 시간 ±windowSec 범위 텍스트를 추출.
+ * YouTube 자막 형식 "[M:SS]" 타임스탬프가 있으면 해당 구간을,
+ * 없으면 전체 텍스트의 앞 1500자를 반환.
+ */
+function extractNearbyTranscript(transcript: string, currentSec: number, windowSec = 45): string {
+  if (!transcript) return ''
+
+  // "[0:12] 텍스트" 또는 "[1:23:45] 텍스트" 형식 파싱
+  const lines = transcript.split('\n')
+  const timestampPattern = /^\[(\d+):(\d{2})(?::(\d{2}))?\]\s*(.*)/
+
+  const timed: { sec: number; text: string }[] = []
+  let hasTimestamps = false
+
+  for (const line of lines) {
+    const m = line.match(timestampPattern)
+    if (m) {
+      hasTimestamps = true
+      const sec = m[3]
+        ? parseInt(m[1]) * 3600 + parseInt(m[2]) * 60 + parseInt(m[3])
+        : parseInt(m[1]) * 60 + parseInt(m[2])
+      timed.push({ sec, text: m[4] })
+    }
+  }
+
+  if (!hasTimestamps || timed.length === 0) {
+    // 타임스탬프 없는 plain text → 전체의 앞 1500자
+    return transcript.slice(0, 1500)
+  }
+
+  const nearby = timed
+    .filter(t => Math.abs(t.sec - currentSec) <= windowSec)
+    .map(t => `[${fmtTime(t.sec)}] ${t.text}`)
+    .join('\n')
+
+  return nearby || timed.slice(0, 20).map(t => `[${fmtTime(t.sec)}] ${t.text}`).join('\n')
+}
+
+export default function DocentChat({ title, category, summaryData, playerRef, transcript = '' }: DocentChatProps) {
   const [open, setOpen] = useState(false)
   const [messages, setMessages] = useState<ChatMsg[]>([])
   const [input, setInput] = useState('')
@@ -106,6 +154,15 @@ export default function DocentChat({ title, category, summaryData }: DocentChatP
 
     if (!open) setOpen(true)
 
+    // 현재 재생 위치 및 주변 자막 추출
+    const currentSec = playerRef?.current?.getCurrentTime?.() ?? null
+    const nearbyTranscript = currentSec !== null
+      ? extractNearbyTranscript(transcript, currentSec)
+      : transcript.slice(0, 1500)
+    const positionHint = currentSec !== null
+      ? `[현재 재생 위치: ${fmtTime(currentSec)}]`
+      : ''
+
     try {
       const res = await fetch('/api/docent-chat', {
         method: 'POST',
@@ -115,6 +172,8 @@ export default function DocentChat({ title, category, summaryData }: DocentChatP
           summaryContext: JSON.stringify(summaryData),
           title,
           category,
+          positionHint,
+          nearbyTranscript,
         }),
       })
       const data = await res.json()

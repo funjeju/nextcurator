@@ -9,9 +9,11 @@ import { formatRelativeDate } from '@/lib/formatDate'
 import {
   getClass, getClassStudents, getClassLogs, summarizeStudentLogs,
   toggleMasterFolder, getMasterFolderIds, pushVideoToClass,
-  ClassRoom, ActivityLog
+  buildQuizHeatmap,
+  ClassRoom, ActivityLog, VideoHeatmap
 } from '@/lib/classroom'
 import { getUserFolders, getSavedSummariesByFolder } from '@/lib/db'
+import QuizHeatmap from '@/components/classroom/QuizHeatmap'
 
 interface StudentRow {
   uid: string
@@ -99,14 +101,26 @@ export default function ClassDashboard() {
   const [classroom, setClassroom] = useState<ClassRoom | null>(null)
   const [students, setStudents] = useState<StudentRow[]>([])
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState<'students' | 'folders' | 'setup'>('students')
+  const [activeTab, setActiveTab] = useState<'students' | 'folders' | 'heatmap' | 'setup'>('students')
   const [folders, setFolders] = useState<any[]>([])
   const [selectedStudent, setSelectedStudent] = useState<StudentRow | null>(null)
   const [studentLogs, setStudentLogs] = useState<ActivityLog[]>([])
-  const [studentDetailTab, setStudentDetailTab] = useState<'videos' | 'access'>('videos')
+  const [studentDetailTab, setStudentDetailTab] = useState<'videos' | 'access' | 'review'>('videos')
+  const [studentReviews, setStudentReviews] = useState<any[]>([])
   const [loadingLogs, setLoadingLogs] = useState(false)
   const [pushingFolder, setPushingFolder] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+
+  // 클립 배포 관련 상태
+  const [expandedFolder, setExpandedFolder] = useState<string | null>(null)
+  const [folderVideos, setFolderVideos] = useState<Record<string, any[]>>({})
+  const [loadingVideos, setLoadingVideos] = useState<string | null>(null)
+  const [clipModal, setClipModal] = useState<{ item: any; folderId: string } | null>(null)
+  const [clipStartStr, setClipStartStr] = useState('')
+  const [clipEndStr, setClipEndStr] = useState('')
+  const [pushingClip, setPushingClip] = useState(false)
+  const [classLogs, setClassLogs] = useState<ActivityLog[]>([])
+  const [heatmaps, setHeatmaps] = useState<VideoHeatmap[]>([])
 
   const loadData = useCallback(async () => {
     if (!user || !classCode) return
@@ -140,6 +154,8 @@ export default function ClassDashboard() {
       setFolders(userFolders)
 
       const logs = await getClassLogs(classCode, 1000).catch(() => [])
+      setClassLogs(logs)
+      setHeatmaps(buildQuizHeatmap(logs))
 
       const rows: StudentRow[] = studentList.map((s: any) => {
         const sLogs = logs.filter((l: ActivityLog) => l.studentId === s.uid)
@@ -199,10 +215,15 @@ export default function ClassDashboard() {
     setSelectedStudent(student)
     setStudentDetailTab('videos')
     setStudentLogs([])
+    setStudentReviews([])
     setLoadingLogs(true)
     try {
-      const logs = await getClassLogs(classCode, 1000)
+      const [logs, reviewRes] = await Promise.all([
+        getClassLogs(classCode, 1000),
+        fetch(`/api/review-schedule?uid=${student.uid}`).then(r => r.json()).catch(() => ({ items: [] })),
+      ])
       setStudentLogs(logs.filter(l => l.studentId === student.uid))
+      setStudentReviews(reviewRes.items || [])
     } finally {
       setLoadingLogs(false)
     }
@@ -212,6 +233,71 @@ export default function ClassDashboard() {
     navigator.clipboard.writeText(classCode)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
+  }
+
+  // ── 클립 배포 헬퍼 ────────────────────────────────────────────────────────────
+  /** "M:SS" 또는 "H:MM:SS" 문자열 → 초 변환 */
+  const parseTime = (str: string): number => {
+    const s = str.trim()
+    if (!s) return 0
+    const parts = s.split(':').map(Number)
+    if (parts.some(isNaN)) return 0
+    if (parts.length === 2) return parts[0] * 60 + parts[1]
+    if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2]
+    return 0
+  }
+  /** 초 → "M:SS" */
+  const fmtTimeSec = (sec: number) => `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, '0')}`
+
+  const handleExpandFolder = async (folderId: string) => {
+    if (expandedFolder === folderId) { setExpandedFolder(null); return }
+    setExpandedFolder(folderId)
+    if (folderVideos[folderId]) return
+    if (!user) return
+    setLoadingVideos(folderId)
+    try {
+      const items = await getSavedSummariesByFolder(user.uid, folderId)
+      setFolderVideos(prev => ({ ...prev, [folderId]: items }))
+    } finally {
+      setLoadingVideos(null)
+    }
+  }
+
+  const openClipModal = (item: any, folderId: string) => {
+    setClipModal({ item, folderId })
+    setClipStartStr('')
+    setClipEndStr('')
+  }
+
+  const handleClipPush = async () => {
+    if (!clipModal || !classroom || !user) return
+    setPushingClip(true)
+    try {
+      const start = parseTime(clipStartStr)
+      const end   = parseTime(clipEndStr)
+      if (end > 0 && end <= start) {
+        alert('종료 시간이 시작 시간보다 커야 합니다.')
+        return
+      }
+      await pushVideoToClass(
+        classCode,
+        clipModal.folderId,
+        user.uid,
+        userProfile?.displayName || '선생님',
+        clipModal.item,
+        start > 0 ? start : undefined,
+        end   > 0 ? end   : undefined,
+      )
+      const rangeText = start > 0 || end > 0
+        ? ` (${start > 0 ? fmtTimeSec(start) : '처음'} ~ ${end > 0 ? fmtTimeSec(end) : '끝'})`
+        : ''
+      alert(`"${clipModal.item.title}"${rangeText} 을(를) ${students.length}명에게 배포했습니다.`)
+      setClipModal(null)
+    } catch (e: any) {
+      alert('배포 중 오류: ' + e.message)
+    } finally {
+      setPushingClip(false)
+    }
   }
 
   if (authLoading || loading) {
@@ -272,13 +358,13 @@ export default function ClassDashboard() {
 
         {/* 탭 */}
         <div className="flex gap-2 mb-6">
-          {(['students', 'folders', 'setup'] as const).map(tab => (
+          {(['students', 'folders', 'heatmap', 'setup'] as const).map(tab => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
               className={`px-5 py-2 rounded-xl text-sm font-bold transition-colors ${activeTab === tab ? 'bg-orange-500 text-white' : 'bg-white/5 text-gray-400 hover:bg-white/10'}`}
             >
-              {tab === 'students' ? '👥 학생 현황' : tab === 'folders' ? '📁 수업자료 관리' : '⚙️ 클래스 설정'}
+              {tab === 'students' ? '👥 학생 현황' : tab === 'folders' ? '📁 수업자료 관리' : tab === 'heatmap' ? '🔥 퀴즈 히트맵' : '⚙️ 클래스 설정'}
             </button>
           ))}
         </div>
@@ -359,41 +445,83 @@ export default function ClassDashboard() {
               <div className="space-y-3">
                 {folders.map(folder => {
                   const isMaster = masterFolderIds.includes(folder.id)
+                  const isExpanded = expandedFolder === folder.id
+                  const videos = folderVideos[folder.id] || []
                   return (
-                    <div key={folder.id} className={`flex items-center justify-between rounded-2xl px-5 py-4 border transition-colors ${isMaster ? 'bg-orange-500/5 border-orange-500/30' : 'bg-[#1a1918] border-white/5'}`}>
-                      <div className="flex items-center gap-3">
-                        <span className="text-xl">📁</span>
-                        <div>
-                          <p className="font-bold text-sm">{folder.name}</p>
-                          {isMaster && (
-                            <span className="text-[9px] text-orange-400 font-bold bg-orange-500/10 px-2 py-0.5 rounded-full">✓ 기준 폴더</span>
-                          )}
+                    <div key={folder.id} className={`rounded-2xl border transition-colors ${isMaster ? 'bg-orange-500/5 border-orange-500/30' : 'bg-[#1a1918] border-white/5'}`}>
+                      {/* 폴더 헤더 */}
+                      <div className="flex items-center justify-between px-5 py-4">
+                        <button className="flex items-center gap-3 flex-1 text-left" onClick={() => handleExpandFolder(folder.id)}>
+                          <span className="text-xl">{isExpanded ? '📂' : '📁'}</span>
+                          <div>
+                            <p className="font-bold text-sm">{folder.name}</p>
+                            {isMaster && (
+                              <span className="text-[9px] text-orange-400 font-bold bg-orange-500/10 px-2 py-0.5 rounded-full">✓ 기준 폴더</span>
+                            )}
+                          </div>
+                          <span className="text-[10px] text-gray-500 ml-1">{isExpanded ? '▲' : '▼'}</span>
+                        </button>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handleToggleMasterFolder(folder.id)}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+                              isMaster ? 'bg-orange-500/20 text-orange-400 hover:bg-orange-500/30' : 'bg-white/5 text-gray-400 hover:bg-white/10'
+                            }`}
+                          >
+                            {isMaster ? '✓ 기준폴더 해제' : '기준폴더 지정'}
+                          </button>
+                          <button
+                            onClick={() => handlePushToAll(folder.id)}
+                            disabled={pushingFolder === folder.id}
+                            className="px-3 py-1.5 rounded-lg text-xs bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 disabled:opacity-50 transition-colors font-bold"
+                          >
+                            {pushingFolder === folder.id ? '배포 중...' : '전체 배포'}
+                          </button>
                         </div>
                       </div>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => handleToggleMasterFolder(folder.id)}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
-                            isMaster
-                              ? 'bg-orange-500/20 text-orange-400 hover:bg-orange-500/30'
-                              : 'bg-white/5 text-gray-400 hover:bg-white/10'
-                          }`}
-                        >
-                          {isMaster ? '✓ 기준폴더 해제' : '기준폴더 지정'}
-                        </button>
-                        <button
-                          onClick={() => handlePushToAll(folder.id)}
-                          disabled={pushingFolder === folder.id}
-                          className="px-3 py-1.5 rounded-lg text-xs bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 disabled:opacity-50 transition-colors font-bold"
-                        >
-                          {pushingFolder === folder.id ? '배포 중...' : '전체 배포'}
-                        </button>
-                      </div>
+
+                      {/* 영상 목록 (펼쳤을 때) */}
+                      {isExpanded && (
+                        <div className="border-t border-white/5 px-5 pb-4 pt-3 space-y-2">
+                          {loadingVideos === folder.id ? (
+                            <p className="text-xs text-gray-500 py-2">불러오는 중...</p>
+                          ) : videos.length === 0 ? (
+                            <p className="text-xs text-gray-500 py-2">이 폴더에 영상이 없습니다.</p>
+                          ) : videos.map(item => (
+                            <div key={item.id} className="flex items-center gap-3 rounded-xl bg-[#23211f] px-3 py-2.5">
+                              {item.thumbnail && (
+                                <img src={item.thumbnail} alt="" className="w-14 h-8 rounded object-cover shrink-0" />
+                              )}
+                              <p className="flex-1 text-xs text-gray-200 truncate">{item.title}</p>
+                              <button
+                                onClick={() => openClipModal(item, folder.id)}
+                                className="shrink-0 px-3 py-1.5 rounded-lg text-[11px] font-bold bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-colors"
+                              >
+                                🎬 구간 배포
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   )
                 })}
               </div>
             )}
+          </div>
+        )}
+
+        {/* 히트맵 탭 */}
+        {activeTab === 'heatmap' && (
+          <div className="bg-[#23211f] rounded-[28px] border border-white/10 p-6">
+            <div className="mb-5">
+              <h2 className="font-black text-base">🔥 퀴즈 오답 히트맵</h2>
+              <p className="text-xs text-gray-400 mt-1">
+                오답률이 높은 구간을 한눈에 파악하고, 다음 수업에서 집중 보충하세요.
+                <span className="text-red-400 font-bold ml-1">빨간색</span> = 오답 60% 이상 → 수업 개입 필요
+              </p>
+            </div>
+            <QuizHeatmap heatmaps={heatmaps} />
           </div>
         )}
 
@@ -410,6 +538,61 @@ export default function ClassDashboard() {
           </div>
         )}
       </main>
+
+      {/* 클립 배포 모달 */}
+      {clipModal && (
+        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4" onClick={() => setClipModal(null)}>
+          <div className="bg-[#23211f] rounded-[28px] border border-white/10 w-full max-w-sm p-6 space-y-5" onClick={e => e.stopPropagation()}>
+            <div>
+              <h3 className="text-base font-black">🎬 구간 배포 설정</h3>
+              <p className="text-xs text-gray-400 mt-1 truncate">"{clipModal.item.title}"</p>
+            </div>
+            <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-2xl px-4 py-3 text-xs text-emerald-300 space-y-0.5">
+              <p className="font-bold">시간을 비워두면 전체 영상이 배포됩니다.</p>
+              <p className="text-emerald-400/70">시작 시간만 설정하면 그 지점부터 끝까지 재생됩니다.</p>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-[11px] text-gray-400 mb-1 block">시작 시간 (M:SS)</label>
+                <input
+                  type="text"
+                  placeholder="예: 2:30"
+                  value={clipStartStr}
+                  onChange={e => setClipStartStr(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl bg-[#1a1918] border border-white/10 text-sm text-white placeholder:text-gray-600 focus:outline-none focus:border-emerald-500/50"
+                />
+              </div>
+              <div>
+                <label className="text-[11px] text-gray-400 mb-1 block">종료 시간 (M:SS)</label>
+                <input
+                  type="text"
+                  placeholder="예: 5:45"
+                  value={clipEndStr}
+                  onChange={e => setClipEndStr(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl bg-[#1a1918] border border-white/10 text-sm text-white placeholder:text-gray-600 focus:outline-none focus:border-emerald-500/50"
+                />
+              </div>
+            </div>
+            {clipStartStr && clipEndStr && parseTime(clipStartStr) > 0 && parseTime(clipEndStr) > 0 && (
+              <p className="text-xs text-emerald-400 text-center">
+                {fmtTimeSec(parseTime(clipStartStr))} ~ {fmtTimeSec(parseTime(clipEndStr))} 구간 배포
+              </p>
+            )}
+            <div className="flex gap-2 pt-1">
+              <button onClick={() => setClipModal(null)} className="flex-1 px-4 py-2.5 rounded-xl bg-white/5 text-gray-400 text-sm font-bold hover:bg-white/10">
+                취소
+              </button>
+              <button
+                onClick={handleClipPush}
+                disabled={pushingClip}
+                className="flex-1 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold disabled:opacity-50 transition-colors"
+              >
+                {pushingClip ? '배포 중...' : `${students.length}명에게 배포`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 학생 상세 모달 */}
       {selectedStudent && (
@@ -442,6 +625,12 @@ export default function ClassDashboard() {
                 className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-colors ${studentDetailTab === 'videos' ? 'bg-orange-500 text-white' : 'bg-white/5 text-gray-400 hover:bg-white/10'}`}
               >
                 🎬 영상별 기록
+              </button>
+              <button
+                onClick={() => setStudentDetailTab('review')}
+                className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-colors ${studentDetailTab === 'review' ? 'bg-orange-500 text-white' : 'bg-white/5 text-gray-400 hover:bg-white/10'}`}
+              >
+                🔁 복습 현황
               </button>
               <button
                 onClick={() => setStudentDetailTab('access')}
@@ -529,6 +718,35 @@ export default function ClassDashboard() {
                         )}
                       </div>
                     ))}
+                  </div>
+                )
+              ) : studentDetailTab === 'review' ? (
+                /* 복습 현황 탭 */
+                studentReviews.length === 0 ? (
+                  <p className="text-gray-600 text-sm text-center py-12">복습 대기 항목이 없습니다.<br/><span className="text-xs text-gray-700">퀴즈 오답 발생 시 자동으로 복습 일정이 등록됩니다.</span></p>
+                ) : (
+                  <div className="space-y-2">
+                    {studentReviews.map((item, i) => {
+                      const isOverdue = item.nextReviewDate <= new Date().toISOString().slice(0, 10)
+                      return (
+                        <div key={i} className={`flex items-start gap-3 rounded-xl px-4 py-3 text-xs ${isOverdue ? 'bg-red-500/10 border border-red-500/20' : 'bg-[#1a1918]'}`}>
+                          <span className="text-lg">{isOverdue ? '🔴' : '🔵'}</span>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-gray-300 font-medium truncate">{item.videoTitle || '영상'}</p>
+                            {item.question && <p className="text-gray-500 truncate mt-0.5">Q{item.questionIdx + 1}. {item.question}</p>}
+                            <p className={`mt-0.5 font-bold ${isOverdue ? 'text-red-400' : 'text-blue-400'}`}>
+                              {isOverdue ? `복습 필요 (${item.nextReviewDate})` : `다음 복습: ${item.nextReviewDate}`}
+                            </p>
+                          </div>
+                          <span className="text-[10px] text-gray-600 shrink-0">
+                            {['1일', '3일', '7일', '14일', '30일', '60일'][item.repetition ?? 0] ?? ''} 주기
+                          </span>
+                        </div>
+                      )
+                    })}
+                    <p className="text-[10px] text-gray-600 text-center pt-2">
+                      🔴 오늘 이전 = 복습 필요 · 🔵 미래 일정 = 예약됨
+                    </p>
                   </div>
                 )
               ) : (

@@ -90,16 +90,42 @@ export default function VoiceControl({ playerRef, steps }: Props) {
     const player = playerRef.current
     if (!player) { showFeedback('❌ 플레이어가 준비되지 않았어요'); return }
 
+    // ── 단계 이동 (숫자) ────────────────────────────────────────────────────────
     const digitMatch = t.match(/(\d+)\s*단계/)
     if (digitMatch) return seekToStep(parseInt(digitMatch[1]), player)
 
+    // ── 단계 이동 (한국어 수사) ─────────────────────────────────────────────────
     for (const [kor, num] of Object.entries(KOR_NUM)) {
       if (t.includes(`${kor}단계`) || t.includes(`${kor} 단계`)) return seekToStep(num, player)
     }
 
-    if (/재생|틀어|시작|계속|play/.test(t))          { player.playVideo();  showFeedback('▶️ 재생'); return }
-    if (/멈춰|멈추|정지|일시정지|pause|스톱/.test(t)) { player.pauseVideo(); showFeedback('⏸ 일시정지'); return }
+    // ── N초 뒤로 / 앞으로 ──────────────────────────────────────────────────────
+    const seekSecMatch = t.match(/(\d+)\s*초?\s*(뒤로?|앞으로?|back|forward)/)
+    if (seekSecMatch) {
+      const secs = parseInt(seekSecMatch[1])
+      const isBack = /뒤|back/.test(seekSecMatch[2])
+      const cur = player.getCurrentTime?.() ?? 0
+      player.seekTo(isBack ? Math.max(0, cur - secs) : cur + secs, true)
+      showFeedback(isBack ? `⏪ ${secs}초 뒤로` : `⏩ ${secs}초 앞으로`)
+      return
+    }
 
+    // ── 처음으로 / 끝으로 ──────────────────────────────────────────────────────
+    if (/처음|맨 앞|처음부터|restart/.test(t)) {
+      player.seekTo(0, true); player.playVideo(); showFeedback('⏮ 처음부터'); return
+    }
+
+    // ── 재생 / 일시정지 ────────────────────────────────────────────────────────
+    if (/재생|틀어|시작|계속|play/.test(t))          { player.playVideo();  showFeedback('▶️ 재생'); return }
+    if (/멈춰|멈추|정지|일시정지|pause|스톱|stop/.test(t)) { player.pauseVideo(); showFeedback('⏸ 일시정지'); return }
+
+    // ── 배속 ───────────────────────────────────────────────────────────────────
+    // "N배속"으로 직접 지정
+    const rateMatch = t.match(/(\d+(?:\.\d+)?)\s*배속?/)
+    if (rateMatch) {
+      const r = Math.min(2, Math.max(0.25, parseFloat(rateMatch[1])))
+      player.setPlaybackRate(r); showFeedback(`⚡ ${r}배속`); return
+    }
     if (/느리게|천천히|slow/.test(t)) {
       const next = Math.max(0.25, parseFloat(((player.getPlaybackRate?.() ?? 1) - 0.25).toFixed(2)))
       player.setPlaybackRate(next); showFeedback(`🐢 ${next}배속`); return
@@ -199,6 +225,10 @@ export default function VoiceControl({ playerRef, steps }: Props) {
       return
     }
 
+    // 항상 keep-on 모드로 시작 (명령 후 자동 재시작)
+    keepOnRef.current = true
+    setKeepOn(true)
+
     // 권한이 이미 허용된 경우 → 바로 시작
     if (permission === 'granted') {
       startRecognition()
@@ -209,14 +239,16 @@ export default function VoiceControl({ playerRef, steps }: Props) {
     setPermission('requesting')
     showFeedback('🎙 마이크 권한을 요청하는 중...')
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      // 스트림을 즉시 해제하지 않고 ref에 보관
-      // iOS에서 오디오 하드웨어를 "warm" 상태로 유지해 SpeechRecognition 안정화
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+      })
       streamRef.current = stream
       setPermission('granted')
       showFeedback('')
       startRecognition()
     } catch (err: any) {
+      keepOnRef.current = false
+      setKeepOn(false)
       if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
         setPermission('denied')
         showFeedback('🔒 마이크 권한이 차단됐어요. 브라우저 주소창 옆 자물쇠 아이콘을 눌러 허용해주세요.')
@@ -226,16 +258,6 @@ export default function VoiceControl({ playerRef, steps }: Props) {
       }
     }
   }, [listening, keepOn, permission, startRecognition, stopAll, showFeedback])
-
-  const handleKeepOnToggle = useCallback(() => {
-    if (keepOn) {
-      stopAll()
-    } else {
-      keepOnRef.current = true
-      setKeepOn(true)
-      if (!listening) handleMicClick()
-    }
-  }, [keepOn, listening, stopAll, handleMicClick])
 
   if (!supported) return null
 
@@ -261,22 +283,6 @@ export default function VoiceControl({ playerRef, steps }: Props) {
           <p className="text-orange-300 text-[11px] leading-snug font-medium">마이크 권한을 요청해요</p>
           <p className="text-[#75716e] text-[10px] leading-snug mt-0.5">허용하면 바로 음성 제어 시작!</p>
         </div>
-      )}
-
-      {/* keep-on 토글 버튼 */}
-      {permission !== 'denied' && (
-        <button
-          onClick={handleKeepOnToggle}
-          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-semibold border transition-all ${
-            keepOn
-              ? 'bg-red-500/15 border-red-500/30 text-red-400'
-              : 'bg-[#32302e] border-white/10 text-[#75716e] hover:border-orange-500/30 hover:text-orange-300'
-          }`}
-          title="계속 듣기 모드 — 명령 후 자동으로 다시 인식 시작"
-        >
-          <span className={`w-1.5 h-1.5 rounded-full ${keepOn ? 'bg-red-400 animate-pulse' : 'bg-[#75716e]'}`} />
-          {keepOn ? '연속 듣기 켜짐' : '연속 듣기'}
-        </button>
       )}
 
       {/* 마이크 버튼 */}
@@ -333,7 +339,7 @@ export default function VoiceControl({ playerRef, steps }: Props) {
       <p className="text-[#75716e] text-[10px] pl-1">
         {permission === 'denied'     ? '🔒 권한 차단됨' :
          listening                   ? '듣는 중...' :
-         keepOn                      ? '🔴 연속 대기 중' :
+         keepOn                      ? '🔴 대기 중' :
          permission === 'requesting' ? '권한 요청 중...' :
          '🎙 음성 제어'}
       </p>

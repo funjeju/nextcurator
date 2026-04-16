@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { generateContextSummary } from '@/lib/claude'
+import { classifyCategory, generateSummary, generateContextSummary } from '@/lib/claude'
 import { randomUUID } from 'crypto'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 
@@ -34,97 +34,31 @@ function objToFields(obj: Record<string, unknown>) {
   return fields
 }
 
-// ── 지원 MIME 타입 ─────────────────────────────────────────────────────────────
-const SUPPORTED_AUDIO = [
-  'audio/webm', 'audio/mp4', 'audio/mpeg', 'audio/mp3',
-  'audio/wav', 'audio/ogg', 'audio/flac', 'audio/aac',
-  'audio/x-m4a', 'audio/m4a',
-]
-
-// ── 썸네일 색상 맵 ─────────────────────────────────────────────────────────────
-const COLOR_GRADIENTS: Record<string, [string, string]> = {
-  blue:   ['#1e3a8a', '#3b82f6'],
-  green:  ['#14532d', '#22c55e'],
-  orange: ['#7c2d12', '#f97316'],
-  purple: ['#3b0764', '#a855f7'],
-  pink:   ['#831843', '#ec4899'],
-  teal:   ['#134e4a', '#14b8a6'],
-  amber:  ['#78350f', '#f59e0b'],
+// ── 카테고리별 썸네일 팔레트 ────────────────────────────────────────────────────
+const CATEGORY_GRADIENTS: Record<string, [string, string]> = {
+  recipe:   ['#7c2d12', '#f97316'],
+  english:  ['#1e3a8a', '#3b82f6'],
+  learning: ['#3b0764', '#a855f7'],
+  news:     ['#27272a', '#71717a'],
+  selfdev:  ['#14532d', '#22c55e'],
+  travel:   ['#164e63', '#06b6d4'],
+  story:    ['#831843', '#ec4899'],
+  tips:     ['#78350f', '#f59e0b'],
+  report:   ['#1e1b4b', '#6366f1'],
 }
 
-export async function POST(req: NextRequest) {
-  try {
-    const formData = await req.formData()
-    const file = formData.get('file') as File | null
-    if (!file) return NextResponse.json({ error: '파일이 없습니다.' }, { status: 400 })
-
-    // MIME 타입 검증
-    const mimeType = file.type || 'audio/webm'
-    const isAudio = SUPPORTED_AUDIO.some(t => mimeType.startsWith(t.split('/')[0]) && mimeType.includes(t.split('/')[1]))
-    if (!mimeType.startsWith('audio/')) {
-      return NextResponse.json({ error: '오디오 파일만 지원합니다.' }, { status: 400 })
-    }
-
-    // 파일 크기 제한 (20MB)
-    if (file.size > 20 * 1024 * 1024) {
-      return NextResponse.json({ error: '20MB 이하 파일만 지원합니다.' }, { status: 400 })
-    }
-
-    const buffer = await file.arrayBuffer()
-    const base64 = Buffer.from(buffer).toString('base64')
-
-    // ── Gemini: 전사 + 구조화 요약 한 번에 ────────────────────────────────────
-    const model = genAI.getGenerativeModel({
-      model: 'gemini-2.5-flash',
-      generationConfig: { responseMimeType: 'application/json' },
-    })
-
-    const prompt = `당신은 음성 녹음 분석 전문가입니다. 주어진 오디오 파일을 분석하여 아래 JSON 형식으로 정확히 응답하세요.
-
-반환 형식 (JSON만, 설명 없이):
-{
-  "title": "녹음 내용을 잘 표현하는 제목 (20자 이내)",
-  "main_topic": "핵심 주제를 한 문장으로 요약",
-  "duration_estimate": "약 N분" 또는 "약 N초",
-  "key_points": [
-    { "point": "핵심 포인트 제목", "detail": "부가 설명 (선택)" }
-  ],
-  "action_items": ["실행 가능한 항목 1", "실행 가능한 항목 2"],
-  "transcript": "전체 녹음 내용을 텍스트로 전사 (최대한 정확하게)",
-  "emoji": "내용과 가장 잘 어울리는 이모지 1개",
-  "color_theme": "blue | green | orange | purple | pink | teal | amber 중 내용 분위기에 맞는 것",
-  "square_meta": {
-    "tags": ["관련 키워드 최대 5개"],
-    "topic_cluster": "주제 카테고리",
-    "vibe": "분위기/톤 한 단어"
-  }
+const CATEGORY_ICONS: Record<string, string> = {
+  recipe: '🍳', english: '🔤', learning: '📐', news: '🗞️',
+  selfdev: '💪', travel: '🧳', story: '🍿', tips: '💡', report: '📋',
 }
 
-음성이 없거나 알아들을 수 없으면 transcript에 "(음성 인식 불가)"라고 적으세요.
-action_items가 없으면 빈 배열 []로 두세요.`
+function buildVoiceThumbnail(category: string, title: string): string {
+  const [c1, c2] = CATEGORY_GRADIENTS[category] ?? ['#3b0764', '#a855f7']
+  const catEmoji = CATEGORY_ICONS[category] ?? '✨'
+  const safe = title.slice(0, 22).replace(/[<>&"']/g,
+    c => c === '<' ? '&lt;' : c === '>' ? '&gt;' : c === '&' ? '&amp;' : c === '"' ? '&quot;' : '&apos;')
 
-    const result = await model.generateContent([
-      { inlineData: { mimeType, data: base64 } },
-      prompt,
-    ])
-
-    const raw = result.response.text().trim()
-    let parsed: any
-    try {
-      const jsonMatch = raw.match(/\{[\s\S]*\}/)
-      parsed = JSON.parse(jsonMatch ? jsonMatch[0] : raw)
-    } catch {
-      return NextResponse.json({ error: '요약 파싱 실패. 다시 시도해주세요.' }, { status: 500 })
-    }
-
-    // ── 썸네일 SVG 생성 ────────────────────────────────────────────────────────
-    const theme = parsed.color_theme || 'purple'
-    const [c1, c2] = COLOR_GRADIENTS[theme] ?? COLOR_GRADIENTS.purple
-    const emoji = parsed.emoji || '🎙'
-    const titleShort = (parsed.title || '녹음 메모').slice(0, 24)
-
-    const svgThumbnail = `data:image/svg+xml;utf8,${encodeURIComponent(`
-<svg width="480" height="270" xmlns="http://www.w3.org/2000/svg">
+  const svg = `<svg width="480" height="270" xmlns="http://www.w3.org/2000/svg">
   <defs>
     <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" style="stop-color:${c1}"/>
@@ -132,55 +66,108 @@ action_items가 없으면 빈 배열 []로 두세요.`
     </linearGradient>
   </defs>
   <rect width="480" height="270" fill="url(#g)" rx="12"/>
-  <rect width="480" height="270" fill="rgba(0,0,0,0.15)" rx="12"/>
-  <text x="240" y="110" font-size="72" text-anchor="middle" dominant-baseline="middle">${emoji}</text>
-  <text x="240" y="175" font-size="22" font-weight="bold" fill="white" text-anchor="middle" font-family="system-ui,sans-serif">${titleShort}</text>
-  <text x="240" y="210" font-size="14" fill="rgba(255,255,255,0.6)" text-anchor="middle" font-family="system-ui,sans-serif">🎙 음성 녹음 메모</text>
-</svg>`)}`
+  <rect width="480" height="270" fill="rgba(0,0,0,0.18)" rx="12"/>
+  <text x="190" y="118" font-size="64" text-anchor="middle" dominant-baseline="middle">${catEmoji}</text>
+  <text x="330" y="118" font-size="42" text-anchor="middle" dominant-baseline="middle" opacity="0.75">🎙</text>
+  <text x="240" y="185" font-size="20" font-weight="bold" fill="white" text-anchor="middle" font-family="system-ui,sans-serif">${safe}</text>
+  <text x="240" y="215" font-size="13" fill="rgba(255,255,255,0.55)" text-anchor="middle" font-family="system-ui,sans-serif">🎙 음성 녹음</text>
+</svg>`
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`
+}
 
-    // ── sessionId 생성 및 Firestore 저장 ──────────────────────────────────────
+// ── 지원 MIME 타입 ─────────────────────────────────────────────────────────────
+const SUPPORTED_AUDIO_PREFIXES = ['audio/']
+
+export async function POST(req: NextRequest) {
+  try {
+    const formData = await req.formData()
+    const file = formData.get('file') as File | null
+    if (!file) return NextResponse.json({ error: '파일이 없습니다.' }, { status: 400 })
+
+    const mimeType = file.type || 'audio/webm'
+    if (!SUPPORTED_AUDIO_PREFIXES.some(p => mimeType.startsWith(p))) {
+      return NextResponse.json({ error: '오디오 파일만 지원합니다.' }, { status: 400 })
+    }
+    if (file.size > 20 * 1024 * 1024) {
+      return NextResponse.json({ error: '20MB 이하 파일만 지원합니다.' }, { status: 400 })
+    }
+
+    const buffer = await file.arrayBuffer()
+    const base64 = Buffer.from(buffer).toString('base64')
+
+    // ── Step 1: Gemini로 전사 + 제목 추출 ─────────────────────────────────────
+    const gemini = genAI.getGenerativeModel({
+      model: 'gemini-2.5-flash',
+      generationConfig: { responseMimeType: 'application/json', temperature: 0 },
+    })
+
+    const transcribeResult = await gemini.generateContent([
+      { inlineData: { mimeType, data: base64 } },
+      `이 오디오를 분석하세요. JSON으로만 응답하세요 (설명 없음):
+{
+  "title": "녹음 내용을 잘 표현하는 제목 (한국어, 20자 이내)",
+  "transcript": "전체 녹음 내용을 텍스트로 전사. 알아들을 수 없으면 빈 문자열."
+}`,
+    ])
+
+    let transcribed: { title: string; transcript: string }
+    try {
+      const raw = transcribeResult.response.text().trim()
+      const match = raw.match(/\{[\s\S]*\}/)
+      transcribed = JSON.parse(match ? match[0] : raw)
+    } catch {
+      return NextResponse.json({ error: '음성 인식에 실패했습니다. 다시 시도해주세요.' }, { status: 500 })
+    }
+
+    const { title: rawTitle, transcript } = transcribed
+
+    if (!transcript || transcript.length < 20) {
+      return NextResponse.json({ error: '음성을 인식할 수 없습니다. 더 선명하게 녹음해주세요.' }, { status: 422 })
+    }
+
+    const title = rawTitle || '음성 녹음 메모'
+
+    // ── Step 2: 카테고리 자동 분류 ────────────────────────────────────────────
+    const classified = await classifyCategory(transcript)
+    const category = classified.category
+
+    // ── Step 3: 카테고리별 요약 생성 ──────────────────────────────────────────
+    const [summary, contextSummary] = await Promise.all([
+      generateSummary(category as any, transcript, 'voice' as any),
+      generateContextSummary(title, category as any, {} as any).catch(() => ''),
+    ])
+
+    // contextSummary를 transcript 기반으로 재생성 (summary 완성 후)
+    const finalContextSummary = await generateContextSummary(title, category as any, summary).catch(() => contextSummary)
+
+    // ── Step 4: 썸네일 SVG 생성 ───────────────────────────────────────────────
+    const thumbnail = buildVoiceThumbnail(category, title)
+
+    // ── Step 5: sessionId 생성 및 Firestore 저장 ──────────────────────────────
     const sessionId = randomUUID()
     const now = new Date().toISOString()
 
-    const summary = {
-      title: parsed.title || '녹음 메모',
-      main_topic: parsed.main_topic || '',
-      duration_estimate: parsed.duration_estimate || '',
-      key_points: parsed.key_points || [],
-      action_items: parsed.action_items || [],
-      transcript: parsed.transcript || '',
-      emoji,
-      color_theme: theme,
-      square_meta: parsed.square_meta || { tags: [], topic_cluster: '녹음', vibe: '기록' },
-    }
-
-    // contextSummary 생성
-    const contextSummary = await generateContextSummary(
-      summary.title, 'voice' as any, summary as any
-    ).catch(() => summary.main_topic)
-
     const responseData = {
       sessionId,
-      videoId: '',          // 유튜브 없음
-      title: summary.title,
-      channel: '녹음 메모',
-      thumbnail: svgThumbnail,
+      videoId: '',
+      title,
+      channel: '음성 녹음',
+      thumbnail,
       duration: 0,
-      category: 'voice',
+      category,
       summary,
-      contextSummary,
-      transcript: summary.transcript,
+      contextSummary: finalContextSummary,
+      transcript,
       transcriptSource: 'voice',
       summarizedAt: now,
       sourceType: 'voice',
     }
 
-    // Firestore에 저장
     await fetch(`${FIRESTORE_BASE}/summaries/${sessionId}?key=${API_KEY}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ fields: objToFields(responseData as any) }),
-    })
+    }).catch(() => {})
 
     return NextResponse.json(responseData)
   } catch (e) {

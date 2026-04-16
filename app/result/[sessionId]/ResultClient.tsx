@@ -318,7 +318,29 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
     }
   }, [data, savedItem])
 
-  const handlePlayerReady = useCallback((player: YT.Player) => { playerRef.current = player }, [])
+  const handlePlayerReady = useCallback((player: YT.Player) => {
+    playerRef.current = player
+    // 교사가 설정한 클립 구간이 있으면 시작 위치로 이동
+    const clipStart = (data as any).clipStart
+    const clipEnd   = (data as any).clipEnd
+    if (clipStart > 0) {
+      player.seekTo(clipStart, true)
+    }
+    // clipEnd 경계: 200ms마다 현재 시간 확인 후 자동 정지
+    if (clipEnd > 0) {
+      const interval = setInterval(() => {
+        const p = playerRef.current
+        if (!p) { clearInterval(interval); return }
+        try {
+          const state = p.getPlayerState()
+          // 1 = playing
+          if (state === 1 && p.getCurrentTime() >= clipEnd) {
+            p.pauseVideo()
+          }
+        } catch { clearInterval(interval) }
+      }, 200)
+    }
+  }, [data])
   const handleSeek = useCallback((ts: string) => {
     if (playerRef.current) {
       playerRef.current.seekTo(timestampToSeconds(ts), true)
@@ -361,15 +383,35 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
     setReanalyzing(true)
     setReanalyzeCategory(category)
     try {
-      const res = await fetch('/api/summarize', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          url: `https://www.youtube.com/watch?v=${data.videoId}`,
-          category,
-          noSave: fromSquare,  // 타인 요약 재분석 시 Firestore 저장 안 함
-        }),
-      })
+      const isTranscriptSource = (data as any).sourceType === 'voice' || (data as any).sourceType === 'pdf'
+
+      let res: Response
+      if (isTranscriptSource) {
+        // 음성/PDF → transcript 기반 재분석
+        res = await fetch('/api/reanalyze-transcript', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            transcript: data.transcript,
+            title: data.title,
+            category,
+            sourceType: (data as any).sourceType,
+            noSave: fromSquare,
+          }),
+        })
+      } else {
+        // YouTube/URL → 기존 방식
+        res = await fetch('/api/summarize', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            url: `https://www.youtube.com/watch?v=${data.videoId}`,
+            category,
+            noSave: fromSquare,
+          }),
+        })
+      }
+
       if (!res.ok) { const e = await res.json(); throw new Error(e.error) }
       const newData: SummarizeResponse = await res.json()
       sessionStorage.setItem(`summary_${newData.sessionId}`, JSON.stringify(newData))
@@ -451,10 +493,26 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
     logStudentActivity('play', log)
   }, [logStudentActivity])
 
-  // 퀴즈 정답 로그
-  const handleQuizAnswer = useCallback((log: { questionIdx: number; selected: string; correct: boolean; metaLevel?: string }) => {
+  // 퀴즈 정답 로그 + 오답 시 복습 스케줄 등록
+  const handleQuizAnswer = useCallback((log: { questionIdx: number; question: string; selected: string; correct: boolean; metaLevel?: string }) => {
     logStudentActivity('quiz', log)
-  }, [logStudentActivity])
+    // 오답이면 에빙하우스 복습 스케줄에 추가
+    if (!log.correct && user && userProfile?.classCode) {
+      fetch('/api/review-schedule', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          studentId: user.uid,
+          classCode: userProfile.classCode,
+          sessionId: data.sessionId,
+          videoId: data.videoId || '',
+          videoTitle: data.title,
+          questionIdx: log.questionIdx,
+          question: log.question,
+        }),
+      }).catch(() => {})
+    }
+  }, [logStudentActivity, user, userProfile, data])
 
   // 퀴즈 메타인지 로그 (학습/영어 카테고리만)
   const handleQuizMeta = useCallback((log: { questionIdx: number; question: string; metaLevel: string }) => {
@@ -676,11 +734,23 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
               </div>
             </div>
           </div>
+        ) : (data as any).sourceType === 'voice' ? (
+          <div className="rounded-xl bg-[#2a2826] border border-white/10 p-5 flex items-center gap-4">
+            {data.thumbnail && (
+              <img src={data.thumbnail} alt="" className="w-20 h-[45px] rounded-lg object-cover shrink-0" />
+            )}
+            <div className="flex-1 min-w-0">
+              <p className="text-xs text-[#75716e] mb-0.5">🎙 음성 녹음</p>
+              <p className="text-white text-sm font-semibold truncate">{data.title}</p>
+            </div>
+          </div>
         ) : (data as any).sourceUrl || (data as any).sourceType === 'pdf' ? (
           <div className="rounded-xl bg-[#2a2826] border border-white/10 p-5 flex items-center gap-4">
-            <span className="text-3xl">{(data as any).sourceType === 'pdf' ? '📄' : '🌐'}</span>
+            {data.thumbnail && (
+              <img src={data.thumbnail} alt="" className="w-20 h-[45px] rounded-lg object-cover shrink-0" />
+            )}
             <div className="flex-1 min-w-0">
-              <p className="text-xs text-[#75716e] mb-0.5">{(data as any).sourceType === 'pdf' ? 'PDF 문서' : '웹페이지'}</p>
+              <p className="text-xs text-[#75716e] mb-0.5">{(data as any).sourceType === 'pdf' ? '📄 PDF 문서' : '🌐 웹페이지'}</p>
               <p className="text-white text-sm font-semibold truncate">{data.title}</p>
               {(data as any).sourceUrl && (
                 <a href={(data as any).sourceUrl} target="_blank" rel="noopener noreferrer"
@@ -1294,6 +1364,8 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
         title={data.title}
         category={data.category}
         summaryData={data.summary}
+        playerRef={playerRef}
+        transcript={data.transcript || ''}
       />
 
       {showRoomModal && data.videoId && (

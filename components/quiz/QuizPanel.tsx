@@ -5,6 +5,7 @@ import { QuizData, QuizQuestion } from '@/types/summary'
 
 export interface QuizAnswerLog {
   questionIdx: number
+  question: string   // 히트맵·복습 시스템용
   selected: string
   correct: boolean
   metaLevel?: 'complete' | 'confused' | 'unknown'
@@ -37,7 +38,7 @@ export default function QuizPanel({ quiz, onClose, onAnswer, showMeta, onMeta }:
   const total = quiz.questions.length
 
   const next = (correct: boolean, chosenOption?: string, metaLevel?: 'complete' | 'confused' | 'unknown') => {
-    onAnswer?.({ questionIdx: idx, selected: chosenOption ?? (correct ? '알았어' : '몰랐어'), correct, metaLevel })
+    onAnswer?.({ questionIdx: idx, question: q.question, selected: chosenOption ?? (correct ? '알았어' : '몰랐어'), correct, metaLevel })
     const newAnswers = [...answers, correct]
     setAnswers(newAnswers)
     if (correct) setScore(s => s + 1)

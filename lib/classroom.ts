@@ -212,12 +212,15 @@ export async function inheritMasterFolder(
 }
 
 // 교사가 새 영상을 클래스 학생 전체에게 배포
+// clipStart / clipEnd: 초 단위 — 설정하면 학생 플레이어가 해당 구간만 재생
 export async function pushVideoToClass(
   classCode: string,
   teacherFolderId: string,
   teacherId: string,
   teacherName: string,
   savedSummaryItem: any,
+  clipStart?: number,
+  clipEnd?: number,
 ): Promise<void> {
   const students = await getClassStudents(classCode)
 
@@ -236,7 +239,7 @@ export async function pushVideoToClass(
     if (!studentFolderId) continue
 
     const newRef = doc(collection(db, 'saved_summaries'))
-    batch.set(newRef, {
+    const docData: Record<string, any> = {
       userId: student.uid,
       userDisplayName: student.studentName || student.displayName || '',
       userPhotoURL: '',
@@ -255,7 +258,11 @@ export async function pushVideoToClass(
       likeCount: 0,
       viewCount: 0,
       createdAt: serverTimestamp(),
-    })
+    }
+    if (clipStart != null && clipStart > 0) docData.clipStart = clipStart
+    if (clipEnd != null && clipEnd > 0)   docData.clipEnd   = clipEnd
+
+    batch.set(newRef, docData)
   }
 
   await batch.commit()
@@ -298,6 +305,68 @@ export async function getClassLogs(
   )
   const snap = await getDocs(q)
   return snap.docs.map(d => ({ id: d.id, ...d.data() }) as ActivityLog)
+}
+
+// ─────────────────────────────────────────────
+// 퀴즈 히트맵 데이터 집계
+// ─────────────────────────────────────────────
+
+export interface HeatmapQuestion {
+  questionIdx: number
+  question: string      // 문제 텍스트 (question 필드 있을 때만)
+  attempts: number
+  wrong: number
+  wrongRate: number     // 0~1
+  confusedCount: number // metaLevel='confused'
+  unknownCount: number  // metaLevel='unknown'
+}
+
+export interface VideoHeatmap {
+  videoId: string
+  videoTitle: string
+  sessionId: string
+  questions: HeatmapQuestion[]
+}
+
+/** classCode 전체 activity_logs를 받아 영상별 퀴즈 오답 히트맵으로 변환 */
+export function buildQuizHeatmap(logs: ActivityLog[]): VideoHeatmap[] {
+  // videoId → questionIdx → 집계
+  const byVideo: Record<string, {
+    videoTitle: string
+    sessionId: string
+    byQ: Record<number, { question: string; attempts: number; wrong: number; confused: number; unknown: number }>
+  }> = {}
+
+  for (const log of logs) {
+    if (log.type !== 'quiz' || !log.videoId) continue
+    const vid = log.videoId
+    if (!byVideo[vid]) byVideo[vid] = { videoTitle: log.videoTitle || '', sessionId: log.sessionId || '', byQ: {} }
+    const qi = log.value.questionIdx ?? 0
+    if (!byVideo[vid].byQ[qi]) byVideo[vid].byQ[qi] = { question: '', attempts: 0, wrong: 0, confused: 0, unknown: 0 }
+    const q = byVideo[vid].byQ[qi]
+    if (log.value.question) q.question = log.value.question
+    q.attempts++
+    if (!log.value.correct) q.wrong++
+    if (log.value.metaLevel === 'confused') q.confused++
+    if (log.value.metaLevel === 'unknown')  q.unknown++
+  }
+
+  return Object.entries(byVideo).map(([videoId, v]) => ({
+    videoId,
+    videoTitle: v.videoTitle,
+    sessionId: v.sessionId,
+    questions: Object.entries(v.byQ)
+      .sort(([a], [b]) => Number(a) - Number(b))
+      .map(([qi, q]) => ({
+        questionIdx: Number(qi),
+        question: q.question,
+        attempts: q.attempts,
+        wrong: q.wrong,
+        wrongRate: q.attempts > 0 ? q.wrong / q.attempts : 0,
+        confusedCount: q.confused,
+        unknownCount: q.unknown,
+      })),
+  })).filter(v => v.questions.length > 0)
 }
 
 // 학생별 활동 요약 (대시보드용)

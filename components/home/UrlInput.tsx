@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import LoadingSteps from './LoadingSteps'
 import RecentHistory from './RecentHistory'
 import { useAuth } from '@/providers/AuthProvider'
+import { saveSummary } from '@/lib/db'
 
 const CATEGORIES = [
   { id: 'auto',    icon: '✨', label: '자동 분류' },
@@ -124,6 +125,31 @@ export default function UrlInput() {
       if (!res.ok) { const d = await res.json(); throw new Error(d.error || '처리 실패') }
       const data = await res.json()
       setStep(5)
+
+      // 로그인 유저 → 비공개로 자동 저장 (마이페이지 즉시 보관)
+      if (user) {
+        try {
+          await saveSummary({
+            userId: user.uid,
+            userDisplayName: user.displayName || '',
+            userPhotoURL: user.photoURL || '',
+            folderId: null,
+            sessionId: data.sessionId,
+            videoId: data.videoId || '',
+            title: data.title,
+            channel: data.channel,
+            thumbnail: data.thumbnail || '',
+            category: data.category,
+            summary: data.summary,
+            square_meta: data.summary?.square_meta,
+            isPublic: false,
+            transcript: data.transcript || '',
+            transcriptSource: data.transcriptSource || '',
+          })
+        } catch (e) {
+          console.warn('[AutoSave] 자동 저장 실패:', e)
+        }
+      }
 
       sessionStorage.setItem(`summary_${data.sessionId}`, JSON.stringify(data))
       router.push(`/result/${data.sessionId}`)

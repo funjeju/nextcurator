@@ -7,6 +7,7 @@ import { getTotalUnread } from '@/lib/db'
 import { getAvatarBg } from '@/lib/avatar'
 import { useTheme } from './ThemeProvider'
 import MessagesModal from '@/components/messages/MessagesModal'
+import ReviewBanner from '@/components/classroom/ReviewBanner'
 
 export default function Header({ title = 'SSOKTUBE' }: { title?: string }) {
   const { user, userProfile, signOut, openAuthModal } = useAuth()
@@ -47,6 +48,9 @@ export default function Header({ title = 'SSOKTUBE' }: { title?: string }) {
   const classCode = userProfile?.classCode
 
   return (
+    <>
+    {/* 학생 복습 알림 배너 */}
+    {isStudent && user && <ReviewBanner studentId={user.uid} />}
     <div className="sticky top-0 z-50 bg-[#252423]/90 backdrop-blur-xl border-b border-white/5 py-2.5 px-4 md:px-8 mb-6">
       <div className="max-w-7xl mx-auto flex items-center justify-between">
         <div className="flex items-center gap-4">
@@ -234,5 +238,6 @@ export default function Header({ title = 'SSOKTUBE' }: { title?: string }) {
         <MessagesModal onClose={() => setShowMessages(false)} />
       )}
     </div>
+    </>
   )
 }
