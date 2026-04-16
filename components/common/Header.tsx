@@ -5,13 +5,11 @@ import Link from 'next/link'
 import { useAuth } from '@/providers/AuthProvider'
 import { getTotalUnread } from '@/lib/db'
 import { getAvatarBg } from '@/lib/avatar'
-import { useTheme } from './ThemeProvider'
 import MessagesModal from '@/components/messages/MessagesModal'
 import ReviewBanner from '@/components/classroom/ReviewBanner'
 
 export default function Header({ title = 'SSOKTUBE' }: { title?: string }) {
   const { user, userProfile, signOut, openAuthModal } = useAuth()
-  const { theme, toggle } = useTheme()
   const [unread, setUnread] = useState(0)
   const [showMessages, setShowMessages] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
@@ -92,25 +90,6 @@ export default function Header({ title = 'SSOKTUBE' }: { title?: string }) {
         </div>
 
         <div className="flex items-center gap-1.5">
-          {/* 다크/라이트 모드 토글 */}
-          <button
-            onClick={toggle}
-            className="w-8 h-8 flex items-center justify-center rounded-full text-[#a4a09c] hover:text-white hover:bg-white/8 transition-all"
-            title={theme === 'dark' ? '라이트 모드로 전환' : '다크 모드로 전환'}
-          >
-            {theme === 'dark' ? (
-              /* 해 아이콘 — 라이트로 전환 */
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="4"/>
-                <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>
-              </svg>
-            ) : (
-              /* 달 아이콘 — 다크로 전환 */
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
-              </svg>
-            )}
-          </button>
 
           {/* 모바일 햄버거 */}
           <div className="md:hidden relative" ref={mobileMenuRef}>
