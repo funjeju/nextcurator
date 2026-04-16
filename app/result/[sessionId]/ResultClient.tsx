@@ -66,7 +66,7 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
   const searchParams = useSearchParams()
   const fromSquare = searchParams.get('from') === 'square'
   const isTempReanalyze = searchParams.get('temp') === '1'
-  const { user, openAuthModal } = useAuth()
+  const { user, userProfile, openAuthModal } = useAuth()
   const [data, setData] = useState<SummarizeResponse | null>(null)
   const [loadError, setLoadError] = useState(false)
   const [savedItem, setSavedItem] = useState<SavedSummary | null>(null)
