@@ -15,10 +15,10 @@ const inter = Inter({ subsets: ['latin'] })
 export const metadata: Metadata = {
   metadataBase: new URL('https://ssoktube.com'),
   title: {
-    default: 'SSOKTUBE — 유튜브를 쏙, 내 지식은 쑥',
+    default: 'SSOKTUBE — 유튜브를 SSOK쏙 내 지식을 SSUK쑥',
     template: '%s | SSOKTUBE',
   },
-  description: '유튜브를 쏙, 내 지식은 쑥. AI가 영상을 분석해 핵심만 내 라이브러리에 저장해드립니다.',
+  description: '유튜브를 SSOK쏙 내 지식을 SSUK쑥. AI가 영상을 분석해 핵심만 내 라이브러리에 저장해드립니다.',
   keywords: ['유튜브 요약', 'YouTube AI 요약', '영상 요약', 'AI 학습', '유튜브 라이브러리', '요리 레시피', '영어 학습'],
   authors: [{ name: 'SSOKTUBE' }],
   creator: 'SSOKTUBE',
@@ -27,14 +27,14 @@ export const metadata: Metadata = {
     locale: 'ko_KR',
     url: 'https://ssoktube.com',
     siteName: 'SSOKTUBE',
-    title: 'SSOKTUBE — 유튜브를 쏙, 내 지식은 쑥',
-    description: '유튜브를 쏙, 내 지식은 쑥. AI가 영상을 분석해 핵심만 내 라이브러리에 저장해드립니다.',
+    title: 'SSOKTUBE — 유튜브를 SSOK쏙 내 지식을 SSUK쑥',
+    description: '유튜브를 SSOK쏙 내 지식을 SSUK쑥. AI가 영상을 분석해 핵심만 내 라이브러리에 저장해드립니다.',
   },
   twitter: {
     card: 'summary_large_image',
     site: '@ssoktube',
-    title: 'SSOKTUBE — 유튜브를 쏙, 내 지식은 쑥',
-    description: '유튜브를 쏙, 내 지식은 쑥. AI가 영상을 분석해 핵심만 내 라이브러리에 저장해드립니다.',
+    title: 'SSOKTUBE — 유튜브를 SSOK쏙 내 지식을 SSUK쑥',
+    description: '유튜브를 SSOK쏙 내 지식을 SSUK쑥. AI가 영상을 분석해 핵심만 내 라이브러리에 저장해드립니다.',
   },
   robots: {
     index: true,

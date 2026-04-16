@@ -20,6 +20,7 @@ import FloatingChat from '@/components/chat/FloatingChat'
 import AvatarUploadModal from '@/components/profile/AvatarUploadModal'
 import TravelWishlist from '@/components/travel/TravelWishlist'
 import SavedBlogDrafts from '@/components/blog/SavedBlogDrafts'
+import SavedShortsScripts from '@/components/shorts/SavedShortsScripts'
 
 
 const CATEGORY_LABEL: Record<string, string> = {
@@ -232,7 +233,7 @@ function FriendsTab({ myUid }: { myUid: string }) {
 
 export default function MyPage() {
   const { user, userProfile, needsProfile, refreshProfile } = useAuth()
-  const [activeTab, setActiveTab] = useState<'library' | 'friends' | 'travel' | 'blog'>('library')
+  const [activeTab, setActiveTab] = useState<'library' | 'friends' | 'travel' | 'blog' | 'shorts'>('library')
   const [folders, setFolders] = useState<Folder[]>([])
   const [summaries, setSummaries] = useState<SavedSummary[]>([])
   const [allSummaries, setAllSummaries] = useState<SavedSummary[]>([])
@@ -790,6 +791,14 @@ export default function MyPage() {
           >
             ✍️ 블로그 초안
           </button>
+          <button
+            onClick={() => setActiveTab('shorts')}
+            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+              activeTab === 'shorts' ? 'bg-[#3d3a38] text-white shadow' : 'text-[#75716e] hover:text-white'
+            }`}
+          >
+            ✂️ 숏폼 스크립트
+          </button>
         </div>
       </div>
 
@@ -822,6 +831,16 @@ export default function MyPage() {
             <p className="text-[#75716e] text-sm mt-0.5">요약 결과에서 생성한 SEO 블로그 초안을 저장하고 관리하세요.</p>
           </div>
           <SavedBlogDrafts userId={user?.uid ?? getLocalUserId()} />
+        </div>
+      )}
+
+      {activeTab === 'shorts' && (
+        <div className="max-w-7xl mx-auto px-6 pb-12">
+          <div className="mb-4">
+            <h2 className="text-white font-bold text-lg">✂️ 저장된 숏폼 스크립트</h2>
+            <p className="text-[#75716e] text-sm mt-0.5">롱폼 영상에서 추출한 숏폼 구간 스크립트를 저장하고 관리하세요.</p>
+          </div>
+          <SavedShortsScripts userId={user?.uid ?? getLocalUserId()} />
         </div>
       )}
 

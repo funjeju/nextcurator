@@ -21,8 +21,7 @@ export default function Home() {
               <span className="text-orange-400">SSOK</span>TUBE
             </h1>
             <p className="text-xl font-bold text-white/90 tracking-wide">
-              유튜브를 <span className="text-orange-400">쏙</span> 내 지식을 <span className="text-emerald-400">쑥쑥쑥</span>
-              <span className="text-sm font-semibold text-white/30 ml-1.5 tracking-widest">SSUK</span>
+              유튜브를 <span className="text-orange-400">SSOK</span>쏙 내 지식을 <span className="text-emerald-400">SSUK</span>쑥
             </p>
             <p className="text-sm font-medium text-white/40 tracking-wide">
               가장 스마트한 유튜브 저장소
@@ -31,8 +30,7 @@ export default function Home() {
           {/* 모바일: 슬로건만 */}
           <div className="md:hidden flex flex-col items-center gap-1">
             <p className="text-base font-bold text-white/90 tracking-wide">
-              유튜브를 <span className="text-orange-400">쏙</span> 내 지식을 <span className="text-emerald-400">쑥쑥쑥</span>
-              <span className="text-xs font-semibold text-white/30 ml-1 tracking-widest">SSUK</span>
+              유튜브를 <span className="text-orange-400">SSOK</span>쏙 내 지식을 <span className="text-emerald-400">SSUK</span>쑥
             </p>
             <p className="text-xs font-medium text-white/35 tracking-wide">
               가장 스마트한 유튜브 저장소

@@ -2,6 +2,8 @@
 
 import { useState } from 'react'
 import type { SummarizeResponse } from '@/types/summary'
+import { saveShortsScript } from '@/lib/shortsScript'
+import { useAuth } from '@/providers/AuthProvider'
 
 interface ShortsSegment {
   id: number
@@ -41,10 +43,13 @@ interface Props {
 }
 
 export default function ShortsScriptModal({ data, onClose }: Props) {
+  const { user, openAuthModal } = useAuth()
   const [result, setResult] = useState<ShortsResult | null>(null)
   const [loading, setLoading] = useState(false)
   const [copiedId, setCopiedId] = useState<number | null>(null)
   const [copiedAll, setCopiedAll] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
 
   const generate = async () => {
     if (!data.transcript || data.transcript.trim().length < 100) {
@@ -53,6 +58,7 @@ export default function ShortsScriptModal({ data, onClose }: Props) {
     }
     setLoading(true)
     setResult(null)
+    setSaved(false)
     try {
       const res = await fetch('/api/shorts-script', {
         method: 'POST',
@@ -89,6 +95,28 @@ export default function ShortsScriptModal({ data, onClose }: Props) {
     await navigator.clipboard.writeText(text)
     setCopiedAll(true)
     setTimeout(() => setCopiedAll(false), 2000)
+  }
+
+  const handleSave = async () => {
+    if (!result) return
+    if (!user) { openAuthModal('login'); return }
+    setSaving(true)
+    try {
+      await saveShortsScript(user.uid, {
+        videoId: data.videoId ?? '',
+        sessionId: data.sessionId ?? '',
+        videoTitle: data.title ?? '',
+        channel: data.channel ?? '',
+        thumbnail: data.thumbnail ?? '',
+        segments: result.segments,
+        edit_tips: result.edit_tips ?? '',
+      })
+      setSaved(true)
+    } catch (e: any) {
+      alert('저장 실패: ' + e.message)
+    } finally {
+      setSaving(false)
+    }
   }
 
   const ytUrl = (secs: number) => `https://youtu.be/${data.videoId}?t=${secs}`
@@ -234,6 +262,17 @@ export default function ShortsScriptModal({ data, onClose }: Props) {
               🔄 다시 추출
             </button>
             <div className="flex-1" />
+            <button
+              onClick={handleSave}
+              disabled={saving || saved}
+              className={`px-4 h-10 rounded-xl text-xs font-bold transition-colors disabled:opacity-60 ${
+                saved
+                  ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                  : 'bg-white/8 border border-white/10 text-zinc-300 hover:bg-white/15'
+              }`}
+            >
+              {saving ? '저장 중...' : saved ? '✓ 저장됨' : '💾 저장'}
+            </button>
             <button
               onClick={copyAll}
               className={`px-5 h-10 rounded-xl text-xs font-bold transition-colors ${

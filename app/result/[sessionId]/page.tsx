@@ -72,7 +72,7 @@ export async function generateMetadata(
   if (!og?.title) {
     return {
       title: 'SSOKTUBE',
-      description: '유튜브를 쏙, 내 지식은 쑥',
+      description: '유튜브를 SSOK쏙 내 지식을 SSUK쑥',
     }
   }
 

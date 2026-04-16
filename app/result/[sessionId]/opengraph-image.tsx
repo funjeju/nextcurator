@@ -223,7 +223,7 @@ export default async function OgImage(
               </div>
             </div>
             <div style={{ fontSize: 11, color: '#52525b', display: 'flex', gap: 8 }}>
-              <span>유튜브를 쏙, 내 지식은 쑥</span>
+              <span>유튜브를 SSOK쏙 내 지식을 SSUK쑥</span>
               <span>·</span>
               <span>ssoktube.com</span>
             </div>

@@ -31,20 +31,30 @@ export default function WishSpotModal({ userId, spot, onClose, onAdded }: Props)
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
+    if (!userId || userId.startsWith('user_')) { setLoading(false); return }
     getRegions(userId)
       .then(list => { setRegions(list); if (list.length > 0) setSelectedId(list[0].id) })
+      .catch(() => {})
       .finally(() => setLoading(false))
   }, [userId])
 
   const handleCreateRegion = async () => {
     const name = newName.trim()
     if (!name) return
-    const id = await createRegion(userId, name, newEmoji)
-    const newRegion: TravelRegion = { id, userId, name, emoji: newEmoji, spotCount: 0, createdAt: null }
-    setRegions(prev => [newRegion, ...prev])
-    setSelectedId(id)
-    setCreating(false)
-    setNewName('')
+    if (!userId || userId.startsWith('user_')) {
+      alert('로그인이 필요합니다. 새로고침 후 다시 시도해주세요.')
+      return
+    }
+    try {
+      const id = await createRegion(userId, name, newEmoji)
+      const newRegion: TravelRegion = { id, userId, name, emoji: newEmoji, spotCount: 0, createdAt: null }
+      setRegions(prev => [newRegion, ...prev])
+      setSelectedId(id)
+      setCreating(false)
+      setNewName('')
+    } catch (e: any) {
+      alert('지역 생성 실패: ' + (e.message || '알 수 없는 오류'))
+    }
   }
 
   const handleSave = async () => {

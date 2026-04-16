@@ -56,26 +56,32 @@ export default function TravelWishlist({ userId }: { userId: string }) {
   const [itineraryDays, setItineraryDays] = useState(2)
 
   useEffect(() => {
-    if (!userId) return
+    if (!userId || userId.startsWith('user_')) { setLoadingRegions(false); return }
     getRegions(userId)
       .then(list => {
         setRegions(list)
         if (list.length > 0) setSelectedId(list[0].id)
       })
+      .catch(() => {})
       .finally(() => setLoadingRegions(false))
   }, [userId])
 
   useEffect(() => {
-    if (!selectedId || !userId) { setSpots([]); return }
+    if (!selectedId || !userId || userId.startsWith('user_')) { setSpots([]); return }
     setLoadingSpots(true)
     getSpots(userId, selectedId)
       .then(setSpots)
+      .catch(() => {})
       .finally(() => setLoadingSpots(false))
   }, [selectedId, userId])
 
   const handleCreateRegion = async () => {
     const name = newRegionName.trim()
     if (!name) return
+    if (!userId || userId.startsWith('user_')) {
+      alert('로그인이 필요합니다. 새로고침 후 다시 시도해주세요.')
+      return
+    }
     const id = await createRegion(userId, name, newRegionEmoji)
     const r: TravelRegion = { id, userId, name, emoji: newRegionEmoji, spotCount: 0, createdAt: null }
     setRegions(prev => [r, ...prev])
