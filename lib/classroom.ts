@@ -323,9 +323,9 @@ export function summarizeStudentLogs(logs: ActivityLog[]): {
     if (!result.lastActive && log.timestamp) result.lastActive = log.timestamp
     if (log.type === 'login') result.loginCount++
     if (log.type === 'meta') {
-      if (log.value.level === 'complete') result.metaComplete++
-      else if (log.value.level === 'confused') result.metaConfused++
-      else if (log.value.level === 'unknown') result.metaUnknown++
+      if (log.value.metaLevel === 'complete') result.metaComplete++
+      else if (log.value.metaLevel === 'confused') result.metaConfused++
+      else if (log.value.metaLevel === 'unknown') result.metaUnknown++
     }
     if (log.type === 'quiz') {
       result.quizAttempts++

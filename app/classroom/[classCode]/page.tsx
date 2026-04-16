@@ -65,9 +65,9 @@ function buildVideoRecords(logs: ActivityLog[]): VideoRecord[] {
       if (log.value.completed) vr.completed = true
     }
     if (log.type === 'meta') {
-      if (log.value.level === 'complete') vr.meta.complete++
-      else if (log.value.level === 'confused') vr.meta.confused++
-      else if (log.value.level === 'unknown') vr.meta.unknown++
+      if (log.value.metaLevel === 'complete') vr.meta.complete++
+      else if (log.value.metaLevel === 'confused') vr.meta.confused++
+      else if (log.value.metaLevel === 'unknown') vr.meta.unknown++
     }
     if (log.type === 'quiz') {
       vr.quiz.attempts++

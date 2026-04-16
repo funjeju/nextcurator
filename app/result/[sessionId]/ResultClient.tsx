@@ -461,6 +461,11 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
     logStudentActivity('meta', log)
   }, [logStudentActivity])
 
+  // 댓글 작성 로그
+  const handleCommentPosted = useCallback((text: string, segmentId: string | null) => {
+    logStudentActivity('comment', { text, segmentId })
+  }, [logStudentActivity])
+
   const handleBookmarkClick = () => {
     if (!user) { openAuthModal('login'); return }
     const sec = playerRef.current ? playerRef.current.getCurrentTime() : 0
@@ -1253,6 +1258,7 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
             focusSegmentLabel={focusSegment?.label ?? null}
             onClearFocus={() => setFocusSegment(null)}
             onCountChange={setCommentCount}
+            onCommentPosted={handleCommentPosted}
           />
         </div>
 

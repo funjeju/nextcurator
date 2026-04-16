@@ -172,6 +172,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = async () => {
     try {
+      // 학생 계정이면 로그아웃 로그 기록 (firebaseSignOut 전에)
+      if (userProfile?.role === 'student' && userProfile?.classCode && user) {
+        fetch('/api/classroom/activity', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            studentId: user.uid,
+            studentName: userProfile.studentName || userProfile.displayName || '',
+            classCode: userProfile.classCode,
+            type: 'logout',
+            value: {},
+          }),
+        }).catch(() => {})
+      }
       await firebaseSignOut(auth)
       setUserProfile(null)
       setNeedsProfile(false)

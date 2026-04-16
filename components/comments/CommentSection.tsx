@@ -11,6 +11,7 @@ interface Props {
   focusSegmentLabel: string | null
   onClearFocus: () => void
   onCountChange?: (count: number) => void
+  onCommentPosted?: (text: string, segmentId: string | null) => void
 }
 
 export default function CommentSection({
@@ -19,6 +20,7 @@ export default function CommentSection({
   focusSegmentLabel,
   onClearFocus,
   onCountChange,
+  onCommentPosted,
 }: Props) {
   const { user } = useAuth()
   const [comments, setComments] = useState<Comment[]>([])
@@ -66,6 +68,7 @@ export default function CommentSection({
       const updated = [...comments, newComment]
       setComments(updated)
       onCountChange?.(updated.filter(c => !c.parentId).length)
+      onCommentPosted?.(text.trim(), replyTo ? null : focusSegmentId)
       setText('')
       setReplyTo(null)
       onClearFocus()
