@@ -172,6 +172,28 @@ html.light .border-white\/15      { border-color: rgba(0,0,0,0.13) !important; }
 html.light .border-white\/20      { border-color: rgba(0,0,0,0.16) !important; }
 html.light .border-white\/25      { border-color: rgba(0,0,0,0.20) !important; }
 
+/* ── zinc 계열 밝은 텍스트 → 다크로 ── */
+html.light .text-zinc-100          { color: #1c1c1f !important; }
+html.light .text-zinc-200          { color: #27272a !important; }
+html.light .text-zinc-300          { color: #3f3f46 !important; }
+html.light .text-zinc-400          { color: #52525b !important; }
+
+/* ── zinc 계열 어두운 배경 → 밝게 ── */
+html.light .bg-zinc-950            { background-color: #fafafa !important; }
+html.light .bg-zinc-900            { background-color: #f4f4f5 !important; }
+html.light .bg-zinc-800            { background-color: #e4e4e7 !important; }
+html.light .bg-zinc-700            { background-color: #d4d4d8 !important; }
+
+/* ── 투명도 포함 배경 추가 ── */
+html.light .bg-\[\#252423\]\/80   { background-color: rgba(247,246,244,0.85) !important; }
+html.light .bg-\[\#32302e\]\/30   { background-color: rgba(238,236,234,0.3) !important; }
+html.light .bg-white\/15           { background-color: rgba(0,0,0,0.10) !important; }
+html.light .bg-white\/25           { background-color: rgba(0,0,0,0.16) !important; }
+
+/* ── placeholder 텍스트 ── */
+html.light .placeholder\:text-\[\#75716e\]::placeholder { color: #9e9a96 !important; }
+html.light .placeholder\:text-zinc-600::placeholder      { color: #888888 !important; }
+
 /* ── hover 상태 ── */
 html.light .hover\:bg-white\/5:hover  { background-color: rgba(0,0,0,0.04) !important; }
 html.light .hover\:bg-white\/8:hover  { background-color: rgba(0,0,0,0.06) !important; }
