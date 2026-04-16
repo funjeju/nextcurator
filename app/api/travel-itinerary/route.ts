@@ -22,8 +22,7 @@ export async function POST(req: NextRequest) {
       startDate, endDate, nights, days,
       mode,               // 'spots_only' | 'with_recommendations'
       arrivalTime,        // 'morning' | 'afternoon' | 'evening'
-      accommodation,      // { status: 'booked' | 'not_booked', details?: string }
-      preferredArea,      // string (숙소 미예약 시 선호 지역)
+      accommodations,     // { night, status, details?, preferredArea? }[]
     } = await req.json()
 
     if (!spots || spots.length === 0) {
@@ -44,10 +43,14 @@ export async function POST(req: NextRequest) {
       arrivalTime === 'evening' ? '저녁 (18시 이후)' : '미정'
 
     const accomLabel =
-      !accommodation ? '정보 없음' :
-      accommodation.status === 'booked'
-        ? `예약 완료${accommodation.details ? ` — ${accommodation.details}` : ''}`
-        : `미예약${preferredArea ? ` — 선호지역: ${preferredArea}` : ' — AI 추천 필요'}`
+      !accommodations || accommodations.length === 0
+        ? '정보 없음'
+        : accommodations.map((a: any) => {
+            const status = a.status === 'booked'
+              ? `예약완료${a.details ? ` (${a.details})` : ''}`
+              : `미예약${a.preferredArea ? ` — 선호지역: ${a.preferredArea}` : ' — AI 추천 필요'}`
+            return `  ${a.night}박째 (Day ${a.night} → Day ${a.night + 1}): ${status}`
+          }).join('\n')
 
     const spotsOnlyPrompt = `당신은 여행 동선 전문가입니다. 아래 조건으로 ${numDays}일 여행 일정을 만들어주세요.
 
@@ -86,7 +89,8 @@ JSON:
 여행지: ${regionName || '미정'}
 여행 기간: ${startDate} ~ ${endDate} (${numNights}박 ${numDays}일)
 첫날 도착 시간대: ${arrivalLabel}
-숙소 상황: ${accomLabel}
+숙소 정보 (박수별):
+${accomLabel}
 
 마이스팟 목록:
 ${spotList}
@@ -94,9 +98,9 @@ ${spotList}
 [작성 기준]
 - 마이스팟을 우선 배치하고, 빈 시간대에는 해당 지역의 추천 명소(isRecommended: true)를 자연스럽게 추가
 - 도착 시간대에 맞게 첫날 일정 구성 (오전 도착이면 풀일정, 저녁 도착이면 가볍게)
-- 숙소 미예약인 경우: 전체 동선을 고려해 최적 숙소 위치와 추천 숙소 유형을 accommodation_suggestion에 작성
-- 숙소 예약된 경우: 숙소 위치를 기준으로 동선 최적화
-- 지리적으로 효율적인 동선 (같은 권역 묶기)
+- 박수별 숙소 위치를 기준으로 각 날의 동선을 최적화 (N박째 숙소 주변을 N+1일 일정의 거점으로 활용)
+- 예약완료 숙소가 있는 날: 해당 숙소 위치 근처 스팟 우선 배치
+- 미예약 숙소가 있는 날: 그날 스팟 동선 분석 후 최적 숙소 위치를 accommodation_suggestion에 박수별로 작성
 - 마지막날: 체크아웃 후 귀국 전 시간 활용
 - 각 slot의 tip은 실제 유용한 정보 (주차, 예약, 혼잡도 등)
 

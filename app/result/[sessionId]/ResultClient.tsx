@@ -29,6 +29,7 @@ import { getLocalUserId } from '@/lib/user'
 import { getCommentsBySession } from '@/lib/comments'
 import type { SavedSummary } from '@/lib/db'
 import type { Comment } from '@/lib/comments'
+import { addBookmark, secsToLabel } from '@/lib/videoBookmark'
 
 const CATEGORY_INFO: Record<string, { label: string; icon: string; color: string }> = {
   recipe:  { label: '요리',    icon: '🍳', color: 'text-orange-400 border-orange-400' },
@@ -105,6 +106,17 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
   // 배속
   const [playbackRate, setPlaybackRate] = useState(1)
   const [showSpeedMenu, setShowSpeedMenu] = useState(false)
+
+  // 타임스탬프 북마크
+  const [showBookmarkPanel, setShowBookmarkPanel] = useState(false)
+  const [bookmarkMemo, setBookmarkMemo] = useState('')
+  const [bookmarkSec, setBookmarkSec] = useState(0)
+  const [bookmarkSaving, setBookmarkSaving] = useState(false)
+  const [bookmarkSaved, setBookmarkSaved] = useState(false)
+
+  // 상품/장소 추출
+  const [extractedItems, setExtractedItems] = useState<{ products: any[]; places: any[] } | null>(null)
+  const [extractingItems, setExtractingItems] = useState(false)
 
   // 구간별 요약 (30분+ 영상)
   const [segments, setSegments] = useState<any[] | null>(null)
@@ -448,6 +460,59 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
   const handleQuizMeta = useCallback((log: { questionIdx: number; question: string; metaLevel: string }) => {
     logStudentActivity('meta', log)
   }, [logStudentActivity])
+
+  const handleBookmarkClick = () => {
+    if (!user) { openAuthModal('login'); return }
+    const sec = playerRef.current ? playerRef.current.getCurrentTime() : 0
+    setBookmarkSec(sec)
+    setBookmarkMemo('')
+    setBookmarkSaved(false)
+    setShowBookmarkPanel(v => !v)
+  }
+
+  const handleBookmarkSave = async () => {
+    if (!user || !data) return
+    setBookmarkSaving(true)
+    try {
+      await addBookmark(user.uid, {
+        videoId: data.videoId ?? '',
+        sessionId,
+        videoTitle: data.title,
+        thumbnail: data.thumbnail,
+        channel: data.channel,
+        timestampSec: bookmarkSec,
+        timestampLabel: secsToLabel(bookmarkSec),
+        memo: bookmarkMemo.trim(),
+      })
+      setBookmarkSaved(true)
+      setTimeout(() => setShowBookmarkPanel(false), 800)
+    } catch {
+      alert('북마크 저장에 실패했습니다.')
+    } finally {
+      setBookmarkSaving(false)
+    }
+  }
+
+  const handleExtractItems = async () => {
+    if (!data || extractingItems) return
+    setExtractingItems(true)
+    try {
+      const res = await fetch('/api/extract-items', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          transcript: data.transcript,
+          title: data.title,
+          category: data.category,
+        }),
+      })
+      setExtractedItems(await res.json())
+    } catch {
+      alert('추출에 실패했습니다.')
+    } finally {
+      setExtractingItems(false)
+    }
+  }
 
   const handleSegmentAnalysis = async () => {
     if (!data?.transcript || segmentsLoading) return
@@ -835,6 +900,104 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
             </div>
           )}
 
+          {/* 상품 & 장소 추출 — summary 탭 */}
+          {activeTab === 'summary' && (
+            <div className="mt-2">
+              {!extractedItems ? (
+                <button
+                  onClick={handleExtractItems}
+                  disabled={extractingItems}
+                  className="w-full py-3.5 rounded-2xl border border-dashed border-amber-500/30 bg-amber-500/5 hover:bg-amber-500/10 text-amber-400 hover:text-amber-300 font-semibold text-sm transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  {extractingItems ? (
+                    <>
+                      <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                      </svg>
+                      추출 중...
+                    </>
+                  ) : '🛍️ 언급된 상품 & 장소 추출'}
+                </button>
+              ) : (
+                <div className="bg-[#2a2826] rounded-2xl border border-white/8 p-4 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <p className="text-amber-400 font-bold text-sm">🛍️ 언급된 상품 & 장소</p>
+                    <button
+                      onClick={() => setExtractedItems(null)}
+                      className="text-zinc-600 hover:text-zinc-400 text-xs"
+                    >닫기</button>
+                  </div>
+
+                  {/* 상품 */}
+                  {extractedItems.products.length > 0 && (
+                    <div>
+                      <p className="text-zinc-400 text-xs font-semibold mb-2">📦 상품 / 브랜드</p>
+                      <div className="space-y-2">
+                        {extractedItems.products.map((p: any, i: number) => (
+                          <div key={i} className="flex items-start gap-3 bg-[#32302e] rounded-xl p-3">
+                            <div className="flex-1 min-w-0">
+                              <p className="text-white text-sm font-semibold">{p.name}</p>
+                              <p className="text-zinc-500 text-xs mt-0.5 leading-relaxed">{p.context}</p>
+                            </div>
+                            <div className="flex flex-col gap-1 shrink-0">
+                              <a
+                                href={`https://search.shopping.naver.com/search/all?query=${encodeURIComponent(p.name)}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-[10px] px-2 py-1 rounded-lg bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25 font-bold transition-colors"
+                              >
+                                N쇼핑
+                              </a>
+                              <a
+                                href={`https://www.coupang.com/np/search?q=${encodeURIComponent(p.name)}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-[10px] px-2 py-1 rounded-lg bg-red-500/15 text-red-400 hover:bg-red-500/25 font-bold transition-colors"
+                              >
+                                쿠팡
+                              </a>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 장소 */}
+                  {extractedItems.places.length > 0 && (
+                    <div>
+                      <p className="text-zinc-400 text-xs font-semibold mb-2">📍 장소</p>
+                      <div className="space-y-2">
+                        {extractedItems.places.map((pl: any, i: number) => (
+                          <div key={i} className="flex items-start gap-3 bg-[#32302e] rounded-xl p-3">
+                            <div className="flex-1 min-w-0">
+                              <p className="text-white text-sm font-semibold">{pl.name}</p>
+                              {pl.region && <span className="text-[10px] text-cyan-400 bg-cyan-500/10 px-1.5 py-0.5 rounded mt-0.5 inline-block">{pl.region}</span>}
+                              <p className="text-zinc-500 text-xs mt-0.5 leading-relaxed">{pl.context}</p>
+                            </div>
+                            <a
+                              href={`https://map.kakao.com/?q=${encodeURIComponent(pl.name)}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="shrink-0 text-[10px] px-2 py-1 rounded-lg bg-yellow-500/15 text-yellow-400 hover:bg-yellow-500/25 font-bold transition-colors"
+                            >
+                              지도
+                            </a>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {extractedItems.products.length === 0 && extractedItems.places.length === 0 && (
+                    <p className="text-zinc-600 text-sm text-center py-4">추출된 상품 및 장소가 없습니다.</p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* 광고 — summary 탭 하단 */}
           {activeTab === 'summary' && (
             <AdBanner adSlot="RESULT_BOTTOM" adFormat="horizontal" className="mt-2" />
@@ -982,6 +1145,57 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
             >
               <span className="text-lg leading-none">✂️</span>
             </button>
+          )}
+
+          {/* 타임스탬프 북마크 버튼 — YouTube 영상만 */}
+          {data.videoId && (
+            <div className="relative">
+              <button
+                onClick={handleBookmarkClick}
+                className={`h-12 w-12 border transition-all rounded-xl flex items-center justify-center ${
+                  showBookmarkPanel
+                    ? 'bg-yellow-500/20 border-yellow-500/40 text-yellow-400'
+                    : 'border-white/10 bg-[#32302e] text-white hover:bg-yellow-500/15 hover:border-yellow-500/30 hover:text-yellow-400'
+                }`}
+                title="현재 시점 북마크"
+              >
+                <span className="text-lg leading-none">🔖</span>
+              </button>
+              {/* 북마크 패널 */}
+              {showBookmarkPanel && (
+                <div className="absolute bottom-14 right-0 w-72 bg-[#1c1a18] border border-yellow-500/20 rounded-2xl p-4 shadow-2xl z-50">
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="text-yellow-400 text-xs font-bold">🔖 북마크 추가</p>
+                    <button onClick={() => setShowBookmarkPanel(false)} className="text-zinc-500 hover:text-white text-sm">✕</button>
+                  </div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="text-orange-400 font-mono text-sm font-bold bg-orange-500/10 px-2 py-1 rounded-lg border border-orange-500/20">
+                      {secsToLabel(bookmarkSec)}
+                    </span>
+                    <span className="text-zinc-500 text-xs">현재 재생 위치</span>
+                  </div>
+                  <textarea
+                    value={bookmarkMemo}
+                    onChange={e => setBookmarkMemo(e.target.value)}
+                    placeholder="메모 추가 (선택)"
+                    rows={2}
+                    className="w-full bg-[#2a2826] border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:border-yellow-500/40 resize-none mb-3"
+                    autoFocus
+                  />
+                  <button
+                    onClick={handleBookmarkSave}
+                    disabled={bookmarkSaving || bookmarkSaved}
+                    className={`w-full py-2 rounded-xl text-sm font-bold transition-all ${
+                      bookmarkSaved
+                        ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                        : 'bg-yellow-500 hover:bg-yellow-600 text-black disabled:opacity-50'
+                    }`}
+                  >
+                    {bookmarkSaved ? '✓ 저장됨!' : bookmarkSaving ? '저장 중...' : '저장'}
+                  </button>
+                </div>
+              )}
+            </div>
           )}
 
           {/* PDF 다운로드 버튼 */}

@@ -19,8 +19,10 @@ import { naturalSearch } from '@/lib/nlp-search'
 import FloatingChat from '@/components/chat/FloatingChat'
 import AvatarUploadModal from '@/components/profile/AvatarUploadModal'
 import TravelWishlist from '@/components/travel/TravelWishlist'
+import SavedItineraries from '@/components/travel/SavedItineraries'
 import SavedBlogDrafts from '@/components/blog/SavedBlogDrafts'
 import SavedShortsScripts from '@/components/shorts/SavedShortsScripts'
+import SavedBookmarks from '@/components/bookmarks/SavedBookmarks'
 
 
 const CATEGORY_LABEL: Record<string, string> = {
@@ -109,6 +111,38 @@ function FolderMoveDropdown({
           <p className="px-3 py-2 text-xs text-[#75716e]">폴더가 없습니다.</p>
         )}
       </div>
+    </div>
+  )
+}
+
+// ── 여행 탭 (찜 + 저장 일정 서브탭) ──
+function TravelTab({ userId }: { userId: string }) {
+  const [subTab, setSubTab] = useState<'wishlist' | 'itineraries'>('wishlist')
+  return (
+    <div className="max-w-7xl mx-auto px-6 pb-12">
+      <div className="mb-5">
+        <h2 className="text-white font-bold text-lg mb-3">🧳 여행</h2>
+        <div className="flex gap-1 bg-[#32302e]/60 rounded-xl p-1 w-fit">
+          <button
+            onClick={() => setSubTab('wishlist')}
+            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+              subTab === 'wishlist' ? 'bg-[#3d3a38] text-white shadow' : 'text-[#75716e] hover:text-white'
+            }`}
+          >
+            📍 여행 찜
+          </button>
+          <button
+            onClick={() => setSubTab('itineraries')}
+            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+              subTab === 'itineraries' ? 'bg-[#3d3a38] text-white shadow' : 'text-[#75716e] hover:text-white'
+            }`}
+          >
+            🗓️ 저장된 일정
+          </button>
+        </div>
+      </div>
+      {subTab === 'wishlist' && <TravelWishlist userId={userId} />}
+      {subTab === 'itineraries' && <SavedItineraries userId={userId} />}
     </div>
   )
 }
@@ -233,7 +267,7 @@ function FriendsTab({ myUid }: { myUid: string }) {
 
 export default function MyPage() {
   const { user, userProfile, needsProfile, refreshProfile } = useAuth()
-  const [activeTab, setActiveTab] = useState<'library' | 'friends' | 'travel' | 'blog' | 'shorts'>('library')
+  const [activeTab, setActiveTab] = useState<'library' | 'friends' | 'travel' | 'blog' | 'shorts' | 'bookmarks'>('library')
   const [folders, setFolders] = useState<Folder[]>([])
   const [summaries, setSummaries] = useState<SavedSummary[]>([])
   const [allSummaries, setAllSummaries] = useState<SavedSummary[]>([])
@@ -799,6 +833,14 @@ export default function MyPage() {
           >
             ✂️ 숏폼 스크립트
           </button>
+          <button
+            onClick={() => setActiveTab('bookmarks')}
+            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+              activeTab === 'bookmarks' ? 'bg-[#3d3a38] text-white shadow' : 'text-[#75716e] hover:text-white'
+            }`}
+          >
+            🔖 북마크
+          </button>
         </div>
       </div>
 
@@ -815,13 +857,7 @@ export default function MyPage() {
       )}
 
       {activeTab === 'travel' && (
-        <div className="max-w-7xl mx-auto px-6 pb-12">
-          <div className="mb-4">
-            <h2 className="text-white font-bold text-lg">🧳 나의 여행 찜</h2>
-            <p className="text-[#75716e] text-sm mt-0.5">여행 영상에서 스팟을 찜하거나 직접 추가해 일정을 만들어보세요.</p>
-          </div>
-          <TravelWishlist userId={user?.uid ?? getLocalUserId()} />
-        </div>
+        <TravelTab userId={user?.uid ?? getLocalUserId()} />
       )}
 
       {activeTab === 'blog' && (
@@ -841,6 +877,16 @@ export default function MyPage() {
             <p className="text-[#75716e] text-sm mt-0.5">롱폼 영상에서 추출한 숏폼 구간 스크립트를 저장하고 관리하세요.</p>
           </div>
           <SavedShortsScripts userId={user?.uid ?? getLocalUserId()} />
+        </div>
+      )}
+
+      {activeTab === 'bookmarks' && (
+        <div className="max-w-7xl mx-auto px-6 pb-12">
+          <div className="mb-5">
+            <h2 className="text-white font-bold text-lg">🔖 타임스탬프 북마크</h2>
+            <p className="text-[#75716e] text-sm mt-0.5">영상 시청 중 저장한 구간과 메모를 한눈에 확인하세요.</p>
+          </div>
+          <SavedBookmarks userId={user?.uid ?? getLocalUserId()} />
         </div>
       )}
 

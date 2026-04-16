@@ -151,6 +151,20 @@ service cloud.firestore {
       allow update, delete: if request.auth != null && request.auth.uid == resource.data.userId;
     }
 
+    // travel_itineraries: 본인 AI 여행 일정 저장
+    match /travel_itineraries/{itineraryId} {
+      allow read: if request.auth != null && request.auth.uid == resource.data.userId;
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
+      allow delete: if request.auth != null && request.auth.uid == resource.data.userId;
+    }
+
+    // video_bookmarks: 본인 타임스탬프 북마크
+    match /video_bookmarks/{bookmarkId} {
+      allow read: if request.auth != null && request.auth.uid == resource.data.userId;
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
+      allow delete: if request.auth != null && request.auth.uid == resource.data.userId;
+    }
+
     // activity_logs: 학생 본인 생성, 본인 및 담당 교사 읽기
     match /activity_logs/{logId} {
       allow create: if request.auth != null && request.auth.uid == request.resource.data.studentId;

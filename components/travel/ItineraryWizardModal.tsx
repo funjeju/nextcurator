@@ -2,11 +2,19 @@
 
 import { useState } from 'react'
 import type { TravelRegion, TravelSpot } from '@/lib/travel'
+import { saveItinerary } from '@/lib/travelItinerary'
+import { useAuth } from '@/providers/AuthProvider'
 
 type Step = 'dates' | 'mode' | 'details' | 'generating' | 'result'
 type Mode = 'spots_only' | 'with_recommendations'
 type ArrivalTime = 'morning' | 'afternoon' | 'evening'
 type AccomStatus = 'booked' | 'not_booked'
+
+interface AccomEntry {
+  status: AccomStatus | null
+  details: string       // 예약완료 시 숙소명/위치
+  preferredArea: string // 미예약 시 선호 지역
+}
 
 interface ItinerarySlot {
   time: string
@@ -57,17 +65,18 @@ function formatDate(dateStr: string) {
 }
 
 export default function ItineraryWizardModal({ region, spots, onClose }: Props) {
+  const { user } = useAuth()
   const today = new Date().toISOString().split('T')[0]
   const [step, setStep] = useState<Step>('dates')
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
   const [mode, setMode] = useState<Mode | null>(null)
   const [arrivalTime, setArrivalTime] = useState<ArrivalTime | null>(null)
-  const [accomStatus, setAccomStatus] = useState<AccomStatus | null>(null)
-  const [accomDetails, setAccomDetails] = useState('')
-  const [preferredArea, setPreferredArea] = useState('')
+  const [accommodations, setAccommodations] = useState<AccomEntry[]>([])
   const [result, setResult] = useState<ItineraryResult | null>(null)
   const [error, setError] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
 
   const { nights, days } = startDate && endDate ? calcNightsdays(startDate, endDate) : { nights: 0, days: 0 }
   const steps = mode === 'spots_only' ? STEPS_NO_DETAILS : STEPS_WITH_DETAILS
@@ -85,8 +94,12 @@ export default function ItineraryWizardModal({ region, spots, onClose }: Props) 
       }
       if (selectedMode === 'with_recommendations') {
         body.arrivalTime = arrivalTime
-        body.accommodation = { status: accomStatus, details: accomDetails || undefined }
-        body.preferredArea = preferredArea || undefined
+        body.accommodations = accommodations.map((a, i) => ({
+          night: i + 1,
+          status: a.status,
+          details: a.details || undefined,
+          preferredArea: a.preferredArea || undefined,
+        }))
       }
       const res = await fetch('/api/travel-itinerary', {
         method: 'POST',
@@ -107,14 +120,44 @@ export default function ItineraryWizardModal({ region, spots, onClose }: Props) 
     if (m === 'spots_only') {
       generate(m)
     } else {
+      // 박수만큼 숙소 슬롯 초기화
+      setAccommodations(
+        Array.from({ length: nights }, () => ({ status: null, details: '', preferredArea: '' }))
+      )
       setStep('details')
     }
   }
 
   const handleDetailsSubmit = () => {
     if (!arrivalTime) return
-    if (!accomStatus) return
+    if (accommodations.some(a => !a.status)) return
     generate('with_recommendations')
+  }
+
+  const updateAccom = (i: number, patch: Partial<AccomEntry>) => {
+    setAccommodations(prev => prev.map((a, idx) => idx === i ? { ...a, ...patch } : a))
+  }
+
+  const handleSave = async () => {
+    if (!result || !user || saving || saved) return
+    setSaving(true)
+    try {
+      await saveItinerary(user.uid, {
+        regionName: region.name,
+        regionEmoji: region.emoji,
+        startDate,
+        endDate,
+        nights,
+        days,
+        mode: mode!,
+        result,
+      })
+      setSaved(true)
+    } catch {
+      alert('저장에 실패했습니다.')
+    } finally {
+      setSaving(false)
+    }
   }
 
   const canNextDates = startDate && endDate && endDate >= startDate
@@ -265,55 +308,63 @@ export default function ItineraryWizardModal({ region, spots, onClose }: Props) 
                 </div>
               </div>
 
-              {/* 숙소 예약 여부 */}
+              {/* 박수별 숙소 */}
               <div>
-                <p className="text-zinc-400 text-sm font-semibold mb-3">숙소 예약 상태</p>
-                <div className="grid grid-cols-2 gap-2">
-                  {[
-                    { id: 'booked' as AccomStatus, label: '예약 완료', icon: '🏨' },
-                    { id: 'not_booked' as AccomStatus, label: '아직 미예약', icon: '🔍' },
-                  ].map(a => (
-                    <button
-                      key={a.id}
-                      onClick={() => setAccomStatus(a.id)}
-                      className={`py-3 rounded-2xl border text-sm font-semibold transition-all flex items-center justify-center gap-2 ${
-                        accomStatus === a.id
-                          ? 'bg-orange-500/20 border-orange-500/50 text-orange-300'
-                          : 'bg-[#23211f] border-white/8 text-zinc-400 hover:border-white/20 hover:text-white'
-                      }`}
-                    >
-                      <span>{a.icon}</span>{a.label}
-                    </button>
+                <p className="text-zinc-400 text-sm font-semibold mb-1">숙소 정보 <span className="text-zinc-600 font-normal text-xs">({nights}박 각각 입력)</span></p>
+                <p className="text-zinc-600 text-xs mb-3">숙소 위치에 따라 날짜별 동선이 달라집니다</p>
+                <div className="space-y-3">
+                  {accommodations.map((accom, i) => (
+                    <div key={i} className="bg-[#23211f] border border-white/8 rounded-2xl p-3 space-y-2.5">
+                      {/* 박 레이블 + 상태 토글 */}
+                      <div className="flex items-center gap-2">
+                        <span className="w-6 h-6 rounded-full bg-orange-500/20 text-orange-400 text-[10px] font-black flex items-center justify-center shrink-0">
+                          {i + 1}
+                        </span>
+                        <span className="text-zinc-300 text-xs font-semibold flex-1">
+                          {i + 1}박째 숙소
+                          <span className="text-zinc-600 font-normal ml-1">
+                            (Day {i + 1} → Day {i + 2})
+                          </span>
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-1.5">
+                        {[
+                          { id: 'booked' as AccomStatus, label: '예약 완료', icon: '🏨' },
+                          { id: 'not_booked' as AccomStatus, label: '미예약', icon: '🔍' },
+                        ].map(opt => (
+                          <button
+                            key={opt.id}
+                            onClick={() => updateAccom(i, { status: opt.id })}
+                            className={`py-2 rounded-xl border text-xs font-semibold transition-all flex items-center justify-center gap-1.5 ${
+                              accom.status === opt.id
+                                ? 'bg-orange-500/20 border-orange-500/50 text-orange-300'
+                                : 'bg-[#2a2826] border-white/8 text-zinc-500 hover:border-white/20 hover:text-white'
+                            }`}
+                          >
+                            <span>{opt.icon}</span>{opt.label}
+                          </button>
+                        ))}
+                      </div>
+                      {accom.status === 'booked' && (
+                        <input
+                          value={accom.details}
+                          onChange={e => updateAccom(i, { details: e.target.value })}
+                          placeholder="숙소명 또는 위치 (선택)"
+                          className="w-full bg-[#2a2826] border border-white/10 rounded-xl px-3 py-2 text-xs text-white placeholder:text-zinc-600 focus:outline-none focus:border-orange-500/40"
+                        />
+                      )}
+                      {accom.status === 'not_booked' && (
+                        <input
+                          value={accom.preferredArea}
+                          onChange={e => updateAccom(i, { preferredArea: e.target.value })}
+                          placeholder="선호 지역 (비우면 AI가 동선 기반 추천)"
+                          className="w-full bg-[#2a2826] border border-white/10 rounded-xl px-3 py-2 text-xs text-white placeholder:text-zinc-600 focus:outline-none focus:border-orange-500/40"
+                        />
+                      )}
+                    </div>
                   ))}
                 </div>
               </div>
-
-              {/* 숙소 예약 완료: 위치 입력 */}
-              {accomStatus === 'booked' && (
-                <div>
-                  <label className="text-zinc-500 text-xs mb-1.5 block">숙소 이름 또는 위치 <span className="text-zinc-600">(선택)</span></label>
-                  <input
-                    value={accomDetails}
-                    onChange={e => setAccomDetails(e.target.value)}
-                    placeholder="예: 제주시 연동 호텔, 성산 게스트하우스..."
-                    className="w-full bg-[#2a2826] border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:border-orange-500/40"
-                  />
-                </div>
-              )}
-
-              {/* 숙소 미예약: 선호 지역 */}
-              {accomStatus === 'not_booked' && (
-                <div>
-                  <label className="text-zinc-500 text-xs mb-1.5 block">선호 숙소 지역 <span className="text-zinc-600">(선택 — 비우면 AI가 동선 기반으로 추천)</span></label>
-                  <input
-                    value={preferredArea}
-                    onChange={e => setPreferredArea(e.target.value)}
-                    placeholder="예: 제주시내, 성산 근처, 서귀포..."
-                    className="w-full bg-[#2a2826] border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:border-orange-500/40"
-                  />
-                  <p className="text-zinc-600 text-xs mt-1.5">비워두면 AI가 스팟 동선을 분석해 최적 숙소 위치를 추천해드립니다.</p>
-                </div>
-              )}
             </div>
           )}
 
@@ -424,7 +475,7 @@ export default function ItineraryWizardModal({ region, spots, onClose }: Props) 
           )}
           {step === 'result' && (
             <button
-              onClick={() => { setStep('dates'); setMode(null); setResult(null); setError('') }}
+              onClick={() => { setStep('dates'); setMode(null); setResult(null); setError(''); setSaved(false) }}
               className="px-4 h-10 rounded-xl bg-white/5 hover:bg-white/10 text-zinc-400 text-xs transition-colors"
             >
               🔄 다시 생성
@@ -446,19 +497,36 @@ export default function ItineraryWizardModal({ region, spots, onClose }: Props) 
           {step === 'details' && (
             <button
               onClick={handleDetailsSubmit}
-              disabled={!arrivalTime || !accomStatus}
+              disabled={!arrivalTime || accommodations.some(a => !a.status)}
               className="px-6 h-10 rounded-xl bg-gradient-to-r from-orange-500 to-pink-500 hover:opacity-90 disabled:opacity-40 text-white text-sm font-bold transition-all"
             >
               ✨ 일정 생성하기
             </button>
           )}
           {step === 'result' && (
-            <button
-              onClick={onClose}
-              className="px-6 h-10 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-sm font-bold transition-colors"
-            >
-              닫기
-            </button>
+            <div className="flex items-center gap-2">
+              {user && (
+                <button
+                  onClick={handleSave}
+                  disabled={saving || saved}
+                  className={`px-4 h-10 rounded-xl text-sm font-bold transition-all flex items-center gap-1.5 ${
+                    saved
+                      ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 cursor-default'
+                      : 'bg-white/8 hover:bg-white/15 text-zinc-300 border border-white/10 disabled:opacity-50'
+                  }`}
+                >
+                  {saving ? (
+                    <span className="w-3.5 h-3.5 rounded-full border border-zinc-400 border-t-transparent animate-spin" />
+                  ) : saved ? '✓ 저장됨' : '💾 저장'}
+                </button>
+              )}
+              <button
+                onClick={onClose}
+                className="px-6 h-10 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-sm font-bold transition-colors"
+              >
+                닫기
+              </button>
+            </div>
           )}
         </div>
       </div>
