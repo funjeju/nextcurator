@@ -815,9 +815,6 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
                 🤖 요약 {new Date(data.summarizedAt).toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' })}
               </span>
             )}
-            {data.transcriptSource && (
-              <span className="text-xs text-zinc-600">자막 출처: {data.transcriptSource}</span>
-            )}
           </div>
         </div>
 
