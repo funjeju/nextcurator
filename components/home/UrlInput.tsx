@@ -42,6 +42,20 @@ interface LangChoiceData {
   cachedVideoInfo: { title: string; channel: string; thumbnail: string; publishedAt: string }
 }
 
+function toUserMessage(err: unknown): string {
+  const msg = err instanceof Error ? err.message : String(err)
+  if (/bad control character|json parse|unexpected token|json at position/i.test(msg))
+    return 'AI 요약 생성 중 일시적인 오류가 발생했습니다. 잠시 후 다시 시도해주세요.'
+  if (/VIDEO_NOT_FOUND/i.test(msg))
+    return '영상 정보를 가져올 수 없습니다. URL을 다시 확인해주세요.'
+  if (/fetch|network|econnrefused|timeout/i.test(msg))
+    return '네트워크 오류가 발생했습니다. 인터넷 연결을 확인하고 다시 시도해주세요.'
+  if (/quota|rate.?limit|resource.?exhausted/i.test(msg))
+    return 'AI 서비스가 일시적으로 혼잡합니다. 잠시 후 다시 시도해주세요.'
+  if (msg.length > 80) return '요약 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.'
+  return msg
+}
+
 export default function UrlInput() {
   const { user, signInWithGoogle } = useAuth()
   const [url, setUrl] = useState('')
@@ -115,7 +129,7 @@ export default function UrlInput() {
       router.push(`/result/${data.sessionId}`)
     } catch (err) {
       if ((err as Error).name === 'AbortError') return  // 취소 — 이미 handleCancel에서 상태 초기화
-      setError(err instanceof Error ? err.message : '처리 중 오류가 발생했습니다.')
+      setError(toUserMessage(err))
       setLoading(false)
       setStep(0)
     }
@@ -206,7 +220,7 @@ export default function UrlInput() {
       finalizeSummary(data)
     } catch (err) {
       if ((err as Error).name === 'AbortError') return
-      setError(err instanceof Error ? err.message : '오류가 발생했습니다.')
+      setError(toUserMessage(err))
       setLoading(false)
       setStep(0)
     }
@@ -242,7 +256,7 @@ export default function UrlInput() {
       finalizeSummary(data)
     } catch (err) {
       if ((err as Error).name === 'AbortError') return
-      setError(err instanceof Error ? err.message : '오류가 발생했습니다.')
+      setError(toUserMessage(err))
       setLoading(false)
       setStep(0)
     }

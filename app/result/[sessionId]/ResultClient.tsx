@@ -15,6 +15,7 @@ import QuizPanel from '@/components/quiz/QuizPanel'
 import DocentChat from '@/components/chat/DocentChat'
 import CreateRoomModal from '@/components/room/CreateRoomModal'
 import BlogDraftModal from '@/components/blog/BlogDraftModal'
+import ShortsScriptModal from '@/components/shorts/ShortsScriptModal'
 import RoomClient from '@/app/room/[roomId]/RoomClient'
 import WorksheetPanel from '@/components/worksheet/WorksheetPanel'
 import type { QuizData, WorksheetData } from '@/types/summary'
@@ -72,6 +73,7 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
   const [showSaveModal, setShowSaveModal] = useState(false)
   const [showRoomModal, setShowRoomModal] = useState(false)
   const [showBlogModal, setShowBlogModal] = useState(false)
+  const [showShortsModal, setShowShortsModal] = useState(false)
   const [activeRoomId, setActiveRoomId] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'summary' | 'transcript' | 'segments' | 'reanalyze'>('summary')
   const [sharing, setSharing] = useState(false)
@@ -971,6 +973,17 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
             <span className="text-lg leading-none">✍️</span>
           </button>
 
+          {/* 숏폼 스크립트 버튼 — YouTube 영상만 */}
+          {data.videoId && (
+            <button
+              onClick={() => setShowShortsModal(true)}
+              className="h-12 w-12 border border-white/10 bg-[#32302e] text-white hover:bg-pink-500/15 hover:border-pink-500/30 hover:text-pink-400 transition-all rounded-xl flex items-center justify-center"
+              title="숏폼 스크립트 생성"
+            >
+              <span className="text-lg leading-none">✂️</span>
+            </button>
+          )}
+
           {/* PDF 다운로드 버튼 */}
           <button
             onClick={handleDownloadPdf}
@@ -1085,6 +1098,13 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
         <BlogDraftModal
           data={data}
           onClose={() => setShowBlogModal(false)}
+        />
+      )}
+
+      {showShortsModal && (
+        <ShortsScriptModal
+          data={data}
+          onClose={() => setShowShortsModal(false)}
         />
       )}
 

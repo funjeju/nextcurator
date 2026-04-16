@@ -123,6 +123,12 @@ service cloud.firestore {
       allow update, delete: if request.auth != null && request.auth.uid == resource.data.teacherId;
     }
 
+    // blog_drafts: 본인 블로그 초안 CRUD
+    match /blog_drafts/{draftId} {
+      allow read, create: if request.auth != null && request.auth.uid == request.resource.data.userId;
+      allow delete: if request.auth != null && request.auth.uid == resource.data.userId;
+    }
+
     // travel_regions: 본인 지역 폴더 CRUD
     match /travel_regions/{regionId} {
       allow read, create: if request.auth != null && request.auth.uid == request.resource.data.userId;

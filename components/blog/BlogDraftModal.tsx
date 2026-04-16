@@ -2,6 +2,8 @@
 
 import { useState } from 'react'
 import type { SummarizeResponse } from '@/types/summary'
+import { saveBlogDraft } from '@/lib/blogDraft'
+import { useAuth } from '@/providers/AuthProvider'
 
 interface BlogSection {
   id: string
@@ -116,13 +118,17 @@ function buildPlainText(draft: BlogDraft): string {
 }
 
 export default function BlogDraftModal({ data, onClose }: Props) {
+  const { user, openAuthModal } = useAuth()
   const [draft, setDraft] = useState<BlogDraft | null>(null)
   const [loading, setLoading] = useState(false)
   const [tab, setTab] = useState<'preview' | 'html' | 'text'>('preview')
   const [copied, setCopied] = useState<'html' | 'text' | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
 
   const generate = async () => {
     setLoading(true)
+    setSaved(false)
     try {
       const res = await fetch('/api/blog-draft', {
         method: 'POST',
@@ -144,6 +150,32 @@ export default function BlogDraftModal({ data, onClose }: Props) {
       alert('블로그 초안 생성 실패: ' + e.message)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleSave = async () => {
+    if (!draft) return
+    if (!user) { openAuthModal(); return }
+    setSaving(true)
+    try {
+      await saveBlogDraft(user.uid, {
+        videoId: draft.videoId,
+        sessionId: draft.sessionId,
+        title: draft.title,
+        channel: draft.channel,
+        thumbnail: draft.thumbnail,
+        seo_title: draft.seo_title,
+        meta_description: draft.meta_description,
+        slug: draft.slug,
+        tags: draft.tags,
+        reading_time: draft.reading_time,
+        sections: draft.sections,
+      })
+      setSaved(true)
+    } catch (e: any) {
+      alert('저장 실패: ' + e.message)
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -303,6 +335,17 @@ export default function BlogDraftModal({ data, onClose }: Props) {
               className="px-4 h-10 rounded-xl bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white text-xs transition-colors"
             >
               🔄 다시 생성
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={saving || saved}
+              className={`px-4 h-10 rounded-xl text-xs font-bold transition-colors ${
+                saved
+                  ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                  : 'bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white'
+              } disabled:opacity-60`}
+            >
+              {saved ? '✓ 저장됨' : saving ? '저장 중...' : '💾 저장'}
             </button>
             <div className="flex-1" />
             <button

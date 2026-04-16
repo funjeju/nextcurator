@@ -36,7 +36,7 @@ const VALID_CATEGORIES: Category[] = ['recipe', 'english', 'learning', 'news', '
 function extractJSON(text: string): unknown {
   // 1. 마크다운 코드블록 제거
   let cleaned = text.replace(/```(?:json)?\n?/gi, '').replace(/```/g, '').trim()
-  
+
   // 2. JSON 부분만 추출 ({ ... })
   const match = cleaned.match(/\{[\s\S]*\}/)
   if (!match) throw new Error('응답에서 JSON 구조를 찾을 수 없습니다.')
@@ -44,15 +44,29 @@ function extractJSON(text: string): unknown {
 
   try {
     return JSON.parse(cleaned)
-  } catch (initialError) {
-    // 3. 일반적인 오타 수정 시도 (Trailing comma 등)
+  } catch {
+    // 3. Trailing comma 제거
     try {
-      // 객체나 배열의 마지막 요소 뒤에 붙은 쉼표 제거 (}, ] 앞의 ,)
       cleaned = cleaned.replace(/,\s*([}\]])/g, '$1')
       return JSON.parse(cleaned)
-    } catch (e) {
-      console.error('[JSON Parse Error Source]:', text)
-      throw initialError
+    } catch {
+      // 4. JSON 문자열 값 안의 raw 제어문자 이스케이프 (Gemini가 가끔 넣는 literal \n 등)
+      try {
+        cleaned = cleaned.replace(/"(?:[^"\\]|\\.)*"/g, m =>
+          m.replace(/[\u0000-\u001F]/g, c => {
+            if (c === '\n') return '\\n'
+            if (c === '\r') return '\\r'
+            if (c === '\t') return '\\t'
+            if (c === '\b') return '\\b'
+            if (c === '\f') return '\\f'
+            return ''  // 나머지 제어문자는 제거
+          })
+        )
+        return JSON.parse(cleaned)
+      } catch (finalError) {
+        console.error('[JSON Parse Error Source]:', text.slice(0, 500))
+        throw finalError
+      }
     }
   }
 }
