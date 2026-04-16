@@ -50,7 +50,14 @@ export default function NewsSummary({ data, onSeek, sessionId, commentCounts = {
               <CommentBubble sessionId={sessionId} segmentId="three-line" segmentLabel="3줄 요약" initialCount={commentCounts['three-line'] ?? 0} />
             )}
           </div>
-          <p className="text-zinc-200 text-sm leading-relaxed">{data.three_line_summary}</p>
+          <div className="text-zinc-200 text-sm leading-relaxed space-y-1.5">
+            {data.three_line_summary.split('\n').filter(Boolean).map((line, i) => (
+              <p key={i} className="flex gap-2">
+                <span className="shrink-0 text-blue-400 font-bold">{i + 1}.</span>
+                <span>{line}</span>
+              </p>
+            ))}
+          </div>
           {showTranslate && <TranslateButton text={data.three_line_summary} className="mt-2" />}
         </div>
 

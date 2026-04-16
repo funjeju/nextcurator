@@ -29,9 +29,11 @@ interface Props {
   commentCounts?: Record<string, number>
   onComment?: (segmentId: string, segmentLabel: string) => void
   transcriptSource?: string  // 'pdf' | 'web' | 'youtube' | ...
+  videoId?: string
+  thumbnail?: string
 }
 
-export default function SummaryShell({ category, summary, onSeek, sessionId, commentCounts, onComment, transcriptSource }: Props) {
+export default function SummaryShell({ category, summary, onSeek, sessionId, commentCounts, onComment, transcriptSource, videoId, thumbnail }: Props) {
   const hideTimestamp = transcriptSource === 'pdf' || transcriptSource === 'web'
   const showTranslate = isLikelyForeign(summary)
   const sharedProps = { sessionId, commentCounts, onComment, hideTimestamp, showTranslate }
@@ -47,7 +49,7 @@ export default function SummaryShell({ category, summary, onSeek, sessionId, com
     case 'selfdev':
       return <SelfDevSummary data={summary as SelfDevSummaryType} onSeek={onSeek} {...sharedProps} />
     case 'travel':
-      return <TravelSummary data={summary as TravelSummaryType} onSeek={onSeek} {...sharedProps} />
+      return <TravelSummary data={summary as TravelSummaryType} onSeek={onSeek} {...sharedProps} videoId={videoId} thumbnail={thumbnail} />
     case 'story':
       return <StorySummary data={summary as StorySummaryType} onSeek={onSeek} {...sharedProps} />
     case 'tips':

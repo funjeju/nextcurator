@@ -14,6 +14,7 @@ import SummaryPdfTemplate from '@/components/pdf/SummaryPdfTemplate'
 import QuizPanel from '@/components/quiz/QuizPanel'
 import DocentChat from '@/components/chat/DocentChat'
 import CreateRoomModal from '@/components/room/CreateRoomModal'
+import BlogDraftModal from '@/components/blog/BlogDraftModal'
 import RoomClient from '@/app/room/[roomId]/RoomClient'
 import WorksheetPanel from '@/components/worksheet/WorksheetPanel'
 import type { QuizData, WorksheetData } from '@/types/summary'
@@ -70,6 +71,7 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
   const playerRef = useRef<YT.Player | null>(null)
   const [showSaveModal, setShowSaveModal] = useState(false)
   const [showRoomModal, setShowRoomModal] = useState(false)
+  const [showBlogModal, setShowBlogModal] = useState(false)
   const [activeRoomId, setActiveRoomId] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'summary' | 'transcript' | 'segments' | 'reanalyze'>('summary')
   const [sharing, setSharing] = useState(false)
@@ -724,6 +726,8 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
                 onComment={handleComment}
                 commentCounts={commentCounts}
                 transcriptSource={data.transcriptSource}
+                videoId={data.videoId}
+                thumbnail={data.thumbnail}
               />
               {/* 퀴즈 버튼 — 영어/학습 카테고리만 */}
               {(data.category === 'english' || data.category === 'learning') && (
@@ -958,6 +962,15 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
             </button>
           )}
 
+          {/* 블로그 초안 버튼 */}
+          <button
+            onClick={() => setShowBlogModal(true)}
+            className="h-12 w-12 border border-white/10 bg-[#32302e] text-white hover:bg-orange-500/15 hover:border-orange-500/30 hover:text-orange-400 transition-all rounded-xl flex items-center justify-center"
+            title="블로그 초안 생성"
+          >
+            <span className="text-lg leading-none">✍️</span>
+          </button>
+
           {/* PDF 다운로드 버튼 */}
           <button
             onClick={handleDownloadPdf}
@@ -1065,6 +1078,13 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
         <RoomClient
           roomId={activeRoomId}
           onClose={() => setActiveRoomId(null)}
+        />
+      )}
+
+      {showBlogModal && (
+        <BlogDraftModal
+          data={data}
+          onClose={() => setShowBlogModal(false)}
         />
       )}
 

@@ -1,11 +1,15 @@
 'use client'
 
+import { useState } from 'react'
 import { TravelSummary as TravelSummaryType } from '@/types/summary'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import TimestampBadge from './TimestampBadge'
 import CopyButton from './CopyButton'
 import CommentBubble from '@/components/comments/CommentBubble'
+import WishSpotModal from '@/components/travel/WishSpotModal'
+import { useAuth } from '@/providers/AuthProvider'
+import { getLocalUserId } from '@/lib/user'
 
 interface Props {
   data: TravelSummaryType
@@ -14,12 +18,24 @@ interface Props {
   commentCounts?: Record<string, number>
   onComment?: (segmentId: string, segmentLabel: string) => void
   hideTimestamp?: boolean
+  videoId?: string
+  thumbnail?: string
 }
 
-export default function TravelSummary({ data, onSeek, sessionId, commentCounts = {} }: Props) {
+export default function TravelSummary({ data, onSeek, sessionId, commentCounts = {}, videoId, thumbnail }: Props) {
+  const { user, openAuthModal } = useAuth()
+  const [wishSpot, setWishSpot] = useState<{ name: string; desc: string; price?: string; timestamp: string } | null>(null)
+
+  const handleWish = (place: { name: string; desc: string; price?: string; timestamp: string }) => {
+    if (!user) { openAuthModal(); return }
+    setWishSpot(place)
+  }
+
+  const userId = user?.uid ?? getLocalUserId()
   const copyText = `${data.destination}\n\n방문지:\n${data.places.map(p => `[${p.timestamp}] ${p.name}\n${p.desc}${p.price ? `\n가격: ${p.price}` : ''}${p.tip ? `\n팁: ${p.tip}` : ''}`).join('\n\n')}\n\n추천 동선: ${data.route}\n\n실용 정보:\n${data.practical_info.map(i => `• ${i}`).join('\n')}\n\n주의사항:\n${data.warnings.map(w => `⚠️ ${w}`).join('\n')}`
 
   return (
+    <>
     <Card className="bg-zinc-900 border-zinc-800">
       <CardHeader className="flex flex-row items-center justify-between">
         <div>
@@ -42,9 +58,18 @@ export default function TravelSummary({ data, onSeek, sessionId, commentCounts =
                     <TimestampBadge timestamp={place.timestamp} onSeek={onSeek} />
                     <span className="text-cyan-300 font-medium text-sm">{place.name}</span>
                     {place.price && <span className="text-zinc-400 text-xs">{place.price}</span>}
-                    {sessionId && (
-                      <CommentBubble sessionId={sessionId} segmentId={segId} segmentLabel={`방문지 - ${place.name}`} initialCount={commentCounts[segId] ?? 0} />
-                    )}
+                    <div className="ml-auto flex items-center gap-1.5">
+                      <button
+                        onClick={() => handleWish(place)}
+                        className="flex items-center gap-1 px-2 py-1 rounded-lg bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-400 text-[11px] font-semibold transition-colors"
+                        title="여행 찜에 저장"
+                      >
+                        🗺️ 찜
+                      </button>
+                      {sessionId && (
+                        <CommentBubble sessionId={sessionId} segmentId={segId} segmentLabel={`방문지 - ${place.name}`} initialCount={commentCounts[segId] ?? 0} />
+                      )}
+                    </div>
                   </div>
                   <p className="text-zinc-300 text-sm">{place.desc}</p>
                   {place.tip && <p className="text-amber-400 text-xs">💡 {place.tip}</p>}
@@ -114,5 +139,23 @@ export default function TravelSummary({ data, onSeek, sessionId, commentCounts =
         )}
       </CardContent>
     </Card>
+
+    {wishSpot && user && (
+      <WishSpotModal
+        userId={userId}
+        spot={{
+          name: wishSpot.name,
+          description: wishSpot.desc,
+          sourceType: 'youtube',
+          sourceVideoId: videoId,
+          sourceSessionId: sessionId,
+          videoTimestamp: wishSpot.timestamp,
+          thumbnail,
+        }}
+        onClose={() => setWishSpot(null)}
+        onAdded={() => setWishSpot(null)}
+      />
+    )}
+    </>
   )
 }

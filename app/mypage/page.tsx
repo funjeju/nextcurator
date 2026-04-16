@@ -18,6 +18,7 @@ import { AVATARS, getAvatarBg } from '@/lib/avatar'
 import { naturalSearch } from '@/lib/nlp-search'
 import FloatingChat from '@/components/chat/FloatingChat'
 import AvatarUploadModal from '@/components/profile/AvatarUploadModal'
+import TravelWishlist from '@/components/travel/TravelWishlist'
 
 /** 두 벡터의 코사인 유사도 (−1 ~ 1) */
 function cosineSimilarity(a: number[], b: number[]): number {
@@ -241,7 +242,7 @@ function FriendsTab({ myUid }: { myUid: string }) {
 
 export default function MyPage() {
   const { user, userProfile, needsProfile, refreshProfile } = useAuth()
-  const [activeTab, setActiveTab] = useState<'library' | 'friends'>('library')
+  const [activeTab, setActiveTab] = useState<'library' | 'friends' | 'travel'>('library')
   const [folders, setFolders] = useState<Folder[]>([])
   const [summaries, setSummaries] = useState<SavedSummary[]>([])
   const [allSummaries, setAllSummaries] = useState<SavedSummary[]>([])
@@ -820,6 +821,14 @@ export default function MyPage() {
               </span>
             )}
           </button>
+          <button
+            onClick={() => setActiveTab('travel')}
+            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+              activeTab === 'travel' ? 'bg-[#3d3a38] text-white shadow' : 'text-[#75716e] hover:text-white'
+            }`}
+          >
+            🧳 여행 찜
+          </button>
         </div>
       </div>
 
@@ -832,6 +841,16 @@ export default function MyPage() {
       {activeTab === 'friends' && !user && (
         <div className="max-w-7xl mx-auto px-6 pb-12 text-center py-20 text-[#75716e]">
           로그인 후 이용할 수 있습니다.
+        </div>
+      )}
+
+      {activeTab === 'travel' && (
+        <div className="max-w-7xl mx-auto px-6 pb-12">
+          <div className="mb-4">
+            <h2 className="text-white font-bold text-lg">🧳 나의 여행 찜</h2>
+            <p className="text-[#75716e] text-sm mt-0.5">여행 영상에서 스팟을 찜하거나 직접 추가해 일정을 만들어보세요.</p>
+          </div>
+          <TravelWishlist userId={user?.uid ?? getLocalUserId()} />
         </div>
       )}
 

@@ -41,11 +41,6 @@ export default function Home() {
         </div>
 
         <UrlInput />
-
-        {/* Footer hint */}
-        <p className="text-[#75716e] text-sm font-medium mt-2">
-          자막이 있는 YouTube 영상이라면 무엇이든 분석할 수 있습니다.
-        </p>
       </div>
       </main>
     </div>
