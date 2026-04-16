@@ -6,22 +6,7 @@ import {
   getSpots, addSpot, deleteSpot, toggleVisited,
   TravelRegion, TravelSpot,
 } from '@/lib/travel'
-
-interface ItinerarySlot {
-  time: string
-  spotName: string
-  activity: string
-  tip?: string
-}
-interface ItineraryDay {
-  day: number
-  summary: string
-  slots: ItinerarySlot[]
-}
-interface Itinerary {
-  days: ItineraryDay[]
-  overall_tip: string
-}
+import ItineraryWizardModal from './ItineraryWizardModal'
 
 const EMOJI_OPTIONS = ['📍', '🏖️', '🏔️', '🏙️', '🌿', '🍜', '🎡', '🛕', '🗼', '🌊']
 
@@ -49,11 +34,8 @@ export default function TravelWishlist({ userId }: { userId: string }) {
   const [spotDesc, setSpotDesc] = useState('')
   const [savingSpot, setSavingSpot] = useState(false)
 
-  // 일정 생성
-  const [itinerary, setItinerary] = useState<Itinerary | null>(null)
-  const [showItinerary, setShowItinerary] = useState(false)
-  const [generatingItinerary, setGeneratingItinerary] = useState(false)
-  const [itineraryDays, setItineraryDays] = useState(2)
+  // 일정 생성 위자드
+  const [showWizard, setShowWizard] = useState(false)
 
   useEffect(() => {
     if (!userId || userId.startsWith('user_')) { setLoadingRegions(false); return }
@@ -99,11 +81,15 @@ export default function TravelWishlist({ userId }: { userId: string }) {
 
   const handleDeleteRegion = async (r: TravelRegion) => {
     if (!confirm(`"${r.name}" 폴더와 포함된 스팟을 모두 삭제할까요?`)) return
-    await deleteRegion(r.id)
-    setRegions(prev => prev.filter(x => x.id !== r.id))
-    if (selectedId === r.id) {
-      const remaining = regions.filter(x => x.id !== r.id)
-      setSelectedId(remaining[0]?.id ?? null)
+    try {
+      await deleteRegion(r.id, userId)
+      setRegions(prev => prev.filter(x => x.id !== r.id))
+      if (selectedId === r.id) {
+        const remaining = regions.filter(x => x.id !== r.id)
+        setSelectedId(remaining[0]?.id ?? null)
+      }
+    } catch (e: any) {
+      alert('삭제 실패: ' + (e.message || '알 수 없는 오류'))
     }
   }
 
@@ -144,31 +130,6 @@ export default function TravelWishlist({ userId }: { userId: string }) {
   const handleToggle = async (s: TravelSpot) => {
     await toggleVisited(s.id, !s.visited)
     setSpots(prev => prev.map(x => x.id === s.id ? { ...x, visited: !x.visited } : x))
-  }
-
-  const handleGenerateItinerary = async () => {
-    if (spots.length === 0) return
-    setGeneratingItinerary(true)
-    setItinerary(null)
-    try {
-      const region = regions.find(r => r.id === selectedId)
-      const res = await fetch('/api/travel-itinerary', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          spots: spots.map(s => ({ name: s.name, address: s.address, description: s.description })),
-          regionName: region?.name,
-          days: itineraryDays,
-        }),
-      })
-      if (!res.ok) throw new Error((await res.json()).error)
-      setItinerary(await res.json())
-      setShowItinerary(true)
-    } catch (e: any) {
-      alert('일정 생성 실패: ' + e.message)
-    } finally {
-      setGeneratingItinerary(false)
-    }
   }
 
   const kakaoMapUrl = (name: string) =>
@@ -314,33 +275,13 @@ export default function TravelWishlist({ userId }: { userId: string }) {
               </button>
               {spots.length > 0 && (
                 <button
-                  onClick={handleGenerateItinerary}
-                  disabled={generatingItinerary}
-                  className="text-xs px-3 py-2 rounded-xl bg-orange-500/15 text-orange-400 hover:bg-orange-500/25 font-bold transition-colors shrink-0 flex items-center gap-1.5 disabled:opacity-50"
+                  onClick={() => setShowWizard(true)}
+                  className="text-xs px-3 py-2 rounded-xl bg-orange-500/15 text-orange-400 hover:bg-orange-500/25 font-bold transition-colors shrink-0 flex items-center gap-1.5"
                 >
-                  {generatingItinerary ? (
-                    <span className="w-3 h-3 rounded-full border border-orange-400 border-t-transparent animate-spin inline-block" />
-                  ) : '✨'}
-                  AI 일정
+                  ✨ AI 일정
                 </button>
               )}
             </div>
-
-            {/* 일정 일수 선택 (AI 일정 버튼 근처) */}
-            {spots.length > 0 && (
-              <div className="flex items-center gap-2 mb-3">
-                <span className="text-xs text-zinc-500">여행 기간:</span>
-                {[1, 2, 3, 4, 5].map(d => (
-                  <button
-                    key={d}
-                    onClick={() => setItineraryDays(d)}
-                    className={`text-xs px-2.5 py-1 rounded-lg transition-colors ${
-                      itineraryDays === d ? 'bg-orange-500 text-white font-bold' : 'bg-white/5 text-zinc-400 hover:bg-white/10'
-                    }`}
-                  >{d}일</button>
-                ))}
-              </div>
-            )}
 
             {/* 스팟 수동 추가 폼 */}
             {addingSpot && (
@@ -493,67 +434,13 @@ export default function TravelWishlist({ userId }: { userId: string }) {
         )}
       </main>
 
-      {/* AI 일정 모달 */}
-      {showItinerary && itinerary && (
-        <div className="fixed inset-0 z-[150] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowItinerary(false)}>
-          <div
-            className="bg-[#1c1a18] border border-white/10 rounded-3xl w-full max-w-2xl max-h-[90vh] flex flex-col shadow-2xl"
-            onClick={e => e.stopPropagation()}
-          >
-            <div className="shrink-0 flex items-center justify-between px-6 pt-6 pb-4 border-b border-white/5">
-              <div>
-                <h2 className="text-white font-bold text-lg">✨ AI 여행 일정</h2>
-                <p className="text-zinc-500 text-xs mt-0.5">{selectedRegion?.emoji} {selectedRegion?.name} · {itineraryDays}일 코스</p>
-              </div>
-              <button onClick={() => setShowItinerary(false)} className="text-zinc-500 hover:text-white text-xl">✕</button>
-            </div>
-            <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
-              {itinerary.days.map(day => (
-                <div key={day.day}>
-                  <div className="flex items-center gap-2 mb-3">
-                    <span className="w-7 h-7 rounded-full bg-orange-500 text-white text-xs font-black flex items-center justify-center shrink-0">
-                      {day.day}
-                    </span>
-                    <p className="text-zinc-300 text-sm font-semibold">{day.summary}</p>
-                  </div>
-                  <div className="space-y-2 ml-9">
-                    {day.slots.map((slot, i) => (
-                      <div key={i} className="flex gap-3 bg-white/4 rounded-2xl p-3">
-                        <div className="shrink-0 text-right w-16">
-                          <span className="text-orange-400 text-xs font-semibold">{slot.time}</span>
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-cyan-300 text-sm font-semibold">{slot.spotName}</p>
-                          <p className="text-zinc-400 text-xs mt-0.5 leading-relaxed">{slot.activity}</p>
-                          {slot.tip && <p className="text-amber-400/70 text-xs mt-1">💡 {slot.tip}</p>}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
-              {itinerary.overall_tip && (
-                <div className="bg-orange-500/10 border border-orange-500/20 rounded-2xl p-4">
-                  <p className="text-orange-300 text-xs font-semibold mb-1">전체 여행 팁</p>
-                  <p className="text-zinc-300 text-sm">{itinerary.overall_tip}</p>
-                </div>
-              )}
-            </div>
-            <div className="shrink-0 px-6 py-4 border-t border-white/5 flex gap-2">
-              <button
-                onClick={handleGenerateItinerary}
-                disabled={generatingItinerary}
-                className="px-4 h-10 rounded-xl bg-white/5 hover:bg-white/10 text-zinc-400 text-xs transition-colors disabled:opacity-50"
-              >
-                🔄 다시 생성
-              </button>
-              <div className="flex-1" />
-              <button onClick={() => setShowItinerary(false)} className="px-6 h-10 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-sm font-bold transition-colors">
-                닫기
-              </button>
-            </div>
-          </div>
-        </div>
+      {/* AI 일정 위자드 모달 */}
+      {showWizard && selectedRegion && (
+        <ItineraryWizardModal
+          region={selectedRegion}
+          spots={spots}
+          onClose={() => setShowWizard(false)}
+        />
       )}
     </div>
   )

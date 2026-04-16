@@ -60,12 +60,15 @@ export async function renameRegion(regionId: string, name: string, emoji: string
   await updateDoc(doc(db, 'travel_regions', regionId), { name, emoji })
 }
 
-export async function deleteRegion(regionId: string): Promise<void> {
+export async function deleteRegion(regionId: string, userId: string): Promise<void> {
+  // userId로만 조회 후 regionId 클라이언트 필터 (복합 인덱스 불필요)
   const spotsSnap = await getDocs(
-    query(collection(db, 'travel_spots'), where('regionId', '==', regionId)),
+    query(collection(db, 'travel_spots'), where('userId', '==', userId)),
   )
   const batch = writeBatch(db)
-  spotsSnap.docs.forEach(d => batch.delete(d.ref))
+  spotsSnap.docs
+    .filter(d => d.data().regionId === regionId)
+    .forEach(d => batch.delete(d.ref))
   batch.delete(doc(db, 'travel_regions', regionId))
   await batch.commit()
 }
