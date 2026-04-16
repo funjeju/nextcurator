@@ -1055,30 +1055,39 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
                       <p className="text-zinc-400 text-xs font-semibold mb-2">📦 상품 / 브랜드</p>
                       <div className="space-y-2">
                         {extractedItems.products.map((p: any, i: number) => (
-                          <div key={i} className="flex items-start gap-3 bg-[#32302e] rounded-xl p-3">
+                          <a
+                            key={i}
+                            href={`https://www.coupang.com/np/search?q=${encodeURIComponent(p.name)}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-3 bg-[#32302e] rounded-xl p-3 hover:bg-[#3a3836] transition-colors group"
+                          >
+                            {/* 쿠팡 썸네일 플레이스홀더 */}
+                            <div className="w-14 h-14 rounded-lg bg-[#fff] flex items-center justify-center shrink-0 overflow-hidden border border-white/10">
+                              <img
+                                src={`https://img1.coupangcdn.com/image/coupang/common/logo_coupang_w350.png`}
+                                alt="coupang"
+                                className="w-10 object-contain"
+                                onError={(e) => { (e.target as HTMLImageElement).src = 'https://www.coupang.com/favicon.ico' }}
+                              />
+                            </div>
+                            {/* 상품 정보 */}
                             <div className="flex-1 min-w-0">
-                              <p className="text-white text-sm font-semibold">{p.name}</p>
-                              <p className="text-zinc-500 text-xs mt-0.5 leading-relaxed">{p.context}</p>
+                              <p className="text-white text-sm font-semibold leading-snug line-clamp-2">{p.name}</p>
+                              <p className="text-zinc-500 text-xs mt-0.5 leading-relaxed line-clamp-1">{p.context}</p>
+                              <div className="flex items-center gap-1.5 mt-1.5">
+                                <span className="text-[10px] font-black text-[#e4003a] tracking-tight">COUPANG</span>
+                                <span className="text-zinc-600 text-[10px]">·</span>
+                                <span className="text-zinc-500 text-[10px]">link.coupang.com</span>
+                              </div>
                             </div>
-                            <div className="flex flex-col gap-1 shrink-0">
-                              <a
-                                href={`https://search.shopping.naver.com/search/all?query=${encodeURIComponent(p.name)}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-[10px] px-2 py-1 rounded-lg bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25 font-bold transition-colors"
-                              >
-                                N쇼핑
-                              </a>
-                              <a
-                                href={`https://www.coupang.com/np/search?q=${encodeURIComponent(p.name)}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-[10px] px-2 py-1 rounded-lg bg-red-500/15 text-red-400 hover:bg-red-500/25 font-bold transition-colors"
-                              >
-                                쿠팡
-                              </a>
+                            {/* 구매하러가기 버튼 */}
+                            <div className="shrink-0">
+                              <span className="text-[10px] px-2.5 py-1.5 rounded-lg bg-[#e4003a] text-white font-bold whitespace-nowrap group-hover:bg-[#c8002f] transition-colors">
+                                구매하러가기
+                              </span>
                             </div>
-                          </div>
+                          </a>
                         ))}
                       </div>
                     </div>
