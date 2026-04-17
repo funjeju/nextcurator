@@ -8,11 +8,15 @@ interface ChatMsg {
   isQuote?: boolean   // 드래그 인용 메시지 표시
 }
 
+interface YoutubePlayerRef {
+  getCurrentTime?: () => number
+}
+
 interface DocentChatProps {
   title: string
   category: string
   summaryData: unknown   // SummaryData JSON
-  playerRef?: React.RefObject<YT.Player | null>
+  playerRef?: React.RefObject<YoutubePlayerRef | null>
   transcript?: string   // 원본 자막 전문
 }
 
@@ -154,11 +158,11 @@ export default function DocentChat({ title, category, summaryData, playerRef, tr
 
     if (!open) setOpen(true)
 
-    // 현재 재생 위치 및 주변 자막 추출
+    // 현재 재생 위치 및 주변 자막 추출 (위치 참고용)
     const currentSec = playerRef?.current?.getCurrentTime?.() ?? null
     const nearbyTranscript = currentSec !== null
       ? extractNearbyTranscript(transcript, currentSec)
-      : transcript.slice(0, 1500)
+      : ''
     const positionHint = currentSec !== null
       ? `[현재 재생 위치: ${fmtTime(currentSec)}]`
       : ''
@@ -170,6 +174,7 @@ export default function DocentChat({ title, category, summaryData, playerRef, tr
         body: JSON.stringify({
           messages: newMessages.map(m => ({ role: m.role, content: m.content })),
           summaryContext: JSON.stringify(summaryData),
+          fullTranscript: transcript,
           title,
           category,
           positionHint,

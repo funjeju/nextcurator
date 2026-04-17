@@ -109,6 +109,7 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
 
   // 타임스탬프 북마크
   const [showBookmarkPanel, setShowBookmarkPanel] = useState(false)
+  const [showBookmarkPanelTop, setShowBookmarkPanelTop] = useState(false)
   const [bookmarkMemo, setBookmarkMemo] = useState('')
   const [bookmarkSec, setBookmarkSec] = useState(0)
   const [bookmarkSaving, setBookmarkSaving] = useState(false)
@@ -536,6 +537,17 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
     setBookmarkMemo('')
     setBookmarkSaved(false)
     setShowBookmarkPanel(v => !v)
+    setShowBookmarkPanelTop(false)
+  }
+
+  const handleBookmarkClickTop = () => {
+    if (!user) { openAuthModal('login'); return }
+    const sec = playerRef.current ? playerRef.current.getCurrentTime() : 0
+    setBookmarkSec(sec)
+    setBookmarkMemo('')
+    setBookmarkSaved(false)
+    setShowBookmarkPanelTop(v => !v)
+    setShowBookmarkPanel(false)
   }
 
   const handleBookmarkSave = async () => {
@@ -553,7 +565,10 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
         memo: bookmarkMemo.trim(),
       })
       setBookmarkSaved(true)
-      setTimeout(() => setShowBookmarkPanel(false), 800)
+      setTimeout(() => {
+        setShowBookmarkPanel(false)
+        setShowBookmarkPanelTop(false)
+      }, 800)
     } catch {
       alert('북마크 저장에 실패했습니다.')
     } finally {
@@ -707,9 +722,9 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
               {/* 현재 시점 북마크 */}
               <div className="relative">
                 <button
-                  onClick={handleBookmarkClick}
+                  onClick={handleBookmarkClickTop}
                   className={`flex items-center gap-1 px-3 h-7 rounded-lg text-xs transition-colors border ${
-                    showBookmarkPanel
+                    showBookmarkPanelTop
                       ? 'bg-yellow-500/20 border-yellow-500/40 text-yellow-400'
                       : 'bg-white/5 hover:bg-yellow-500/15 border-white/5 hover:border-yellow-500/30 text-zinc-400 hover:text-yellow-400'
                   }`}
@@ -717,11 +732,11 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
                 >
                   🔖 <span>북마크</span>
                 </button>
-                {showBookmarkPanel && (
+                {showBookmarkPanelTop && (
                   <div className="absolute bottom-9 right-0 w-72 bg-[#1c1a18] border border-yellow-500/20 rounded-2xl p-4 shadow-2xl z-50">
                     <div className="flex items-center justify-between mb-3">
                       <p className="text-yellow-400 text-xs font-bold">🔖 북마크 추가</p>
-                      <button onClick={() => setShowBookmarkPanel(false)} className="text-zinc-500 hover:text-white text-sm">✕</button>
+                      <button onClick={() => setShowBookmarkPanelTop(false)} className="text-zinc-500 hover:text-white text-sm">✕</button>
                     </div>
                     <div className="flex items-center gap-2 mb-3">
                       <span className="text-orange-400 font-mono text-sm font-bold bg-orange-500/10 px-2 py-1 rounded-lg border border-orange-500/20">

@@ -10,9 +10,10 @@ interface ChatMessage {
 
 export async function POST(req: NextRequest) {
   try {
-    const { messages, summaryContext, title, category, positionHint, nearbyTranscript }: {
+    const { messages, summaryContext, fullTranscript, title, category, positionHint, nearbyTranscript }: {
       messages: ChatMessage[]
       summaryContext: string
+      fullTranscript?: string
       title: string
       category: string
       positionHint?: string
@@ -23,29 +24,34 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: '메시지가 필요합니다.' }, { status: 400 })
     }
 
-    const trimmedContext = summaryContext.length > 2000
-      ? summaryContext.slice(0, 2000) + '...(생략)'
-      : summaryContext
+    // 전체 자막: Gemini 2.5 Flash는 1M 토큰 컨텍스트 — 5시간 영상도 80K자면 충분
+    const fullTranscriptSection = fullTranscript
+      ? `\n---전체 자막 전문---\n${fullTranscript.slice(0, 80000)}\n---`
+      : ''
 
-    const transcriptSection = nearbyTranscript
-      ? `\n---현재 재생 구간 자막 (${positionHint ?? ''})---\n${nearbyTranscript.slice(0, 1200)}\n---`
+    // 현재 구간 자막: 위치 기반 질문용 보조 참고
+    const nearbySection = nearbyTranscript
+      ? `\n---현재 재생 구간 자막 (${positionHint ?? ''})---\n${nearbyTranscript}\n---`
+      : ''
+
+    // 요약: 메타 정보 및 전반적 구조 파악용
+    const summarySection = summaryContext
+      ? `\n---콘텐츠 요약 (참고용)---\n${summaryContext.slice(0, 1500)}\n---`
       : ''
 
     const systemInstructionText = `당신은 NextCurator의 AI 도슨트입니다.
-도슨트(Docent)는 전시·강연 내용을 관람객에게 깊이 있게 해설해주는 전문 가이드입니다.
-당신은 아래 콘텐츠 요약과 현재 재생 구간 자막을 바탕으로 사용자의 질문에 정확하게 답변합니다.
+도슨트(Docent)는 영상 내용을 시청자에게 깊이 있게 해설해주는 전문 가이드입니다.
 
 ---콘텐츠 정보---
 제목: ${title}
 카테고리: ${category}
-요약 내용:
-${trimmedContext}
----${transcriptSection}
+${fullTranscriptSection}${nearbySection}${summarySection}
 
 역할 및 규칙:
-- 사용자가 "방금", "지금", "여기" 같은 표현을 쓰면 "현재 재생 구간 자막"을 우선 참고하세요.
-- 자막에 직접적인 내용이 있으면 자막 기반으로, 없으면 요약 기반으로 답변하세요.
-- 요약·자막 모두에 없는 내용은 일반 지식으로 보완하되 "영상에는 없지만~"으로 구분하세요.
+- 답변의 근거는 반드시 "전체 자막 전문"에서 먼저 찾으세요. 자막이 가장 정확한 1차 정보원입니다.
+- 사용자가 "방금", "지금", "여기서" 같은 표현을 쓰면 "현재 재생 구간 자막"을 추가로 참고하세요.
+- 요약은 전체 구조 파악 시에만 보조적으로 참고하고, 구체적 내용은 자막 기반으로 답변하세요.
+- 자막에 없는 내용을 일반 지식으로 보완할 때는 "영상에는 없지만~"으로 명확히 구분하세요.
 - 어려운 개념은 쉬운 비유나 예시를 들어 설명하세요.
 - 답변은 3~5문장으로 간결하게, 필요시 불릿 포인트 사용.
 - 한국어로 친근하게 답변하세요.`
