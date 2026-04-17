@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import type { TravelRegion, TravelSpot } from '@/lib/travel'
+import ItineraryDiary, { type ItineraryResult } from '@/components/travel/ItineraryDiary'
 import { saveItinerary } from '@/lib/travelItinerary'
 import { useAuth } from '@/providers/AuthProvider'
 
@@ -16,25 +17,6 @@ interface AccomEntry {
   preferredArea: string // 미예약 시 선호 지역
 }
 
-interface ItinerarySlot {
-  time: string
-  spotName: string
-  activity: string
-  tip?: string
-  isRecommended?: boolean
-}
-interface ItineraryDay {
-  day: number
-  date?: string
-  summary: string
-  slots: ItinerarySlot[]
-}
-interface ItineraryResult {
-  days: ItineraryDay[]
-  overall_tip: string
-  accommodation_suggestion?: string | null
-  transport_tips?: string
-}
 
 interface Props {
   region: TravelRegion
@@ -385,80 +367,16 @@ export default function ItineraryWizardModal({ region, spots, onClose }: Props) 
 
           {/* ── STEP: RESULT ── */}
           {step === 'result' && result && (
-            <div className="space-y-5">
-              {/* 요약 배지 */}
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-xs px-2.5 py-1 rounded-lg bg-orange-500/15 text-orange-400 border border-orange-500/20 font-semibold">
-                  {nights}박 {days}일
-                </span>
-                <span className="text-xs px-2.5 py-1 rounded-lg bg-zinc-700 text-zinc-300 font-semibold">
-                  {formatDate(startDate)} → {formatDate(endDate)}
-                </span>
-                {mode === 'with_recommendations' && (
-                  <span className="text-xs px-2.5 py-1 rounded-lg bg-cyan-500/15 text-cyan-400 border border-cyan-500/20 font-semibold">
-                    AI 추천 포함
-                  </span>
-                )}
-              </div>
-
-              {/* 숙소 추천 (미예약 + AI 추천이 있을 때) */}
-              {result.accommodation_suggestion && (
-                <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl px-4 py-3">
-                  <p className="text-amber-400 text-[10px] font-bold uppercase tracking-wider mb-1">🏨 숙소 추천</p>
-                  <p className="text-zinc-300 text-sm leading-relaxed">{result.accommodation_suggestion}</p>
-                </div>
-              )}
-
-              {/* 날짜별 일정 */}
-              {result.days.map(day => (
-                <div key={day.day}>
-                  <div className="flex items-center gap-2 mb-3">
-                    <span className="w-7 h-7 rounded-full bg-gradient-to-br from-orange-500 to-pink-500 text-white text-xs font-black flex items-center justify-center shrink-0">
-                      {day.day}
-                    </span>
-                    <div>
-                      <p className="text-white font-semibold text-sm">{day.summary}</p>
-                      {day.date && <p className="text-zinc-600 text-xs">{formatDate(day.date)}</p>}
-                    </div>
-                  </div>
-                  <div className="space-y-2 ml-9">
-                    {day.slots.map((slot, i) => (
-                      <div key={i} className={`flex gap-3 rounded-2xl p-3 ${slot.isRecommended ? 'bg-cyan-500/5 border border-cyan-500/15' : 'bg-white/4 border border-white/5'}`}>
-                        <div className="shrink-0 w-16 text-right">
-                          <span className="text-orange-400 text-xs font-semibold">{slot.time}</span>
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <p className="text-cyan-300 text-sm font-semibold">{slot.spotName}</p>
-                            {slot.isRecommended && (
-                              <span className="text-[9px] px-1.5 py-0.5 rounded bg-cyan-500/15 text-cyan-400 font-bold border border-cyan-500/20">AI 추천</span>
-                            )}
-                          </div>
-                          <p className="text-zinc-400 text-xs mt-0.5 leading-relaxed">{slot.activity}</p>
-                          {slot.tip && <p className="text-amber-400/80 text-xs mt-1">💡 {slot.tip}</p>}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
-
-              {/* 이동수단 팁 */}
-              {result.transport_tips && (
-                <div className="bg-white/4 border border-white/8 rounded-2xl px-4 py-3">
-                  <p className="text-zinc-500 text-[10px] font-bold uppercase tracking-wider mb-1">🚗 이동 팁</p>
-                  <p className="text-zinc-300 text-sm leading-relaxed">{result.transport_tips}</p>
-                </div>
-              )}
-
-              {/* 전체 꿀팁 */}
-              {result.overall_tip && (
-                <div className="bg-orange-500/8 border border-orange-500/15 rounded-2xl px-4 py-3">
-                  <p className="text-orange-400 text-[10px] font-bold uppercase tracking-wider mb-1">✨ 전체 꿀팁</p>
-                  <p className="text-zinc-300 text-sm leading-relaxed">{result.overall_tip}</p>
-                </div>
-              )}
-            </div>
+            <ItineraryDiary
+              result={result}
+              regionName={region.name}
+              regionEmoji={region.emoji}
+              startDate={startDate}
+              endDate={endDate}
+              nights={nights}
+              days={days}
+              mode={mode!}
+            />
           )}
         </div>
 
