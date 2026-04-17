@@ -7,12 +7,14 @@ import { getTotalUnread } from '@/lib/db'
 import { getAvatarBg } from '@/lib/avatar'
 import MessagesModal from '@/components/messages/MessagesModal'
 import ReviewBanner from '@/components/classroom/ReviewBanner'
+import ContactModal from '@/components/common/ContactModal'
 
 export default function Header({ title = 'SSOKTUBE' }: { title?: string }) {
   const { user, userProfile, signOut, openAuthModal } = useAuth()
   const [unread, setUnread] = useState(0)
   const [showMessages, setShowMessages] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [showContact, setShowContact] = useState(false)
   const mobileMenuRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -86,6 +88,13 @@ export default function Header({ title = 'SSOKTUBE' }: { title?: string }) {
                 + 클래스 만들기
               </Link>
             )}
+            {/* 문의·제안 */}
+            <button
+              onClick={() => setShowContact(true)}
+              className="text-[#a4a09c] hover:text-white transition-colors text-xs"
+            >
+              문의 · 제안
+            </button>
           </nav>
         </div>
 
@@ -131,6 +140,13 @@ export default function Header({ title = 'SSOKTUBE' }: { title?: string }) {
                   </>
                 )}
                 <div className="border-t border-white/5 mt-1 pt-1">
+                  <button
+                    onClick={() => { setShowContact(true); setMobileMenuOpen(false) }}
+                    className="w-full text-left flex items-center gap-2 px-4 py-2.5 text-sm text-[#a4a09c] hover:text-white hover:bg-white/5 transition-colors"
+                  >
+                    <span>📬</span> 문의 · 제안
+                  </button>
+                  <div className="border-t border-white/5 my-1" />
                   {user ? (
                     <button onClick={() => { signOut(); setMobileMenuOpen(false) }} className="w-full text-left flex items-center gap-2 px-4 py-2.5 text-sm text-orange-400 hover:bg-white/5 transition-colors">
                       <span>🚪</span> 로그아웃
@@ -217,6 +233,11 @@ export default function Header({ title = 'SSOKTUBE' }: { title?: string }) {
         <MessagesModal onClose={() => setShowMessages(false)} />
       )}
     </div>
+
+    {/* 문의 모달 */}
+    {showContact && (
+      <ContactModal onClose={() => setShowContact(false)} />
+    )}
     </>
   )
 }
