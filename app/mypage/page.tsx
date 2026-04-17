@@ -652,8 +652,10 @@ export default function MyPage() {
 
       {/* 프로필 + 토큰 카드 */}
       {user && (
-        <div className="max-w-7xl mx-auto px-6 mb-6">
-          <div className="flex items-center gap-4 bg-[#32302e]/60 border border-white/5 rounded-2xl px-5 py-4">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 mb-6">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3 bg-[#32302e]/60 border border-white/5 rounded-2xl px-4 py-4 sm:px-5">
+            {/* 윗줄: 아바타 + 이름 + 토큰 */}
+            <div className="flex items-center gap-3 flex-1 min-w-0">
             {/* 아바타 */}
             <div className="relative shrink-0">
               {(currentPhotoURL || user.photoURL) ? (
@@ -743,104 +745,109 @@ export default function MyPage() {
                 )}
               </p>
               <p className="text-[#75716e] text-xs truncate">{user.email}</p>
-              {/* 선생님 전환 버튼 — role 없는 일반 사용자만 */}
+            </div>
+            {/* 토큰 잔액 (아바타 우측, 모바일에서도 한 줄) */}
+            <div className="flex items-center gap-2 shrink-0 ml-auto">
+              <div className="flex items-center gap-1.5 bg-[#23211f] border border-white/10 rounded-xl px-3 py-2">
+                <span className="text-base">🪙</span>
+                <span className="text-white font-bold text-sm">{userProfile?.tokens ?? 0}</span>
+                <span className="text-[#75716e] text-xs hidden sm:inline">토큰</span>
+              </div>
+              {needsProfile && (
+                <div className="flex items-center gap-1 bg-orange-500/10 border border-orange-500/30 rounded-xl px-2 py-2">
+                  <span className="text-sm">🎁</span>
+                  <span className="text-orange-400 text-xs font-bold hidden sm:inline">+{PROFILE_COMPLETE_TOKENS}</span>
+                </div>
+              )}
+            </div>
+          </div>
+          {/* 아랫줄: 클래스/전환 링크 + 탈퇴 */}
+          <div className="flex items-center justify-between mt-2 px-1">
+            <div>
               {userProfile && !userProfile.role && (
                 <button
                   onClick={() => { setShowTeacherModal(true); setTeacherDoneCode(''); setTeacherError('') }}
-                  className="mt-1 text-[10px] text-emerald-400 hover:text-emerald-300 transition-colors"
+                  className="text-[11px] text-emerald-400 hover:text-emerald-300 transition-colors"
                 >
                   🏫 선생님으로 전환
                 </button>
               )}
               {userProfile?.role === 'teacher' && userProfile.classCode && (
-                <Link href={`/classroom/${userProfile.classCode}`} className="mt-1 text-[10px] text-emerald-400 hover:text-emerald-300 transition-colors block">
+                <Link href={`/classroom/${userProfile.classCode}`} className="text-[11px] text-emerald-400 hover:text-emerald-300 transition-colors">
                   🏫 내 클래스 대시보드 →
                 </Link>
               )}
             </div>
-            {/* 토큰 잔액 */}
-            <div className="flex items-center gap-3 shrink-0">
-              <div className="flex items-center gap-1.5 bg-[#23211f] border border-white/10 rounded-xl px-3 py-2">
-                <span className="text-base">🪙</span>
-                <span className="text-white font-bold text-sm">{userProfile?.tokens ?? 0}</span>
-                <span className="text-[#75716e] text-xs">토큰</span>
-              </div>
-              {/* 프로필 미완성 유도 */}
-              {needsProfile && (
-                <div className="flex items-center gap-1.5 bg-orange-500/10 border border-orange-500/30 rounded-xl px-3 py-2">
-                  <span className="text-sm">🎁</span>
-                  <span className="text-orange-400 text-xs font-bold">+{PROFILE_COMPLETE_TOKENS} 토큰 받기</span>
-                </div>
-              )}
-              {/* 회원탈퇴 */}
-              <button
-                onClick={() => { setShowWithdrawModal(true); setWithdrawConfirm(''); setWithdrawError('') }}
-                className="text-[#4a4745] hover:text-red-500/70 text-[10px] transition-colors px-1"
-                title="회원탈퇴"
-              >
-                탈퇴
-              </button>
-            </div>
+            <button
+              onClick={() => { setShowWithdrawModal(true); setWithdrawConfirm(''); setWithdrawError('') }}
+              className="text-[#4a4745] hover:text-red-500/70 text-[10px] transition-colors"
+              title="회원탈퇴"
+            >
+              탈퇴
+            </button>
+          </div>
           </div>
         </div>
       )}
 
       {/* 탭 */}
-      <div className="max-w-7xl mx-auto px-6 mb-4">
-        <div className="flex gap-1 bg-[#32302e]/60 rounded-xl p-1 w-fit">
-          <button
-            onClick={() => setActiveTab('library')}
-            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
-              activeTab === 'library' ? 'bg-[#3d3a38] text-white shadow' : 'text-[#75716e] hover:text-white'
-            }`}
-          >
-            📚 내 라이브러리
-          </button>
-          <button
-            onClick={() => setActiveTab('friends')}
-            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all flex items-center gap-1.5 ${
-              activeTab === 'friends' ? 'bg-[#3d3a38] text-white shadow' : 'text-[#75716e] hover:text-white'
-            }`}
-          >
-            👥 친구
-            {pendingCount > 0 && (
-              <span className="w-4 h-4 rounded-full bg-orange-500 text-white text-[9px] font-bold flex items-center justify-center">
-                {pendingCount}
-              </span>
-            )}
-          </button>
-          <button
-            onClick={() => setActiveTab('travel')}
-            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
-              activeTab === 'travel' ? 'bg-[#3d3a38] text-white shadow' : 'text-[#75716e] hover:text-white'
-            }`}
-          >
-            🧳 여행 찜
-          </button>
-          <button
-            onClick={() => setActiveTab('blog')}
-            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
-              activeTab === 'blog' ? 'bg-[#3d3a38] text-white shadow' : 'text-[#75716e] hover:text-white'
-            }`}
-          >
-            ✍️ 블로그 초안
-          </button>
-          <button
-            onClick={() => setActiveTab('shorts')}
-            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
-              activeTab === 'shorts' ? 'bg-[#3d3a38] text-white shadow' : 'text-[#75716e] hover:text-white'
-            }`}
-          >
-            ✂️ 숏폼 스크립트
-          </button>
-          <button
-            onClick={() => setActiveTab('bookmarks')}
-            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
-              activeTab === 'bookmarks' ? 'bg-[#3d3a38] text-white shadow' : 'text-[#75716e] hover:text-white'
-            }`}
-          >
-            🔖 북마크
-          </button>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 mb-4">
+        <div className="overflow-x-auto scrollbar-none">
+          <div className="flex gap-1 bg-[#32302e]/60 rounded-xl p-1 w-max min-w-full sm:w-fit">
+            <button
+              onClick={() => setActiveTab('library')}
+              className={`px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all whitespace-nowrap ${
+                activeTab === 'library' ? 'bg-[#3d3a38] text-white shadow' : 'text-[#75716e] hover:text-white'
+              }`}
+            >
+              📚 <span className="hidden xs:inline">내 </span>라이브러리
+            </button>
+            <button
+              onClick={() => setActiveTab('friends')}
+              className={`px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all whitespace-nowrap flex items-center gap-1.5 ${
+                activeTab === 'friends' ? 'bg-[#3d3a38] text-white shadow' : 'text-[#75716e] hover:text-white'
+              }`}
+            >
+              👥 친구
+              {pendingCount > 0 && (
+                <span className="w-4 h-4 rounded-full bg-orange-500 text-white text-[9px] font-bold flex items-center justify-center">
+                  {pendingCount}
+                </span>
+              )}
+            </button>
+            <button
+              onClick={() => setActiveTab('travel')}
+              className={`px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all whitespace-nowrap ${
+                activeTab === 'travel' ? 'bg-[#3d3a38] text-white shadow' : 'text-[#75716e] hover:text-white'
+              }`}
+            >
+              🧳 여행
+            </button>
+            <button
+              onClick={() => setActiveTab('blog')}
+              className={`px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all whitespace-nowrap ${
+                activeTab === 'blog' ? 'bg-[#3d3a38] text-white shadow' : 'text-[#75716e] hover:text-white'
+              }`}
+            >
+              ✍️ 블로그
+            </button>
+            <button
+              onClick={() => setActiveTab('shorts')}
+              className={`px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all whitespace-nowrap ${
+                activeTab === 'shorts' ? 'bg-[#3d3a38] text-white shadow' : 'text-[#75716e] hover:text-white'
+              }`}
+            >
+              ✂️ 숏폼
+            </button>
+            <button
+              onClick={() => setActiveTab('bookmarks')}
+              className={`px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all whitespace-nowrap ${
+                activeTab === 'bookmarks' ? 'bg-[#3d3a38] text-white shadow' : 'text-[#75716e] hover:text-white'
+              }`}
+            >
+              🔖 북마크
+            </button>
+          </div>
         </div>
       </div>
 
@@ -893,7 +900,7 @@ export default function MyPage() {
       {activeTab === 'library' && (
       <>
 
-      <div className="max-w-7xl mx-auto px-6 pb-12 flex flex-col md:flex-row gap-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 pb-12 flex flex-col md:flex-row gap-8">
 
         {/* Sidebar: Folders */}
         <aside className="w-full md:w-64 shrink-0 flex flex-col gap-4">

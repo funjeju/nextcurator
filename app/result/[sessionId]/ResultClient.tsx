@@ -649,14 +649,9 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
     const isMobile = typeof navigator !== 'undefined' && navigator.maxTouchPoints > 0
     try {
       if (isMobile && navigator.share) {
-        // 파일 첨부 없이 URL만 공유 — 카카오 등에서 OG 이미지로 썸네일이 자동 표시됨
-        await navigator.share({
-          title: data.title,
-          text: `${data.title} — SSOKTUBE AI 요약`,
-          url: pageUrl,
-        })
+        // url만 전달 — text를 같이 보내면 당근 등 일부 앱에서 텍스트+URL이 붙어서 링크가 깨짐
+        await navigator.share({ url: pageUrl })
       } else {
-        // PC: 클립보드 복사
         await navigator.clipboard.writeText(pageUrl)
         setShareCopied(true)
         setTimeout(() => setShareCopied(false), 2000)
