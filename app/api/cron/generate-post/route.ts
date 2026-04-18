@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import {
-  getCurationSettings, saveCurationSettings,
   getRecentPublicSummaries, findBestCluster,
   generateMagazinePost, saveCuratedPost, publishCuratedPost,
   shouldGenerate,
 } from '@/lib/magazine'
+import { getCurationSettings, saveCurationSettings } from '@/lib/magazine-server'
 
 export const maxDuration = 120
 

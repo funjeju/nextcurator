@@ -1,9 +1,4 @@
 import { GoogleGenerativeAI } from '@google/generative-ai'
-import { initAdminApp } from '@/lib/firebase-admin'
-import { getFirestore } from 'firebase-admin/firestore'
-
-initAdminApp()
-function adminDb() { return getFirestore() }
 
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GENERATIVE_AI_API_KEY!)
 
@@ -169,16 +164,16 @@ const SETTINGS_DEFAULTS: CurationSettings = {
 
 export async function getCurationSettings(): Promise<CurationSettings> {
   try {
-    const snap = await adminDb().collection('settings').doc('curation').get()
-    if (!snap.exists) return { ...SETTINGS_DEFAULTS }
-    return { ...SETTINGS_DEFAULTS, ...snap.data() } as CurationSettings
+    const data = await fsGet('settings/curation')
+    if (!data) return { ...SETTINGS_DEFAULTS }
+    return { ...SETTINGS_DEFAULTS, ...data } as CurationSettings
   } catch {
     return { ...SETTINGS_DEFAULTS }
   }
 }
 
 export async function saveCurationSettings(settings: Partial<CurationSettings>) {
-  await adminDb().collection('settings').doc('curation').set(settings, { merge: true })
+  await fsPatch('settings/curation', settings as Record<string, unknown>)
 }
 
 // ─── Summaries for curation ──────────────────────────────────────────────────

@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import {
-  getCurationSettings, saveCurationSettings,
   getAllPostsForAdmin, publishCuratedPost, deleteCuratedPost,
   CurationSettings,
 } from '@/lib/magazine'
+import { getCurationSettings, saveCurationSettings } from '@/lib/magazine-server'
 import { checkIsAdminByToken } from '@/lib/admin'
 
 async function verifyAdmin(req: NextRequest): Promise<boolean> {

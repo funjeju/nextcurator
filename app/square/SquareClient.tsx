@@ -201,6 +201,103 @@ function SummaryCard({ item, likedIds, likingIds, user, messagingId, commentCoun
   )
 }
 
+// 매거진 게시판
+function MagazineBoard({ posts }: { posts: CuratedPost[] }) {
+  if (posts.length === 0) {
+    return (
+      <div className="bg-[#32302e]/50 rounded-[32px] p-16 text-center border border-white/5">
+        <span className="text-4xl mb-4 block">✍️</span>
+        <h2 className="text-xl text-white font-bold mb-2">아직 발행된 매거진이 없습니다</h2>
+        <p className="text-[#75716e] text-sm">AI가 영상들을 분석해 블로그 포스트를 자동으로 작성합니다.</p>
+      </div>
+    )
+  }
+
+  const [featured, ...rest] = posts
+
+  return (
+    <div className="space-y-4">
+      {/* 피처드 — 첫 번째 글을 크게 */}
+      <Link
+        href={`/magazine/${featured.slug}`}
+        className="group block rounded-2xl overflow-hidden bg-[#32302e] border border-white/5 hover:border-white/20 transition-all shadow-md"
+      >
+        {featured.heroThumbnail && !featured.heroThumbnail.startsWith('data:') ? (
+          <div className="relative overflow-hidden h-52 sm:h-64 bg-[#23211f]">
+            <img
+              src={featured.heroThumbnail}
+              alt={featured.title}
+              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+            <div className="absolute bottom-0 left-0 right-0 p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-orange-500/90 text-white">✍️ 매거진</span>
+                <span className="text-[10px] text-white/60">{featured.readTime}분 읽기 · 영상 {featured.videoTitles?.length ?? 0}개</span>
+              </div>
+              <h2 className="text-white text-lg sm:text-xl font-black leading-tight line-clamp-2 mb-1">{featured.title}</h2>
+              {featured.subtitle && <p className="text-white/70 text-sm line-clamp-1">{featured.subtitle}</p>}
+            </div>
+          </div>
+        ) : (
+          <div className="p-5">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-orange-500/20 text-orange-400 border border-orange-500/30">✍️ 매거진</span>
+              <span className="text-[10px] text-[#75716e]">{featured.readTime}분 읽기 · 영상 {featured.videoTitles?.length ?? 0}개</span>
+            </div>
+            <h2 className="text-white text-lg font-black leading-tight line-clamp-2 mb-1">{featured.title}</h2>
+            {featured.subtitle && <p className="text-[#a4a09c] text-sm line-clamp-2">{featured.subtitle}</p>}
+          </div>
+        )}
+        {(featured.seoDescription || featured.subtitle) && (
+          <div className="px-4 py-3">
+            <p className="text-[#a4a09c] text-[13px] leading-relaxed line-clamp-2">
+              {featured.seoDescription || featured.subtitle}
+            </p>
+            <div className="flex items-center gap-2 mt-2">
+              {featured.tags?.slice(0, 4).map(tag => (
+                <span key={tag} className="text-[10px] text-[#75716e] bg-white/5 px-1.5 py-0.5 rounded">#{tag}</span>
+              ))}
+              {featured.publishedAt && (
+                <span className="text-[10px] text-[#75716e] ml-auto">
+                  {new Intl.DateTimeFormat('ko-KR', { month: 'short', day: 'numeric' }).format(new Date(featured.publishedAt))}
+                </span>
+              )}
+            </div>
+          </div>
+        )}
+      </Link>
+
+      {/* 나머지 글 — 목록형 */}
+      {rest.length > 0 && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {rest.map(post => (
+            <Link
+              key={post.id}
+              href={`/magazine/${post.slug}`}
+              className="group flex gap-3 rounded-xl bg-[#32302e] border border-white/5 hover:border-white/20 transition-all shadow-sm p-3"
+            >
+              {post.heroThumbnail && !post.heroThumbnail.startsWith('data:') && (
+                <div className="relative shrink-0 w-24 h-16 rounded-lg overflow-hidden bg-[#23211f]">
+                  <img src={post.heroThumbnail} alt={post.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                </div>
+              )}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5 mb-1">
+                  <span className="text-[9px] font-bold text-orange-400">✍️ 매거진</span>
+                  <span className="text-[9px] text-[#75716e]">{post.readTime}분 · {post.videoTitles?.length ?? 0}개 영상</span>
+                </div>
+                <h3 className="text-[#f4f4f5] text-[12px] font-bold leading-snug line-clamp-2 mb-1">{post.title}</h3>
+                <p className="text-[10px] text-[#75716e] line-clamp-1">{post.seoDescription || post.subtitle}</p>
+              </div>
+            </Link>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // 목록형 행
 function SummaryListRow({ item, likedIds, likingIds, user, messagingId, commentCount, onLike, onMessage, onDelete }: {
   item: SavedSummary
@@ -411,6 +508,7 @@ export default function SquareClient({ initialSummaries = [], initialMagazinePos
     if (typeof window !== 'undefined') return (localStorage.getItem('squareViewMode') as ViewMode) ?? 'grid'
     return 'grid'
   })
+  const [activeTab, setActiveTab] = useState<'feed' | 'magazine'>('feed')
   const colCount = useColumnCount()
 
   const toggleViewMode = (mode: ViewMode) => {
@@ -627,6 +725,40 @@ export default function SquareClient({ initialSummaries = [], initialMagazinePos
 
       <div className="max-w-7xl mx-auto px-3 pb-12">
 
+        {/* 탭 바 */}
+        <div className="flex items-center gap-1 mb-5 border-b border-white/8">
+          <button
+            onClick={() => setActiveTab('feed')}
+            className={`px-4 py-2.5 text-sm font-bold transition-all border-b-2 -mb-px ${
+              activeTab === 'feed'
+                ? 'border-orange-500 text-white'
+                : 'border-transparent text-[#75716e] hover:text-white'
+            }`}
+          >
+            피드
+          </button>
+          <button
+            onClick={() => setActiveTab('magazine')}
+            className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-bold transition-all border-b-2 -mb-px ${
+              activeTab === 'magazine'
+                ? 'border-orange-500 text-white'
+                : 'border-transparent text-[#75716e] hover:text-white'
+            }`}
+          >
+            ✍️ 매거진
+            {magazinePosts.length > 0 && (
+              <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-orange-500/20 text-orange-400 border border-orange-500/30">
+                {magazinePosts.length}
+              </span>
+            )}
+          </button>
+        </div>
+
+        {activeTab === 'magazine' ? (
+          <MagazineBoard posts={magazinePosts} />
+        ) : (
+        <>
+
         {/* 검색창 */}
         <div className="flex gap-2 mb-3">
           <div className="relative flex-1">
@@ -781,6 +913,8 @@ export default function SquareClient({ initialSummaries = [], initialMagazinePos
               </div>
             ))}
           </div>
+        )}
+        </> {/* feed tab end */}
         )}
       </div>
 

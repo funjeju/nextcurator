@@ -78,7 +78,7 @@ async function fetchPublicSummariesServer(): Promise<SavedSummary[]> {
 export default async function SquarePage() {
   const [initialSummaries, initialMagazinePosts] = await Promise.all([
     fetchPublicSummariesServer(),
-    getPublishedPosts(10),
+    getPublishedPosts(50),
   ])
 
   return (
