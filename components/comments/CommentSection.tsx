@@ -233,6 +233,11 @@ export default function CommentSection({
                 setReplyTo({ id: c.id, userName: c.userDisplayName })
                 setTimeout(() => textareaRef.current?.focus(), 100)
               }}
+              onReplyToThread={parentComment => {
+                // AI 대댓글에 답글 → 최상위 댓글 스레드에 추가
+                setReplyTo({ id: parentComment.id, userName: 'AI 토론봇' })
+                setTimeout(() => textareaRef.current?.focus(), 100)
+              }}
               onDelete={handleDelete}
               onScrollToSegment={scrollToSegment}
               onAIReply={handleAIReply}
@@ -254,13 +259,14 @@ interface CommentItemProps {
   currentUserId: string | null
   aiLoadingId: string | null
   onReply: (c: Comment) => void
+  onReplyToThread: (parentComment: Comment) => void  // AI 대댓글에 사람이 답글 → 같은 스레드에 추가
   onDelete: (id: string) => void
   onScrollToSegment: (segmentId: string) => void
   onAIReply: (target: Comment, thread: Comment[]) => void
   allComments: Comment[]
 }
 
-function CommentItem({ comment, replies, currentUserId, aiLoadingId, onReply, onDelete, onScrollToSegment, onAIReply, allComments }: CommentItemProps) {
+function CommentItem({ comment, replies, currentUserId, aiLoadingId, onReply, onReplyToThread, onDelete, onScrollToSegment, onAIReply, allComments }: CommentItemProps) {
   return (
     <div className="py-3 flex flex-col gap-2">
       <div className="flex gap-2.5">
@@ -320,7 +326,18 @@ function CommentItem({ comment, replies, currentUserId, aiLoadingId, onReply, on
                 </div>
                 <p className="text-[#d4d4d8] text-xs leading-relaxed break-words">{reply.text}</p>
                 <div className="flex items-center gap-3 mt-1">
-                  {!reply.isAI && (
+                  {reply.isAI ? (
+                    /* AI 댓글 → 사람이 답글 달 수 있음 (같은 스레드에 추가) */
+                    currentUserId && (
+                      <button
+                        onClick={() => onReplyToThread(comment)}
+                        className="text-[10px] text-[#75716e] hover:text-white transition-colors"
+                      >
+                        ↩️ 답글
+                      </button>
+                    )
+                  ) : (
+                    /* 사람 댓글 → AI 반응 버튼 */
                     <AIReplyButton
                       commentId={reply.id}
                       aiLoadingId={aiLoadingId}
