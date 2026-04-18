@@ -86,6 +86,7 @@ export default function DocentChat({ title, category, summaryData, playerRef, tr
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [selectionPopup, setSelectionPopup] = useState<{ x: number; y: number; text: string } | null>(null)
+  const cacheIdRef = useRef<string | undefined>(undefined)
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
@@ -179,9 +180,11 @@ export default function DocentChat({ title, category, summaryData, playerRef, tr
           category,
           positionHint,
           nearbyTranscript,
+          cacheId: cacheIdRef.current,
         }),
       })
       const data = await res.json()
+      if (data.cacheId) cacheIdRef.current = data.cacheId
       setMessages(prev => [...prev, {
         role: 'model',
         content: data.text ?? '오류가 발생했습니다.',
@@ -268,7 +271,7 @@ export default function DocentChat({ title, category, summaryData, playerRef, tr
             </div>
             {messages.length > 0 && (
               <button
-                onClick={() => setMessages([])}
+                onClick={() => { setMessages([]); cacheIdRef.current = undefined }}
                 className="text-[#75716e] hover:text-white text-xs px-2 py-1 rounded-lg hover:bg-white/5 transition-colors shrink-0"
               >
                 초기화

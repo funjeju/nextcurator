@@ -29,7 +29,7 @@ import { getLocalUserId } from '@/lib/user'
 import { getCommentsBySession } from '@/lib/comments'
 import type { SavedSummary } from '@/lib/db'
 import type { Comment } from '@/lib/comments'
-import { addBookmark, secsToLabel } from '@/lib/videoBookmark'
+import { addBookmark, getBookmarks, deleteBookmark, secsToLabel, VideoBookmark } from '@/lib/videoBookmark'
 
 const CATEGORY_INFO: Record<string, { label: string; icon: string; color: string }> = {
   recipe:  { label: '요리',    icon: '🍳', color: 'text-orange-400 border-orange-400' },
@@ -108,12 +108,14 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
   const [showSpeedMenu, setShowSpeedMenu] = useState(false)
 
   // 타임스탬프 북마크
+  const [showBookmarkModal, setShowBookmarkModal] = useState(false)
   const [showBookmarkPanel, setShowBookmarkPanel] = useState(false)
   const [showBookmarkPanelTop, setShowBookmarkPanelTop] = useState(false)
   const [bookmarkMemo, setBookmarkMemo] = useState('')
   const [bookmarkSec, setBookmarkSec] = useState(0)
   const [bookmarkSaving, setBookmarkSaving] = useState(false)
   const [bookmarkSaved, setBookmarkSaved] = useState(false)
+  const [videoBookmarks, setVideoBookmarks] = useState<VideoBookmark[]>([])
 
   // 상품/장소 추출
   const [extractedItems, setExtractedItems] = useState<{ products: any[]; places: any[] } | null>(null)
@@ -267,6 +269,14 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
       })
       .catch(() => {})
   }, [sessionId])
+
+  // 이 영상의 북마크 로드
+  useEffect(() => {
+    if (!user?.uid || !sessionId) return
+    getBookmarks(user.uid).then(all => {
+      setVideoBookmarks(all.filter(b => b.sessionId === sessionId).sort((a, b) => a.timestampSec - b.timestampSec))
+    }).catch(() => {})
+  }, [user?.uid, sessionId, bookmarkSaved])
 
   // 저장 여부 확인
   useEffect(() => {
@@ -530,25 +540,19 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
     logStudentActivity('comment', { text, segmentId })
   }, [logStudentActivity])
 
-  const handleBookmarkClick = () => {
+  const openBookmarkModal = () => {
     if (!user) { openAuthModal('login'); return }
     const sec = playerRef.current ? playerRef.current.getCurrentTime() : 0
     setBookmarkSec(sec)
     setBookmarkMemo('')
     setBookmarkSaved(false)
-    setShowBookmarkPanel(v => !v)
+    setShowBookmarkModal(true)
+    setShowBookmarkPanel(false)
     setShowBookmarkPanelTop(false)
   }
 
-  const handleBookmarkClickTop = () => {
-    if (!user) { openAuthModal('login'); return }
-    const sec = playerRef.current ? playerRef.current.getCurrentTime() : 0
-    setBookmarkSec(sec)
-    setBookmarkMemo('')
-    setBookmarkSaved(false)
-    setShowBookmarkPanelTop(v => !v)
-    setShowBookmarkPanel(false)
-  }
+  const handleBookmarkClick = openBookmarkModal
+  const handleBookmarkClickTop = openBookmarkModal
 
   const handleBookmarkSave = async () => {
     if (!user || !data) return
@@ -727,35 +731,6 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
                 >
                   🔖 <span>북마크</span>
                 </button>
-                {showBookmarkPanelTop && (
-                  <div className="absolute bottom-9 right-0 w-72 bg-[#1c1a18] border border-yellow-500/20 rounded-2xl p-4 shadow-2xl z-50">
-                    <div className="flex items-center justify-between mb-3">
-                      <p className="text-yellow-400 text-xs font-bold">🔖 북마크 추가</p>
-                      <button onClick={() => setShowBookmarkPanelTop(false)} className="text-zinc-500 hover:text-white text-sm">✕</button>
-                    </div>
-                    <div className="flex items-center gap-2 mb-3">
-                      <span className="text-orange-400 font-mono text-sm font-bold bg-orange-500/10 px-2 py-1 rounded-lg border border-orange-500/20">
-                        {secsToLabel(bookmarkSec)}
-                      </span>
-                      <span className="text-zinc-500 text-xs">현재 재생 위치</span>
-                    </div>
-                    <textarea
-                      value={bookmarkMemo}
-                      onChange={e => setBookmarkMemo(e.target.value)}
-                      placeholder="메모 추가 (선택)"
-                      rows={2}
-                      className="w-full bg-[#2a2826] border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:border-yellow-500/40 resize-none mb-3"
-                      autoFocus
-                    />
-                    <button
-                      onClick={handleBookmarkSave}
-                      disabled={bookmarkSaving || bookmarkSaved}
-                      className="w-full py-2 bg-yellow-500 hover:bg-yellow-400 disabled:bg-zinc-700 disabled:text-zinc-500 text-black text-sm font-bold rounded-xl transition-colors"
-                    >
-                      {bookmarkSaved ? '✓ 저장됨' : bookmarkSaving ? '저장 중...' : '저장'}
-                    </button>
-                  </div>
-                )}
               </div>
               <div className="relative">
                 <button
@@ -1291,49 +1266,20 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
             <div className="relative">
               <button
                 onClick={handleBookmarkClick}
-                className={`h-12 w-12 border transition-all rounded-xl flex items-center justify-center ${
-                  showBookmarkPanel
+                className={`h-12 w-12 border transition-all rounded-xl flex items-center justify-center relative ${
+                  showBookmarkModal
                     ? 'bg-yellow-500/20 border-yellow-500/40 text-yellow-400'
                     : 'border-white/10 bg-[#32302e] text-white hover:bg-yellow-500/15 hover:border-yellow-500/30 hover:text-yellow-400'
                 }`}
-                title="현재 시점 북마크"
+                title="북마크"
               >
                 <span className="text-lg leading-none">🔖</span>
+                {videoBookmarks.length > 0 && (
+                  <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-yellow-500 text-black text-[9px] font-black flex items-center justify-center">
+                    {videoBookmarks.length}
+                  </span>
+                )}
               </button>
-              {/* 북마크 패널 */}
-              {showBookmarkPanel && (
-                <div className="absolute bottom-14 right-0 w-72 bg-[#1c1a18] border border-yellow-500/20 rounded-2xl p-4 shadow-2xl z-50">
-                  <div className="flex items-center justify-between mb-3">
-                    <p className="text-yellow-400 text-xs font-bold">🔖 북마크 추가</p>
-                    <button onClick={() => setShowBookmarkPanel(false)} className="text-zinc-500 hover:text-white text-sm">✕</button>
-                  </div>
-                  <div className="flex items-center gap-2 mb-3">
-                    <span className="text-orange-400 font-mono text-sm font-bold bg-orange-500/10 px-2 py-1 rounded-lg border border-orange-500/20">
-                      {secsToLabel(bookmarkSec)}
-                    </span>
-                    <span className="text-zinc-500 text-xs">현재 재생 위치</span>
-                  </div>
-                  <textarea
-                    value={bookmarkMemo}
-                    onChange={e => setBookmarkMemo(e.target.value)}
-                    placeholder="메모 추가 (선택)"
-                    rows={2}
-                    className="w-full bg-[#2a2826] border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:border-yellow-500/40 resize-none mb-3"
-                    autoFocus
-                  />
-                  <button
-                    onClick={handleBookmarkSave}
-                    disabled={bookmarkSaving || bookmarkSaved}
-                    className={`w-full py-2 rounded-xl text-sm font-bold transition-all ${
-                      bookmarkSaved
-                        ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                        : 'bg-yellow-500 hover:bg-yellow-600 text-black disabled:opacity-50'
-                    }`}
-                  >
-                    {bookmarkSaved ? '✓ 저장됨!' : bookmarkSaving ? '저장 중...' : '저장'}
-                  </button>
-                </div>
-              )}
             </div>
           )}
 
@@ -1473,6 +1419,102 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
             getSavedSummaryBySessionId(uid, data.sessionId).then(setSavedItem).catch(() => {})
           }}
         />
+      )}
+
+      {/* ── 북마크 통합 모달 ── */}
+      {showBookmarkModal && data && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowBookmarkModal(false)} />
+          <div className="relative w-full max-w-sm bg-[#1c1a18] rounded-3xl border border-yellow-500/20 shadow-2xl overflow-hidden">
+
+            {/* 헤더 */}
+            <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-white/8">
+              <div className="flex items-center gap-2">
+                <span className="text-lg">🔖</span>
+                <p className="text-white font-bold text-sm">북마크</p>
+                {videoBookmarks.length > 0 && (
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-yellow-500/15 text-yellow-400 font-bold border border-yellow-500/20">
+                    {videoBookmarks.length}개
+                  </span>
+                )}
+              </div>
+              <button onClick={() => setShowBookmarkModal(false)} className="text-zinc-500 hover:text-white text-lg transition-colors">✕</button>
+            </div>
+
+            {/* 새 북마크 추가 */}
+            <div className="px-5 py-4 border-b border-white/8">
+              <p className="text-zinc-500 text-xs font-semibold uppercase tracking-wider mb-3">현재 위치에 추가</p>
+              <div className="flex items-center gap-2 mb-3">
+                <span className="font-mono text-sm text-yellow-400 bg-yellow-500/10 px-2.5 py-1 rounded-lg border border-yellow-500/20 font-bold">
+                  ▶ {secsToLabel(bookmarkSec)}
+                </span>
+                <span className="text-zinc-600 text-xs">현재 재생 위치</span>
+              </div>
+              <textarea
+                value={bookmarkMemo}
+                onChange={e => setBookmarkMemo(e.target.value)}
+                placeholder="메모 추가 (선택)"
+                rows={2}
+                className="w-full bg-[#2a2826] border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:border-yellow-500/40 resize-none mb-3"
+                autoFocus
+              />
+              <button
+                onClick={handleBookmarkSave}
+                disabled={bookmarkSaving || bookmarkSaved}
+                className={`w-full py-2.5 rounded-xl text-sm font-bold transition-all ${
+                  bookmarkSaved
+                    ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                    : 'bg-yellow-500 hover:bg-yellow-400 text-black disabled:opacity-50'
+                }`}
+              >
+                {bookmarkSaved ? '✓ 저장됨!' : bookmarkSaving ? '저장 중...' : '저장'}
+              </button>
+            </div>
+
+            {/* 저장된 북마크 목록 */}
+            {videoBookmarks.length > 0 && (
+              <div className="px-5 py-4 max-h-60 overflow-y-auto">
+                <p className="text-zinc-500 text-xs font-semibold uppercase tracking-wider mb-3">저장된 북마크</p>
+                <div className="space-y-2">
+                  {videoBookmarks.map(bm => (
+                    <div
+                      key={bm.id}
+                      className="group flex items-start gap-3 p-2.5 rounded-xl hover:bg-white/5 transition-colors cursor-pointer"
+                      onClick={() => {
+                        playerRef.current?.seekTo(bm.timestampSec, true)
+                        setShowBookmarkModal(false)
+                      }}
+                    >
+                      <span className="shrink-0 font-mono text-xs text-yellow-400 bg-yellow-500/10 px-2 py-1 rounded-lg border border-yellow-500/15 mt-0.5">
+                        {bm.timestampLabel}
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        {bm.memo
+                          ? <p className="text-zinc-300 text-sm leading-relaxed">{bm.memo}</p>
+                          : <p className="text-zinc-600 text-xs italic">메모 없음</p>
+                        }
+                      </div>
+                      <button
+                        onClick={async e => {
+                          e.stopPropagation()
+                          await deleteBookmark(bm.id)
+                          setVideoBookmarks(prev => prev.filter(b => b.id !== bm.id))
+                        }}
+                        className="shrink-0 text-zinc-700 hover:text-red-400 text-xs opacity-0 group-hover:opacity-100 transition-all mt-1"
+                      >✕</button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {videoBookmarks.length === 0 && (
+              <div className="px-5 py-4 text-center text-zinc-700 text-xs">
+                아직 저장된 북마크가 없어요
+              </div>
+            )}
+          </div>
+        </div>
       )}
     </div>
   )

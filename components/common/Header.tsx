@@ -73,13 +73,13 @@ export default function Header({ title = 'SSOKTUBE' }: { title?: string }) {
                 <Link href={`/classroom/${classCode}`} onClick={handleNav} className="text-emerald-400 hover:text-emerald-300 transition-colors font-bold">
                   🏫 내 클래스
                 </Link>
-                <Link href="/square" onClick={handleNav} className="text-[#a4a09c] hover:text-white transition-colors">Square</Link>
+                <Link href="/square" onClick={handleNav} className="text-[#a4a09c] hover:text-white transition-colors">SQUARE K</Link>
               </>
             ) : (
               /* 일반 계정 */
               <>
                 <Link href="/mypage" onClick={handleNav} className="text-[#a4a09c] hover:text-white transition-colors">My Page</Link>
-                <Link href="/square" onClick={handleNav} className="text-[#a4a09c] hover:text-white transition-colors">Square</Link>
+                <Link href="/square" onClick={handleNav} className="text-[#a4a09c] hover:text-white transition-colors">SQUARE K</Link>
               </>
             )}
             {/* 교사: 클래스 없으면 개설 유도 */}
@@ -99,6 +99,15 @@ export default function Header({ title = 'SSOKTUBE' }: { title?: string }) {
         </div>
 
         <div className="flex items-center gap-1.5">
+
+          {/* 모바일: SQUARE K 항상 노출 */}
+          <Link
+            href="/square"
+            onClick={handleNav}
+            className="md:hidden flex items-center px-2.5 py-1 rounded-lg text-xs font-black text-orange-400 hover:bg-orange-500/10 transition-colors border border-orange-500/20 whitespace-nowrap"
+          >
+            SQUARE K
+          </Link>
 
           {/* 모바일 햄버거 */}
           <div className="md:hidden relative" ref={mobileMenuRef}>
@@ -123,9 +132,6 @@ export default function Header({ title = 'SSOKTUBE' }: { title?: string }) {
                   <>
                     <Link href="/mypage" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-2 px-4 py-2.5 text-sm text-[#a4a09c] hover:text-white hover:bg-white/5 transition-colors">
                       <span>👤</span> My Page
-                    </Link>
-                    <Link href="/square" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-2 px-4 py-2.5 text-sm text-[#a4a09c] hover:text-white hover:bg-white/5 transition-colors">
-                      <span>🟧</span> Square
                     </Link>
                     {isTeacher && classCode && (
                       <Link href={`/classroom/${classCode}`} onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-2 px-4 py-2.5 text-sm text-emerald-400 hover:text-emerald-300 hover:bg-white/5 transition-colors font-bold">

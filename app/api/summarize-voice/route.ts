@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { classifyCategory, generateSummary, generateContextSummary } from '@/lib/claude'
 import { randomUUID } from 'crypto'
 import { GoogleGenerativeAI } from '@google/generative-ai'
+import { buildContentThumbnail } from '@/lib/thumbnail'
 
 export const maxDuration = 120
 
@@ -32,47 +33,6 @@ function objToFields(obj: Record<string, unknown>) {
   const fields: Record<string, unknown> = {}
   for (const [k, v] of Object.entries(obj)) fields[k] = toFV(v)
   return fields
-}
-
-// ── 카테고리별 썸네일 팔레트 ────────────────────────────────────────────────────
-const CATEGORY_GRADIENTS: Record<string, [string, string]> = {
-  recipe:   ['#7c2d12', '#f97316'],
-  english:  ['#1e3a8a', '#3b82f6'],
-  learning: ['#3b0764', '#a855f7'],
-  news:     ['#27272a', '#71717a'],
-  selfdev:  ['#14532d', '#22c55e'],
-  travel:   ['#164e63', '#06b6d4'],
-  story:    ['#831843', '#ec4899'],
-  tips:     ['#78350f', '#f59e0b'],
-  report:   ['#1e1b4b', '#6366f1'],
-}
-
-const CATEGORY_ICONS: Record<string, string> = {
-  recipe: '🍳', english: '🔤', learning: '📐', news: '🗞️',
-  selfdev: '💪', travel: '🧳', story: '🍿', tips: '💡', report: '📋',
-}
-
-function buildVoiceThumbnail(category: string, title: string): string {
-  const [c1, c2] = CATEGORY_GRADIENTS[category] ?? ['#3b0764', '#a855f7']
-  const catEmoji = CATEGORY_ICONS[category] ?? '✨'
-  const safe = title.slice(0, 22).replace(/[<>&"']/g,
-    c => c === '<' ? '&lt;' : c === '>' ? '&gt;' : c === '&' ? '&amp;' : c === '"' ? '&quot;' : '&apos;')
-
-  const svg = `<svg width="480" height="270" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:${c1}"/>
-      <stop offset="100%" style="stop-color:${c2}"/>
-    </linearGradient>
-  </defs>
-  <rect width="480" height="270" fill="url(#g)" rx="12"/>
-  <rect width="480" height="270" fill="rgba(0,0,0,0.18)" rx="12"/>
-  <text x="190" y="118" font-size="64" text-anchor="middle" dominant-baseline="middle">${catEmoji}</text>
-  <text x="330" y="118" font-size="42" text-anchor="middle" dominant-baseline="middle" opacity="0.75">🎙</text>
-  <text x="240" y="185" font-size="20" font-weight="bold" fill="white" text-anchor="middle" font-family="system-ui,sans-serif">${safe}</text>
-  <text x="240" y="215" font-size="13" fill="rgba(255,255,255,0.55)" text-anchor="middle" font-family="system-ui,sans-serif">🎙 음성 녹음</text>
-</svg>`
-  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`
 }
 
 // ── 지원 MIME 타입 ─────────────────────────────────────────────────────────────
@@ -141,7 +101,7 @@ export async function POST(req: NextRequest) {
     const finalContextSummary = await generateContextSummary(title, category as any, summary).catch(() => contextSummary)
 
     // ── Step 4: 썸네일 SVG 생성 ───────────────────────────────────────────────
-    const thumbnail = buildVoiceThumbnail(category, title)
+    const thumbnail = buildContentThumbnail(category, title, 'voice')
 
     // ── Step 5: sessionId 생성 및 Firestore 저장 ──────────────────────────────
     const sessionId = randomUUID()

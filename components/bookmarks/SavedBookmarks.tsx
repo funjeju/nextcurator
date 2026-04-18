@@ -1,12 +1,13 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { getBookmarks, deleteBookmark, VideoBookmark } from '@/lib/videoBookmark'
-import Link from 'next/link'
 
 export default function SavedBookmarks({ userId }: { userId: string }) {
   const [bookmarks, setBookmarks] = useState<VideoBookmark[]>([])
   const [loading, setLoading] = useState(true)
+  const router = useRouter()
 
   useEffect(() => {
     if (!userId || userId.startsWith('user_')) { setLoading(false); return }
@@ -45,76 +46,79 @@ export default function SavedBookmarks({ userId }: { userId: string }) {
     )
   }
 
-  // 영상별로 그룹화
+  // 영상(sessionId)별 그룹핑
   const grouped: Record<string, VideoBookmark[]> = {}
   for (const bm of bookmarks) {
-    const key = bm.sessionId
-    if (!grouped[key]) grouped[key] = []
-    grouped[key].push(bm)
+    if (!grouped[bm.sessionId]) grouped[bm.sessionId] = []
+    grouped[bm.sessionId].push(bm)
   }
-  // 그룹 내 타임스탬프 오름차순 정렬
   for (const key of Object.keys(grouped)) {
     grouped[key].sort((a, b) => a.timestampSec - b.timestampSec)
   }
 
   return (
-    <div className="space-y-6">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
       {Object.entries(grouped).map(([sessionId, items]) => {
         const first = items[0]
         return (
-          <div key={sessionId} className="bg-[#2a2826] border border-white/8 rounded-2xl overflow-hidden">
-            {/* 영상 헤더 */}
-            <div className="flex items-center gap-3 px-4 py-3 border-b border-white/5">
-              {first.thumbnail && (
-                <img src={first.thumbnail} alt="" className="w-16 h-10 rounded-lg object-cover shrink-0" />
+          <div
+            key={sessionId}
+            onClick={() => router.push(`/result/${sessionId}`)}
+            className="group bg-[#2a2826] border border-white/8 rounded-2xl overflow-hidden cursor-pointer hover:border-yellow-500/30 hover:bg-[#2f2c2a] transition-all"
+          >
+            {/* 썸네일 */}
+            <div className="relative w-full aspect-video bg-zinc-800 overflow-hidden">
+              {first.thumbnail ? (
+                <img
+                  src={first.thumbnail}
+                  alt={first.videoTitle}
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-3xl">🎬</div>
               )}
-              <div className="flex-1 min-w-0">
-                <Link
-                  href={`/result/${sessionId}`}
-                  className="text-white font-semibold text-sm hover:text-orange-400 transition-colors truncate block"
-                >
-                  {first.videoTitle}
-                </Link>
-                <p className="text-zinc-500 text-xs">{first.channel} · {items.length}개 북마크</p>
+              {/* 북마크 카운트 배지 */}
+              <div className="absolute top-2 right-2 flex items-center gap-1 px-2 py-1 bg-black/60 backdrop-blur rounded-full">
+                <span className="text-yellow-400 text-xs">🔖</span>
+                <span className="text-white text-xs font-bold">{items.length}</span>
               </div>
-              <Link
-                href={`/result/${sessionId}`}
-                className="shrink-0 text-xs px-3 py-1.5 rounded-xl bg-orange-500/15 text-orange-400 hover:bg-orange-500/25 font-bold transition-colors"
-              >
-                영상 보기 →
-              </Link>
             </div>
 
-            {/* 북마크 목록 */}
-            <div className="divide-y divide-white/5">
-              {items.map(bm => (
-                <div key={bm.id} className="flex items-start gap-3 px-4 py-3 group hover:bg-white/3 transition-colors">
-                  {/* 타임스탬프 버튼 */}
-                  <Link
-                    href={`/result/${sessionId}?t=${bm.timestampLabel}`}
-                    className="shrink-0 font-mono text-xs text-orange-400 hover:text-orange-300 bg-orange-500/10 px-2 py-1 rounded-lg border border-orange-500/15 hover:border-orange-500/30 transition-all mt-0.5"
-                  >
-                    ▶ {bm.timestampLabel}
-                  </Link>
+            {/* 영상 정보 */}
+            <div className="px-3 py-3">
+              <p className="text-white text-sm font-semibold leading-snug line-clamp-2 group-hover:text-yellow-400 transition-colors">
+                {first.videoTitle}
+              </p>
+              <p className="text-zinc-500 text-xs mt-1">{first.channel}</p>
 
-                  {/* 메모 */}
-                  <div className="flex-1 min-w-0">
-                    {bm.memo ? (
-                      <p className="text-zinc-300 text-sm leading-relaxed">{bm.memo}</p>
-                    ) : (
-                      <p className="text-zinc-600 text-xs italic">메모 없음</p>
-                    )}
+              {/* 북마크 프리뷰 (최대 2개) */}
+              <div className="mt-2.5 space-y-1.5">
+                {items.slice(0, 2).map(bm => (
+                  <div
+                    key={bm.id}
+                    onClick={e => { e.stopPropagation(); router.push(`/result/${sessionId}?t=${bm.timestampLabel}`) }}
+                    className="flex items-center gap-2 group/bm hover:bg-white/5 rounded-lg px-1.5 py-1 -mx-1.5 transition-colors"
+                  >
+                    <span className="shrink-0 font-mono text-[10px] text-yellow-400 bg-yellow-500/10 px-1.5 py-0.5 rounded border border-yellow-500/15">
+                      {bm.timestampLabel}
+                    </span>
+                    <span className="text-zinc-400 text-xs truncate">
+                      {bm.memo || <span className="italic text-zinc-600">메모 없음</span>}
+                    </span>
+                    <button
+                      onClick={e => handleDelete(e, bm.id)}
+                      className="shrink-0 ml-auto text-zinc-700 hover:text-red-400 text-xs opacity-0 group-hover/bm:opacity-100 transition-all"
+                    >
+                      ✕
+                    </button>
                   </div>
-
-                  {/* 삭제 */}
-                  <button
-                    onClick={e => handleDelete(e, bm.id)}
-                    className="shrink-0 w-6 h-6 rounded-lg flex items-center justify-center text-zinc-600 hover:text-red-400 hover:bg-red-500/10 transition-colors opacity-0 group-hover:opacity-100 text-xs"
-                  >
-                    ✕
-                  </button>
-                </div>
-              ))}
+                ))}
+                {items.length > 2 && (
+                  <p className="text-zinc-600 text-xs px-1.5">
+                    +{items.length - 2}개 더 보기 →
+                  </p>
+                )}
+              </div>
             </div>
           </div>
         )
