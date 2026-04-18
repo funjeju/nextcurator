@@ -13,6 +13,7 @@ async function verifyAdmin(req: NextRequest): Promise<boolean> {
 }
 
 export async function POST(req: NextRequest) {
+  const idToken = req.headers.get('authorization')?.replace('Bearer ', '')
   const isAdmin = await verifyAdmin(req)
   if (!isAdmin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
@@ -25,13 +26,13 @@ export async function POST(req: NextRequest) {
   try {
     switch (body.action) {
       case 'getSettings': {
-        const settings = await getCurationSettings()
+        const settings = await getCurationSettings(idToken)
         return NextResponse.json(settings)
       }
 
       case 'saveSettings': {
         if (!body.settings) return NextResponse.json({ error: 'settings required' }, { status: 400 })
-        await saveCurationSettings(body.settings)
+        await saveCurationSettings(body.settings, idToken)
         return NextResponse.json({ ok: true })
       }
 
