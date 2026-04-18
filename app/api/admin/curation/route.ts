@@ -4,21 +4,12 @@ import {
   getAllPostsForAdmin, publishCuratedPost, deleteCuratedPost,
   CurationSettings,
 } from '@/lib/magazine'
-import { getAuth } from 'firebase-admin/auth'
-import '@/lib/firebase-admin'
+import { checkIsAdminByToken } from '@/lib/admin'
 
 async function verifyAdmin(req: NextRequest): Promise<boolean> {
-  const adminEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL
-  if (!adminEmail) return false
   const auth = req.headers.get('authorization')
   if (!auth?.startsWith('Bearer ')) return false
-  try {
-    const token = auth.slice(7)
-    const decoded = await getAuth().verifyIdToken(token)
-    return decoded.email === adminEmail
-  } catch {
-    return false
-  }
+  return checkIsAdminByToken(auth.slice(7))
 }
 
 export async function POST(req: NextRequest) {
