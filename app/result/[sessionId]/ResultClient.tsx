@@ -1358,6 +1358,9 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
             onClearFocus={() => setFocusSegment(null)}
             onCountChange={setCommentCount}
             onCommentPosted={handleCommentPosted}
+            summaryData={data}
+            title={data?.title ?? ''}
+            category={data?.category ?? ''}
           />
         </div>
 

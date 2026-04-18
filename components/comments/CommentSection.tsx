@@ -12,6 +12,9 @@ interface Props {
   onClearFocus: () => void
   onCountChange?: (count: number) => void
   onCommentPosted?: (text: string, segmentId: string | null) => void
+  summaryData?: unknown
+  title?: string
+  category?: string
 }
 
 export default function CommentSection({
@@ -21,6 +24,9 @@ export default function CommentSection({
   onClearFocus,
   onCountChange,
   onCommentPosted,
+  summaryData,
+  title = '',
+  category = '',
 }: Props) {
   const { user } = useAuth()
   const [comments, setComments] = useState<Comment[]>([])
@@ -28,6 +34,7 @@ export default function CommentSection({
   const [text, setText] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [replyTo, setReplyTo] = useState<{ id: string; userName: string } | null>(null)
+  const [aiLoadingId, setAiLoadingId] = useState<string | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const sectionRef = useRef<HTMLDivElement>(null)
 
@@ -40,7 +47,6 @@ export default function CommentSection({
       .finally(() => setLoading(false))
   }, [sessionId])
 
-  // 세그먼트 말풍선에서 댓글 추가 시 실시간 반영
   useEffect(() => {
     const handler = (e: Event) => {
       const comment = (e as CustomEvent<Comment>).detail
@@ -56,7 +62,6 @@ export default function CommentSection({
     return () => window.removeEventListener('segment-comment-added', handler)
   }, [sessionId, onCountChange])
 
-  // 세그먼트 포커스 시 스크롤 + 인풋 포커스
   useEffect(() => {
     if (focusSegmentId) {
       sectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -80,6 +85,7 @@ export default function CommentSection({
         userDisplayName: user.displayName || '익명',
         userPhotoURL: user.photoURL || '',
         text: text.trim(),
+        isAI: false,
       })
       const updated = [...comments, newComment]
       setComments(updated)
@@ -101,10 +107,61 @@ export default function CommentSection({
     onCountChange?.(updated.filter(c => !c.parentId).length)
   }
 
+  // 댓글 or 대댓글에 AI가 반응
+  const handleAIReply = async (targetComment: Comment, allRepliesInThread: Comment[]) => {
+    setAiLoadingId(targetComment.id)
+    try {
+      // 스레드 전체 히스토리 (AI가 맥락을 파악하게)
+      const thread = allRepliesInThread.map(r => ({
+        role: r.isAI ? 'ai' as const : 'user' as const,
+        text: r.text,
+        userName: r.userDisplayName,
+      }))
+      // 현재 댓글이 대댓글이면 부모 포함해서 앞에 추가
+      const parentComment = targetComment.parentId
+        ? comments.find(c => c.id === targetComment.parentId)
+        : null
+      const contextThread = parentComment
+        ? [{ role: 'user' as const, text: parentComment.text, userName: parentComment.userDisplayName }, ...thread]
+        : thread
+
+      const res = await fetch('/api/ai-comment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          commentText: targetComment.text,
+          threadContext: contextThread,
+          summaryContext: summaryData ? JSON.stringify(summaryData) : '',
+          title,
+          category,
+        }),
+      })
+      const data = await res.json()
+      if (!data.text) throw new Error(data.error ?? 'AI 응답 실패')
+
+      const parentId = targetComment.parentId ?? targetComment.id
+      const aiComment = await addComment({
+        sessionId,
+        segmentId: null,
+        segmentLabel: null,
+        parentId,
+        userId: 'ai-bot',
+        userDisplayName: 'AI 토론봇',
+        userPhotoURL: '',
+        text: data.text,
+        isAI: true,
+      })
+      setComments(prev => [...prev, aiComment])
+    } catch (e) {
+      console.error('[AI Reply]', e)
+    } finally {
+      setAiLoadingId(null)
+    }
+  }
+
   const scrollToSegment = (segmentId: string) => {
     const el = document.getElementById(`seg-${segmentId}`)
     el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-    // 잠깐 하이라이트 효과
     if (el) {
       el.classList.add('ring-2', 'ring-orange-400', 'ring-offset-1', 'ring-offset-transparent')
       setTimeout(() => el.classList.remove('ring-2', 'ring-orange-400', 'ring-offset-1', 'ring-offset-transparent'), 2000)
@@ -180,12 +237,15 @@ export default function CommentSection({
               comment={comment}
               replies={getReplies(comment.id)}
               currentUserId={user?.uid ?? null}
+              aiLoadingId={aiLoadingId}
               onReply={c => {
                 setReplyTo({ id: c.id, userName: c.userDisplayName })
                 setTimeout(() => textareaRef.current?.focus(), 100)
               }}
               onDelete={handleDelete}
               onScrollToSegment={scrollToSegment}
+              onAIReply={handleAIReply}
+              allComments={comments}
             />
           ))}
         </div>
@@ -201,19 +261,25 @@ interface CommentItemProps {
   comment: Comment
   replies: Comment[]
   currentUserId: string | null
+  aiLoadingId: string | null
   onReply: (c: Comment) => void
   onDelete: (id: string) => void
   onScrollToSegment: (segmentId: string) => void
+  onAIReply: (target: Comment, thread: Comment[]) => void
+  allComments: Comment[]
 }
 
-function CommentItem({ comment, replies, currentUserId, onReply, onDelete, onScrollToSegment }: CommentItemProps) {
+function CommentItem({ comment, replies, currentUserId, aiLoadingId, onReply, onDelete, onScrollToSegment, onAIReply, allComments }: CommentItemProps) {
   return (
     <div className="py-3 flex flex-col gap-2">
       <div className="flex gap-2.5">
-        <Avatar src={comment.userPhotoURL} size={28} />
+        <Avatar src={comment.userPhotoURL} size={28} isAI={comment.isAI} />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap mb-1">
             <span className="text-xs font-bold text-white">{comment.userDisplayName}</span>
+            {comment.isAI && (
+              <span className="text-[9px] bg-violet-600/30 text-violet-300 border border-violet-500/30 px-1.5 py-0.5 rounded-full">🤖 AI</span>
+            )}
             <span className="text-[10px] text-[#75716e]">{formatRelativeDate(comment.createdAt)}</span>
             {comment.segmentId && comment.segmentLabel && (
               <button
@@ -226,9 +292,16 @@ function CommentItem({ comment, replies, currentUserId, onReply, onDelete, onScr
           </div>
           <p className="text-[#e2e2e2] text-sm leading-relaxed break-words">{comment.text}</p>
           <div className="flex items-center gap-3 mt-1.5">
-            <button onClick={() => onReply(comment)} className="text-[10px] text-[#75716e] hover:text-white transition-colors">
-              ↩️ 답글
-            </button>
+            {!comment.isAI && (
+              <button onClick={() => onReply(comment)} className="text-[10px] text-[#75716e] hover:text-white transition-colors">
+                ↩️ 답글
+              </button>
+            )}
+            <AIReplyButton
+              commentId={comment.id}
+              aiLoadingId={aiLoadingId}
+              onClick={() => onAIReply(comment, replies)}
+            />
             {currentUserId === comment.userId && (
               <button onClick={() => onDelete(comment.id)} className="text-[10px] text-[#75716e] hover:text-red-400 transition-colors">
                 삭제
@@ -240,21 +313,35 @@ function CommentItem({ comment, replies, currentUserId, onReply, onDelete, onScr
 
       {/* 대댓글 */}
       {replies.length > 0 && (
-        <div className="ml-9 flex flex-col gap-2 border-l-2 border-white/5 pl-3 mt-1">
+        <div className="ml-9 flex flex-col gap-3 border-l-2 border-white/5 pl-3 mt-1">
           {replies.map(reply => (
             <div key={reply.id} className="flex gap-2">
-              <Avatar src={reply.userPhotoURL} size={20} />
+              <Avatar src={reply.userPhotoURL} size={20} isAI={reply.isAI} />
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-0.5">
+                <div className="flex items-center gap-2 mb-0.5 flex-wrap">
                   <span className="text-[11px] font-bold text-white">{reply.userDisplayName}</span>
+                  {reply.isAI && (
+                    <span className="text-[9px] bg-violet-600/30 text-violet-300 border border-violet-500/30 px-1.5 py-0.5 rounded-full">🤖 AI</span>
+                  )}
                   <span className="text-[9px] text-[#75716e]">{formatRelativeDate(reply.createdAt)}</span>
                 </div>
                 <p className="text-[#d4d4d8] text-xs leading-relaxed break-words">{reply.text}</p>
-                {currentUserId === reply.userId && (
-                  <button onClick={() => onDelete(reply.id)} className="text-[9px] text-[#75716e] hover:text-red-400 mt-0.5 transition-colors">
-                    삭제
-                  </button>
-                )}
+                <div className="flex items-center gap-3 mt-1">
+                  <AIReplyButton
+                    commentId={reply.id}
+                    aiLoadingId={aiLoadingId}
+                    onClick={() => {
+                      // 같은 스레드의 모든 대댓글을 컨텍스트로 전달
+                      const thread = allComments.filter(c => c.parentId === comment.id)
+                      onAIReply(reply, thread)
+                    }}
+                  />
+                  {currentUserId === reply.userId && (
+                    <button onClick={() => onDelete(reply.id)} className="text-[9px] text-[#75716e] hover:text-red-400 mt-0.5 transition-colors">
+                      삭제
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           ))}
@@ -264,8 +351,41 @@ function CommentItem({ comment, replies, currentUserId, onReply, onDelete, onScr
   )
 }
 
-function Avatar({ src, size }: { src: string; size: number }) {
+function AIReplyButton({ commentId, aiLoadingId, onClick }: {
+  commentId: string
+  aiLoadingId: string | null
+  onClick: () => void
+}) {
+  const isLoading = aiLoadingId === commentId
+  return (
+    <button
+      onClick={onClick}
+      disabled={aiLoadingId !== null}
+      className="text-[10px] text-violet-400 hover:text-violet-300 disabled:opacity-40 transition-colors flex items-center gap-1"
+    >
+      {isLoading ? (
+        <>
+          <span className="inline-flex gap-0.5">
+            <span className="w-1 h-1 rounded-full bg-violet-400 animate-bounce [animation-delay:0ms]" />
+            <span className="w-1 h-1 rounded-full bg-violet-400 animate-bounce [animation-delay:150ms]" />
+            <span className="w-1 h-1 rounded-full bg-violet-400 animate-bounce [animation-delay:300ms]" />
+          </span>
+          AI 생각중...
+        </>
+      ) : (
+        <>🤖 AI 반응</>
+      )}
+    </button>
+  )
+}
+
+function Avatar({ src, size, isAI }: { src: string; size: number; isAI?: boolean }) {
   const style = { width: size, height: size }
+  if (isAI) return (
+    <div style={style} className="rounded-full bg-violet-600/30 border border-violet-500/40 shrink-0 flex items-center justify-center text-[10px]">
+      🤖
+    </div>
+  )
   if (src) return <img src={src} alt="" style={style} className="rounded-full shrink-0 border border-white/10" />
   return (
     <div style={style} className="rounded-full bg-[#3d3a38] shrink-0 flex items-center justify-center text-[10px] text-white/40">

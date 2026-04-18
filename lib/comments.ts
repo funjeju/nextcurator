@@ -12,6 +12,7 @@ export interface Comment {
   userPhotoURL: string
   text: string
   createdAt: any
+  isAI?: boolean                // AI가 생성한 댓글
 }
 
 export async function getCommentsBySession(sessionId: string): Promise<Comment[]> {

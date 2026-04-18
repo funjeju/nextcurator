@@ -67,7 +67,7 @@ export async function POST(req: NextRequest) {
         try {
           const cachedContent = await cacheManager.get(cacheId)
           model = genAI.getGenerativeModelFromCachedContent(cachedContent, {
-            generationConfig: { temperature: 0.7, maxOutputTokens: 1500 },
+            generationConfig: { temperature: 0.7, maxOutputTokens: 4096 },
           })
         } catch {
           // 캐시 만료된 경우 새로 생성
@@ -92,7 +92,7 @@ export async function POST(req: NextRequest) {
         })
         newCacheId = cachedContent.name
         model = genAI.getGenerativeModelFromCachedContent(cachedContent, {
-          generationConfig: { temperature: 0.7, maxOutputTokens: 1500 },
+          generationConfig: { temperature: 0.7, maxOutputTokens: 4096 },
         })
       }
     } else {
@@ -103,7 +103,7 @@ export async function POST(req: NextRequest) {
       model = genAI.getGenerativeModel({
         model: 'gemini-2.5-flash',
         systemInstruction: baseSystemInstruction + fullTranscriptSection,
-        generationConfig: { temperature: 0.7, maxOutputTokens: 1500 },
+        generationConfig: { temperature: 0.7, maxOutputTokens: 4096 },
       })
     }
 
