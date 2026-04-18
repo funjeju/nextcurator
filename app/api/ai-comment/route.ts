@@ -3,20 +3,62 @@ import { GoogleGenerativeAI } from '@google/generative-ai'
 
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GENERATIVE_AI_API_KEY!)
 
+const PROJECT_ID = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID!
+const API_KEY    = process.env.NEXT_PUBLIC_FIREBASE_API_KEY!
+const BASE       = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents`
+
 interface ThreadMsg {
   role: 'user' | 'ai'
   text: string
   userName?: string
 }
 
+// Firestore REST API로 AI 댓글 저장
+async function saveAIComment(data: {
+  sessionId: string
+  parentId: string
+  text: string
+}): Promise<{ id: string; createdAt: Date }> {
+  const fields: Record<string, unknown> = {
+    sessionId:       { stringValue: data.sessionId },
+    parentId:        { stringValue: data.parentId },
+    segmentId:       { nullValue: null },
+    segmentLabel:    { nullValue: null },
+    userId:          { stringValue: 'ai-bot' },
+    userDisplayName: { stringValue: 'AI 토론봇' },
+    userPhotoURL:    { stringValue: '' },
+    text:            { stringValue: data.text },
+    isAI:            { booleanValue: true },
+    createdAt:       { timestampValue: new Date().toISOString() },
+  }
+
+  const res = await fetch(`${BASE}/comments?key=${API_KEY}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fields }),
+  })
+
+  if (!res.ok) {
+    const body = await res.text().catch(() => '')
+    throw new Error(`Firestore write failed (${res.status}): ${body}`)
+  }
+
+  const doc = await res.json()
+  // name 형식: "projects/.../documents/comments/{id}"
+  const id = doc.name?.split('/').pop() ?? crypto.randomUUID()
+  return { id, createdAt: new Date() }
+}
+
 export async function POST(req: NextRequest) {
   try {
-    const { commentText, threadContext, summaryContext, title, category }: {
+    const { commentText, threadContext, summaryContext, title, category, sessionId, parentId }: {
       commentText: string
       threadContext?: ThreadMsg[]
       summaryContext?: string
       title: string
       category: string
+      sessionId: string
+      parentId: string
     } = await req.json()
 
     const categoryNames: Record<string, string> = {
@@ -69,7 +111,24 @@ ${summaryContext ? `---영상 요약 (참고용)---\n${summaryContext.slice(0, 1
     const result = await chat.sendMessage(commentText)
     const text = result.response.text()
 
-    return NextResponse.json({ text })
+    // Firestore에 AI 댓글 저장 (서버에서 직접)
+    const saved = await saveAIComment({ sessionId, parentId, text })
+
+    const comment = {
+      id: saved.id,
+      sessionId,
+      segmentId: null,
+      segmentLabel: null,
+      parentId,
+      userId: 'ai-bot',
+      userDisplayName: 'AI 토론봇',
+      userPhotoURL: '',
+      text,
+      isAI: true,
+      createdAt: saved.createdAt,
+    }
+
+    return NextResponse.json({ text, comment })
   } catch (e) {
     const errMsg = e instanceof Error ? e.message : String(e)
     console.error('[AI Comment API]', errMsg)

@@ -111,19 +111,19 @@ export default function CommentSection({
   const handleAIReply = async (targetComment: Comment, allRepliesInThread: Comment[]) => {
     setAiLoadingId(targetComment.id)
     try {
-      // 스레드 전체 히스토리 (AI가 맥락을 파악하게)
       const thread = allRepliesInThread.map(r => ({
         role: r.isAI ? 'ai' as const : 'user' as const,
         text: r.text,
         userName: r.userDisplayName,
       }))
-      // 현재 댓글이 대댓글이면 부모 포함해서 앞에 추가
       const parentComment = targetComment.parentId
         ? comments.find(c => c.id === targetComment.parentId)
         : null
       const contextThread = parentComment
         ? [{ role: 'user' as const, text: parentComment.text, userName: parentComment.userDisplayName }, ...thread]
         : thread
+
+      const parentId = targetComment.parentId ?? targetComment.id
 
       const res = await fetch('/api/ai-comment', {
         method: 'POST',
@@ -134,24 +134,15 @@ export default function CommentSection({
           summaryContext: summaryData ? JSON.stringify(summaryData) : '',
           title,
           category,
+          sessionId,
+          parentId,
         }),
       })
       const data = await res.json()
-      if (!data.text) throw new Error(data.error ?? 'AI 응답 실패')
+      if (!data.comment) throw new Error(data.error ?? 'AI 응답 실패')
 
-      const parentId = targetComment.parentId ?? targetComment.id
-      const aiComment = await addComment({
-        sessionId,
-        segmentId: null,
-        segmentLabel: null,
-        parentId,
-        userId: 'ai-bot',
-        userDisplayName: 'AI 토론봇',
-        userPhotoURL: '',
-        text: data.text,
-        isAI: true,
-      })
-      setComments(prev => [...prev, aiComment])
+      // 서버에서 저장 완료된 댓글 객체를 상태에 추가 (클라이언트 Firestore 쓰기 없음)
+      setComments(prev => [...prev, data.comment as Comment])
     } catch (e) {
       console.error('[AI Reply]', e)
     } finally {
@@ -297,11 +288,13 @@ function CommentItem({ comment, replies, currentUserId, aiLoadingId, onReply, on
                 ↩️ 답글
               </button>
             )}
-            <AIReplyButton
-              commentId={comment.id}
-              aiLoadingId={aiLoadingId}
-              onClick={() => onAIReply(comment, replies)}
-            />
+            {!comment.isAI && (
+              <AIReplyButton
+                commentId={comment.id}
+                aiLoadingId={aiLoadingId}
+                onClick={() => onAIReply(comment, replies)}
+              />
+            )}
             {currentUserId === comment.userId && (
               <button onClick={() => onDelete(comment.id)} className="text-[10px] text-[#75716e] hover:text-red-400 transition-colors">
                 삭제
@@ -327,15 +320,16 @@ function CommentItem({ comment, replies, currentUserId, aiLoadingId, onReply, on
                 </div>
                 <p className="text-[#d4d4d8] text-xs leading-relaxed break-words">{reply.text}</p>
                 <div className="flex items-center gap-3 mt-1">
-                  <AIReplyButton
-                    commentId={reply.id}
-                    aiLoadingId={aiLoadingId}
-                    onClick={() => {
-                      // 같은 스레드의 모든 대댓글을 컨텍스트로 전달
-                      const thread = allComments.filter(c => c.parentId === comment.id)
-                      onAIReply(reply, thread)
-                    }}
-                  />
+                  {!reply.isAI && (
+                    <AIReplyButton
+                      commentId={reply.id}
+                      aiLoadingId={aiLoadingId}
+                      onClick={() => {
+                        const thread = allComments.filter(c => c.parentId === comment.id)
+                        onAIReply(reply, thread)
+                      }}
+                    />
+                  )}
                   {currentUserId === reply.userId && (
                     <button onClick={() => onDelete(reply.id)} className="text-[9px] text-[#75716e] hover:text-red-400 mt-0.5 transition-colors">
                       삭제
