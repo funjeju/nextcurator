@@ -201,6 +201,120 @@ function SummaryCard({ item, likedIds, likingIds, user, messagingId, commentCoun
   )
 }
 
+// 목록형 행
+function SummaryListRow({ item, likedIds, likingIds, user, messagingId, commentCount, onLike, onMessage, onDelete }: {
+  item: SavedSummary
+  likedIds: Set<string>
+  likingIds: Set<string>
+  user: any
+  messagingId: string | null
+  commentCount: number
+  onLike: (e: React.MouseEvent, item: SavedSummary) => void
+  onMessage: (e: React.MouseEvent, item: SavedSummary) => void
+  onDelete: (e: React.MouseEvent, item: SavedSummary) => void
+}) {
+  const router = useRouter()
+  const catMeta = CATEGORY_META[item.category]
+  const catLabel = CATEGORIES.find(c => c.id === item.category)?.label ?? '분석됨'
+
+  return (
+    <div
+      className="flex gap-3 rounded-[14px] bg-[#32302e] border border-white/5 hover:border-white/20 transition-all shadow-sm cursor-pointer p-2.5"
+      onClick={() => { incrementViewCount(item.id); router.push(`/result/${item.sessionId}?from=square`) }}
+    >
+      {/* 썸네일 */}
+      <div className="relative shrink-0 w-28 sm:w-36 rounded-lg overflow-hidden bg-[#23211f] aspect-video self-start">
+        <img src={item.thumbnail} alt={item.title} className="w-full h-full object-cover" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
+      </div>
+
+      {/* 내용 */}
+      <div className="flex-1 min-w-0 flex flex-col justify-between gap-1 py-0.5">
+        <div>
+          <div className="flex items-center gap-1.5 mb-1">
+            <span
+              className="text-[9px] font-bold px-1.5 py-0.5 rounded-full"
+              style={catMeta ? { color: catMeta.color, background: `${catMeta.bg}cc` } : { color: '#a4a09c', background: '#3d3a38' }}
+            >{catLabel}</span>
+            {item.createdAt && <span className="text-[9px] text-[#75716e]">{formatRelativeDate(item.createdAt)}</span>}
+          </div>
+          <h3 className="text-[#f4f4f5] text-[12px] sm:text-[13px] font-bold leading-snug line-clamp-2 mb-1">
+            {item.title}
+          </h3>
+          {item.contextSummary ? (
+            <p className="text-[10px] sm:text-[11px] text-[#a4a09c] leading-relaxed line-clamp-2">{item.contextSummary}</p>
+          ) : (
+            <p className="text-[10px] text-[#75716e]">{item.channel}</p>
+          )}
+        </div>
+
+        {/* 하단 액션 */}
+        <div className="flex items-center justify-between mt-1">
+          <Link
+            href={`/profile/${item.userId}`}
+            onClick={e => e.stopPropagation()}
+            className="flex items-center gap-1 min-w-0 group/profile"
+          >
+            {item.userPhotoURL ? (
+              <img src={item.userPhotoURL} alt="" className="w-4 h-4 rounded-full shrink-0 border border-white/10" />
+            ) : (
+              <div className="w-4 h-4 rounded-full bg-[#3d3a38] shrink-0 flex items-center justify-center text-[8px] text-white/40">👤</div>
+            )}
+            <span className="text-[9px] text-[#75716e] group-hover/profile:text-white truncate transition-colors">
+              {item.userDisplayName || '익명'}
+            </span>
+          </Link>
+
+          <div className="flex items-center gap-1.5">
+            {(item.viewCount ?? 0) > 0 && (
+              <span className="text-[9px] text-[#75716e]">👁 {item.viewCount}</span>
+            )}
+            <Link
+              href={`/result/${item.sessionId}?from=square#comments`}
+              onClick={e => e.stopPropagation()}
+              className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] bg-black/40 text-white/40 border border-white/10 hover:text-blue-400 hover:border-blue-500/30 transition-all"
+            >
+              <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+              </svg>
+              <span>{commentCount}</span>
+            </Link>
+            <button
+              onClick={(e) => onLike(e, item)}
+              disabled={likingIds.has(item.id)}
+              className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold transition-all ${
+                likedIds.has(item.id)
+                  ? 'bg-pink-500/20 text-pink-400 border border-pink-500/30'
+                  : 'bg-black/40 text-white/40 border border-white/10 hover:text-pink-400 hover:border-pink-500/30'
+              } disabled:opacity-50`}
+            >
+              <span className="text-[10px]">{likedIds.has(item.id) ? '❤️' : '🤍'}</span>
+              <span>{item.likeCount ?? 0}</span>
+            </button>
+            {user && item.userId === user.uid ? (
+              <button
+                onClick={(e) => onDelete(e, item)}
+                className="text-[9px] text-[#75716e] hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
+                title="삭제"
+              >
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </button>
+            ) : user && item.userId !== user.uid ? (
+              <button
+                onClick={(e) => onMessage(e, item)}
+                disabled={messagingId === item.id}
+                className="text-[9px] text-[#75716e] hover:text-blue-400 transition-colors disabled:opacity-50"
+              >✉️</button>
+            ) : null}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // 취향 추천 카드 — 일반 카드와 동일한 크기, masonry 그리드 안에 삽입
 function RecommendationCard({ slot }: { slot: RecSlot }) {
   const meta = CATEGORY_META[slot.category] ?? CATEGORY_META.news
@@ -293,7 +407,16 @@ export default function SquareClient({ initialSummaries = [], initialMagazinePos
   const [searchQuery, setSearchQuery] = useState('')
   const [committedQuery, setCommittedQuery] = useState('')
   const [commentCounts, setCommentCounts] = useState<Record<string, number>>({})
+  const [viewMode, setViewMode] = useState<ViewMode>(() => {
+    if (typeof window !== 'undefined') return (localStorage.getItem('squareViewMode') as ViewMode) ?? 'grid'
+    return 'grid'
+  })
   const colCount = useColumnCount()
+
+  const toggleViewMode = (mode: ViewMode) => {
+    setViewMode(mode)
+    localStorage.setItem('squareViewMode', mode)
+  }
 
   useEffect(() => {
     // 서버 초기 데이터가 있으면 댓글 수만 보완, 없으면 전체 로드
@@ -570,9 +693,33 @@ export default function SquareClient({ initialSummaries = [], initialMagazinePos
                 </button>
               )
             })}
-            <span className="text-[#75716e] text-xs ml-auto">
-              {committedQuery ? `"${committedQuery}" 결과 ${filtered.length}개` : `${filtered.length}개`}
-            </span>
+            <div className="flex items-center gap-2 ml-auto">
+              <span className="text-[#75716e] text-xs">
+                {committedQuery ? `"${committedQuery}" 결과 ${filtered.length}개` : `${filtered.length}개`}
+              </span>
+              {/* 뷰 모드 토글 */}
+              <div className="flex items-center gap-0.5 bg-[#32302e] rounded-lg p-0.5">
+                <button
+                  onClick={() => toggleViewMode('grid')}
+                  title="그리드 보기"
+                  className={`p-1.5 rounded-md transition-colors ${viewMode === 'grid' ? 'bg-white/10 text-white' : 'text-[#75716e] hover:text-white'}`}
+                >
+                  <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 16 16">
+                    <rect x="1" y="1" width="6" height="6" rx="1"/><rect x="9" y="1" width="6" height="6" rx="1"/>
+                    <rect x="1" y="9" width="6" height="6" rx="1"/><rect x="9" y="9" width="6" height="6" rx="1"/>
+                  </svg>
+                </button>
+                <button
+                  onClick={() => toggleViewMode('list')}
+                  title="목록 보기"
+                  className={`p-1.5 rounded-md transition-colors ${viewMode === 'list' ? 'bg-white/10 text-white' : 'text-[#75716e] hover:text-white'}`}
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 16 16">
+                    <line x1="2" y1="4" x2="14" y2="4"/><line x1="2" y1="8" x2="14" y2="8"/><line x1="2" y1="12" x2="14" y2="12"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -590,6 +737,23 @@ export default function SquareClient({ initialSummaries = [], initialMagazinePos
             <Link href="/" className="inline-block mt-6 px-6 py-3 bg-gradient-to-r from-orange-500 to-pink-500 text-white font-bold rounded-2xl">
               새 영상 분석하기
             </Link>
+          </div>
+        ) : viewMode === 'list' ? (
+          <div className="flex flex-col gap-2">
+            {filtered.map(item => (
+              <SummaryListRow
+                key={item.id}
+                item={item}
+                likedIds={likedIds}
+                likingIds={likingIds}
+                user={user}
+                messagingId={messagingId}
+                commentCount={commentCounts[item.sessionId] ?? 0}
+                onLike={handleLike}
+                onMessage={handleMessage}
+                onDelete={handleDelete}
+              />
+            ))}
           </div>
         ) : (
           <div className="flex gap-3 items-start">
