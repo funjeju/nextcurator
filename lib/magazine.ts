@@ -181,20 +181,20 @@ export async function saveCurationSettings(settings: Partial<CurationSettings>) 
 export async function getRecentPublicSummaries(lookbackDays: number): Promise<SummaryForCuration[]> {
   const since = new Date(Date.now() - lookbackDays * 24 * 60 * 60 * 1000).toISOString()
 
-  const docs = await fsQuery('summaries', {
+  const docs = await fsQuery('saved_summaries', {
     where: {
       compositeFilter: {
         op: 'AND',
         filters: [
           { fieldFilter: { field: { fieldPath: 'isPublic' }, op: 'EQUAL', value: { booleanValue: true } } },
-          { fieldFilter: { field: { fieldPath: 'summarizedAt' }, op: 'GREATER_THAN_OR_EQUAL', value: { stringValue: since } } },
+          { fieldFilter: { field: { fieldPath: 'createdAt' }, op: 'GREATER_THAN_OR_EQUAL', value: { timestampValue: since } } },
         ],
       },
     },
     select: {
       fields: [
         'sessionId', 'title', 'channel', 'thumbnail', 'category',
-        'square_meta', 'contextSummary', 'reportSummary', 'summarizedAt',
+        'square_meta', 'contextSummary', 'reportSummary', 'createdAt',
       ].map(f => ({ fieldPath: f })),
     },
     limit: 200,
@@ -202,6 +202,10 @@ export async function getRecentPublicSummaries(lookbackDays: number): Promise<Su
 
   return docs.map(({ id, data }) => {
     const meta = (data.square_meta as Record<string, unknown>) ?? {}
+    const createdAt = data.createdAt
+    const summarizedAt = typeof createdAt === 'number'
+      ? new Date(createdAt).toISOString()
+      : typeof createdAt === 'string' ? createdAt : ''
     return {
       id,
       sessionId: (data.sessionId as string) ?? '',
@@ -213,7 +217,7 @@ export async function getRecentPublicSummaries(lookbackDays: number): Promise<Su
       tags: (meta.tags as string[]) ?? [],
       contextSummary: (data.contextSummary as string) ?? '',
       reportSummary: (data.reportSummary as string) ?? '',
-      summarizedAt: (data.summarizedAt as string) ?? '',
+      summarizedAt,
     }
   })
 }

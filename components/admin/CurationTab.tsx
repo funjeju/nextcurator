@@ -77,7 +77,7 @@ export default function CurationTab({ getAuthHeader }: {
         const updated = await callAdmin('listPosts')
         if (Array.isArray(updated)) setPosts(updated)
       } else {
-        setTriggerResult(`⚠️ ${data.error || data.skipped ? '스킵됨: ' + data.reason : '알 수 없는 오류'}`)
+        setTriggerResult(`⚠️ ${data.error ?? (data.skipped ? '스킵됨: ' + data.reason : '알 수 없는 오류')}`)
       }
     } catch (e) {
       setTriggerResult(`❌ 오류: ${String(e)}`)
