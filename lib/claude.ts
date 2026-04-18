@@ -25,6 +25,18 @@ const summaryModel = genAI.getGenerativeModel({
   },
 })
 
+// 스토리 전용 모델 — 웹소설 서술 품질을 위해 temperature 높게
+const storyModel = genAI.getGenerativeModel({
+  model: 'gemini-2.5-flash',
+  systemInstruction: 'You are a JSON generator. Always respond with valid JSON only. No explanation, no markdown, no code blocks. Start with { and end with }.',
+  generationConfig: {
+    temperature: 0.6,
+    maxOutputTokens: 16384,
+    // @ts-expect-error thinkingConfig not yet in types but supported
+    thinkingConfig: { thinkingBudget: 0 },
+  },
+})
+
 const VALID_CATEGORIES: Category[] = ['recipe', 'english', 'learning', 'news', 'selfdev', 'travel', 'story', 'tips', 'report']
 
 /**
@@ -109,7 +121,12 @@ const SUMMARY_PROMPTS: Record<Category, string> = {
 
   learning: `다음 학습 영상 자막을 분석해서 학습정리 JSON을 만드세요.
 
-{"square_meta":{"tags":["키워드1","키워드2","키워드3","키워드4","키워드5"],"topic_cluster":"대주제","vibe":"분위기"},"subject":"주제","concepts":[{"name":"개념","desc":"설명","timestamp":"MM:SS"}],"key_points":[{"point":"포인트","timestamp":"MM:SS"}],"examples":[{"desc":"예시","timestamp":"MM:SS"}]}`,
+[필수 지침]
+- concepts의 desc는 "이 개념이 무엇인지"와 "왜 중요한지"를 2문장으로 설명하세요. 단순 정의에 그치지 말고, 이해를 돕는 맥락을 담으세요.
+- key_points는 "이것만 알면 된다"는 핵심 인사이트를 완전한 문장으로 써주세요.
+- examples는 강사가 든 구체적인 예시·비유·사례를 원문에 가깝게 재현하세요.
+
+{"square_meta":{"tags":["키워드1","키워드2","키워드3","키워드4","키워드5"],"topic_cluster":"대주제","vibe":"분위기"},"subject":"주제","concepts":[{"name":"개념명","desc":"개념 설명 2문장 (정의 + 중요성/맥락)","timestamp":"MM:SS"}],"key_points":[{"point":"핵심 포인트 완전한 문장","timestamp":"MM:SS"}],"examples":[{"desc":"강사가 든 구체적 예시나 비유","timestamp":"MM:SS"}]}`,
 
   news: `자막을 처음부터 끝까지 읽고, 이 뉴스의 핵심 사건·사실만 추출해서 JSON을 완성하세요.
 
@@ -131,15 +148,31 @@ const SUMMARY_PROMPTS: Record<Category, string> = {
 
   selfdev: `다음 자기계발 영상 자막을 분석해서 인사이트 JSON을 만드세요.
 
-{"square_meta":{"tags":["키워드1","키워드2","키워드3","키워드4","키워드5"],"topic_cluster":"대주제","vibe":"분위기"},"core_message":{"text":"메시지","timestamp":"MM:SS"},"insights":[{"point":"인사이트","timestamp":"MM:SS"}],"checklist":["항목"],"quotes":[{"text":"인용","timestamp":"MM:SS"}]}`,
+[필수 지침]
+- core_message: 이 영상이 전하려는 단 하나의 핵심 메시지를 명확하고 임팩트 있게 한 문장으로.
+- insights: 단순 나열이 아닌, "왜 이것이 삶을 바꾸는가"라는 관점에서 각 인사이트를 2문장으로 서술. 번화한 자기계발서 문체보다는 솔직하고 설득력 있게.
+- checklist: 내일 당장 실행 가능한 행동으로 구체화. "~하기" 동사형으로.
+- quotes: 영상에 나온 인상적인 실제 발언이나 핵심 문장을 그대로.
+
+{"square_meta":{"tags":["키워드1","키워드2","키워드3","키워드4","키워드5"],"topic_cluster":"대주제","vibe":"분위기"},"core_message":{"text":"핵심 메시지 한 문장","timestamp":"MM:SS"},"insights":[{"point":"인사이트 2문장 (관찰 + 이유/의미)","timestamp":"MM:SS"}],"checklist":["내일 당장 실행 가능한 행동 (~하기 형식)"],"quotes":[{"text":"영상에서 나온 인상적인 실제 발언","timestamp":"MM:SS"}]}`,
 
   travel: `다음 여행 영상 자막을 분석해서 가이드 JSON을 만드세요.
 
 {"square_meta":{"tags":["키워드1","키워드2","키워드3","키워드4","키워드5"],"topic_cluster":"대주제","vibe":"분위기"},"destination":"여행지","places":[{"name":"장소","desc":"설명","price":"가격","tip":"팁","timestamp":"MM:SS"}],"route":"동선","practical_info":["정보"],"warnings":["주의"]}`,
 
-  story: `다음 스토리/드라마/가십 영상 자막을 분석해서 스토리 전개를 알 수 있는 타임라인 중심 JSON을 만드세요.
+  story: `다음 스토리/드라마/가십 영상 자막을 분석해서 독자를 몰입시키는 스토리 JSON을 만드세요.
 
-{"square_meta":{"tags":["키워드1","키워드2","키워드3","키워드4","키워드5"],"topic_cluster":"대주제","vibe":"분위기"},"title":"스토리/드라마 제목 또는 주제","genre":"장르(코미디/드라마/미스터리/썰 등)","characters":[{"name":"등장인물(가명/호칭 등)","desc":"특징이나 역할"}],"timeline":[{"timestamp":"MM:SS","event":"이 시간대에 벌어진 주요 사건"}],"conclusion":"결말 또는 요약"}`,
+[필수 지침 — 반드시 따를 것]
+- timeline의 각 event는 마치 웹소설 화자가 독자에게 들려주듯, 생생하고 맛깔난 2~3문장으로 써주세요.
+  · 인물의 감정·표정·반응·대화 뉘앙스를 살려주세요.
+  · 긴장감, 반전, 웃음 포인트가 있다면 자연스럽게 녹여주세요.
+  · 예시 문체: "그 순간 A의 표정이 굳어버렸다. B가 꺼낸 말 한마디가 그것도 그 타이밍에 나올 줄은 아무도 몰랐다."
+  · 절대 "A가 B를 만남", "C 사건 발생" 식의 건조한 나열은 하지 마세요.
+- characters의 desc는 이 인물의 성격·행동 패턴·관계를 독자가 상상할 수 있게 2문장으로.
+- conclusion은 결말의 여운 또는 반전을 살린 마무리 1~2문장으로 끝내주세요.
+- genre에는 실제 분위기를 반영하세요 (예: "충격 반전 썰", "풋풋한 로맨스", "억장 무너지는 드라마").
+
+{"square_meta":{"tags":["키워드1","키워드2","키워드3","키워드4","키워드5"],"topic_cluster":"대주제","vibe":"분위기 (예: 긴장감 넘치는, 웃음 폭발, 눈물 찔끔)"},"title":"스토리 제목","genre":"장르 (예: 충격 반전 썰, 로맨스 드라마, 소름 미스터리)","characters":[{"name":"인물명 또는 호칭","desc":"성격·행동 패턴·관계를 독자가 상상할 수 있게 2문장으로"}],"timeline":[{"timestamp":"MM:SS","event":"웹소설 화자처럼 생생하게 2~3문장. 감정·뉘앙스·반전 포인트 살릴 것"}],"conclusion":"결말의 여운 또는 반전을 살린 마무리 1~2문장"}`,
 
   tips: `다음 팁/하우투 영상 자막을 분석해서 팁 카드 JSON을 만드세요.
 각 팁은 번호와 함께 명확한 제목과 실용적인 설명으로 정리하세요. difficulty는 "쉬움"/"보통"/"어려움" 중 하나.
@@ -198,7 +231,8 @@ export async function generateSummary(
     ? '\n\n[IMPORTANT: Write ALL text values in the original language of the content (e.g. English). Do NOT translate to Korean.]'
     : ''
 
-  const result = await summaryModel.generateContent(`${prompt}${sourceNote}${langNote}
+  const model = category === 'story' ? storyModel : summaryModel
+  const result = await model.generateContent(`${prompt}${sourceNote}${langNote}
 
 ${source === 'youtube' ? '자막' : '내용'}:
 ${sampled}`)
@@ -428,7 +462,11 @@ export async function generateSegmentSummary(
   const result = await segmentModel.generateContent(`다음은 영상의 ${chunk.start}~${chunk.end} 구간 자막입니다.
 이 구간을 분석해서 JSON으로 정리하세요.
 
-{"headline":"이 구간의 핵심 제목 (20자 이내)","keyPoints":["포인트1 (1-2문장)","포인트2","포인트3"]}
+[지침]
+- headline: 이 구간의 핵심을 담은 제목 (20자 이내, 흥미를 끄는 문구)
+- keyPoints: 3~5개. 각 포인트는 "무엇이 다뤄졌고 왜 중요한지"를 완전한 문장 1~2개로. 단어나 구절이 아닌 문장으로 써주세요.
+
+{"headline":"이 구간의 핵심 제목 (20자 이내)","keyPoints":["포인트를 완전한 문장으로 (무엇 + 왜 중요한지)","포인트2","포인트3"]}
 
 자막:
 ${chunk.text.slice(0, 25000)}`)

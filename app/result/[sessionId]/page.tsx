@@ -29,6 +29,9 @@ async function getOgData(sessionId: string) {
     const channel = getString(fields.channel)
     const category = getString(fields.category)
     const videoPublishedAt = getString(fields.videoPublishedAt)
+    const contextSummary = getString(fields.contextSummary)
+    const summarizedAt = getString(fields.summarizedAt)
+    const videoId = getString(fields.videoId)
 
     const CATEGORY_FEATURED: Record<string, string> = {
       recipe:  '요리 AI 요약 | 재료 · 단계별 조리법 · 핵심 팁',
@@ -54,10 +57,13 @@ async function getOgData(sessionId: string) {
       report:  ['보고서', '분석', '리서치'],
     }
 
-    const description = `${CATEGORY_FEATURED[category] ?? 'AI 요약'} — ${title} (${channel}) | SSOKTUBE`
+    const fallbackDesc = `${CATEGORY_FEATURED[category] ?? 'AI 요약'} — ${title} (${channel}) | SSOKTUBE`
+    const description = contextSummary
+      ? `${contextSummary.slice(0, 150)}… | SSOKTUBE`
+      : fallbackDesc
     const keywords = [...(CATEGORY_KEYWORDS[category] ?? []), 'AI 요약', '유튜브 요약', '유튜브', title, channel]
 
-    return { title, thumbnail, channel, category, videoPublishedAt, description, keywords }
+    return { title, thumbnail, channel, category, videoPublishedAt, summarizedAt, videoId, description, keywords }
   } catch {
     return null
   }
@@ -77,6 +83,7 @@ export async function generateMetadata(
   }
 
   const pageTitle = og.title
+  const ogImage = og.thumbnail && !og.thumbnail.startsWith('data:') ? og.thumbnail : null
 
   return {
     title: pageTitle,
@@ -91,9 +98,9 @@ export async function generateMetadata(
       type: 'article',
       url: `https://ssoktube.com/result/${sessionId}`,
       siteName: 'SSOKTUBE',
-      // 유튜브 썸네일을 og:image로 명시 → 카카오 등 링크 미리보기에서 썸네일 표시
-      ...(og.thumbnail ? {
-        images: [{ url: og.thumbnail, width: 1280, height: 720, alt: og.title }],
+      // data: URL은 소셜 스크래퍼가 fetch 불가 → 유튜브 실제 URL만 사용
+      ...(ogImage ? {
+        images: [{ url: ogImage, width: 1280, height: 720, alt: og.title }],
       } : {}),
     },
     twitter: {
@@ -110,13 +117,16 @@ export default async function ResultPage(
   const { sessionId } = await params
   const og = await getOgData(sessionId)
 
+  // data: URL은 OG/JSON-LD에 사용 불가 (소셜 스크래퍼가 fetch 불가)
+  const ogImage = og?.thumbnail && !og.thumbnail.startsWith('data:') ? og.thumbnail : null
+
   // JSON-LD 구조화 데이터 (SEO 핵심)
   const jsonLd = og ? {
     "@context": "https://schema.org",
     "@type": "Article",
     "headline": og.title,
     "description": og.description,
-    "image": og.thumbnail,
+    ...(ogImage && { "image": ogImage }),
     "url": `https://ssoktube.com/result/${sessionId}`,
     "author": {
       "@type": "Organization",
@@ -132,15 +142,18 @@ export default async function ResultPage(
         "url": "https://ssoktube.com/icon.png"
       }
     },
-    ...(og.videoPublishedAt && {
-      "datePublished": og.videoPublishedAt,
-    }),
+    ...(og.videoPublishedAt && { "datePublished": og.videoPublishedAt }),
+    ...(og.summarizedAt && { "dateModified": og.summarizedAt }),
     "mainEntity": {
       "@type": "VideoObject",
       "name": og.title,
       "description": og.description,
-      "thumbnailUrl": og.thumbnail,
+      ...(ogImage && { "thumbnailUrl": ogImage }),
       ...(og.videoPublishedAt && { "uploadDate": og.videoPublishedAt }),
+      ...(og.videoId && {
+        "embedUrl": `https://www.youtube.com/embed/${og.videoId}`,
+        "url": `https://www.youtube.com/watch?v=${og.videoId}`,
+      }),
     }
   } : null
 

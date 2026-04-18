@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation'
 import { formatRelativeDate } from '@/lib/formatDate'
 import Link from 'next/link'
 import AnalyticsTab from '@/components/admin/AnalyticsTab'
+import CurationTab from '@/components/admin/CurationTab'
 
 interface AdminStats {
   totalSummaries: number
@@ -23,7 +24,7 @@ interface UserStats {
   paid: number
 }
 
-type AdminTab = 'analytics' | 'videos' | 'users'
+type AdminTab = 'analytics' | 'videos' | 'users' | 'curation'
 
 export default function AdminDashboard() {
   const { user, loading: authLoading } = useAuth()
@@ -198,11 +199,22 @@ export default function AdminDashboard() {
           >
             👥 회원 관리
           </button>
+          <button
+            onClick={() => setActiveTab('curation')}
+            className={`px-5 py-2.5 rounded-xl text-sm font-bold transition-colors ${activeTab === 'curation' ? 'bg-orange-500 text-white' : 'bg-white/5 text-gray-400 hover:bg-white/10'}`}
+          >
+            ✍️ 매거진
+          </button>
         </div>
 
         {/* ── 통계 분석 탭 ── */}
         {activeTab === 'analytics' && (
           <AnalyticsTab getAuthHeader={getAuthHeader} />
+        )}
+
+        {/* ── 매거진 큐레이션 탭 ── */}
+        {activeTab === 'curation' && (
+          <CurationTab getAuthHeader={getAuthHeader} />
         )}
 
         {/* ── 영상 관리 탭 ── */}

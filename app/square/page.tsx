@@ -11,6 +11,8 @@ import { useRouter } from 'next/navigation'
 import FloatingChat from '@/components/chat/FloatingChat'
 import AdBanner from '@/components/ads/AdBanner'
 import { naturalSearch } from '@/lib/nlp-search'
+import MagazineCard from '@/components/square/MagazineCard'
+import { getPublishedPosts, CuratedPost } from '@/lib/magazine'
 
 const CATEGORIES = [
   { id: 'all',     label: '전체' },
@@ -41,16 +43,22 @@ type RecSlot = {
   slotId: string
   category: string
   items: SavedSummary[]
-  personalized: boolean  // true: 좋아요 기반 / false: 인기 폴백
+  personalized: boolean
 }
 type AdSlotItem = {
   __ad: true
   slotId: string
 }
-type GridItem = SavedSummary | RecSlot | AdSlotItem
+type MagSlot = {
+  __mag: true
+  slotId: string
+  post: CuratedPost
+}
+type GridItem = SavedSummary | RecSlot | AdSlotItem | MagSlot
 
-const RECOMMENDATION_INTERVAL = 9  // 카드 N개마다 추천 1개 삽입
-const AD_INTERVAL = 13              // 카드 N개마다 광고 1개 삽입 (추천과 겹치지 않게 소수)
+const RECOMMENDATION_INTERVAL = 9
+const AD_INTERVAL = 13
+const MAGAZINE_INTERVAL = 7  // 카드 7개마다 매거진 포스트 1개 삽입
 
 // 반응형 컬럼 수 — window.innerWidth 기반
 function useColumnCount() {
@@ -271,6 +279,7 @@ export default function SquarePage() {
   const router = useRouter()
   const [summaries, setSummaries] = useState<SavedSummary[]>([])
   const [allSummaries, setAllSummaries] = useState<SavedSummary[]>([])
+  const [magazinePosts, setMagazinePosts] = useState<CuratedPost[]>([])
   const [loading, setLoading] = useState(true)
   const [activeCategory, setActiveCategory] = useState('all')
   const [sortType, setSortType] = useState<SortType>('latest')
@@ -283,17 +292,16 @@ export default function SquarePage() {
   const colCount = useColumnCount()
 
   useEffect(() => {
-    getPublicSummaries()
-      .then(data => {
-        setSummaries(data)
-        setAllSummaries(data)
-        // 댓글 수 비동기 로드 (카드 렌더링 차단 안 함)
-        const sessionIds = [...new Set(data.map(s => s.sessionId))]
-        getCommentCountsBySessionIds(sessionIds)
-          .then(setCommentCounts)
-          .catch(() => {})
-      })
-      .catch(e => console.error('Failed to load square data:', e))
+    Promise.all([
+      getPublicSummaries(),
+      getPublishedPosts(10),
+    ]).then(([data, posts]) => {
+      setSummaries(data)
+      setAllSummaries(data)
+      setMagazinePosts(posts)
+      const sessionIds = [...new Set(data.map(s => s.sessionId))]
+      getCommentCountsBySessionIds(sessionIds).then(setCommentCounts).catch(() => {})
+    }).catch(e => console.error('Failed to load square data:', e))
       .finally(() => setLoading(false))
   }, [])
 
@@ -420,20 +428,27 @@ export default function SquarePage() {
     return pool
   }, [effectiveCats, allSummaries, likedIds])
 
-  // 일반 카드 + 추천 카드 + 광고 카드를 flat 배열로 합성 — masonry가 자연스럽게 흐름
+  // 일반 카드 + 추천 + 광고 + 매거진 카드를 flat 배열로 합성
   const gridItems = useMemo<GridItem[]>(() => {
     const result: GridItem[] = []
     let recIndex = 0
     let adIndex = 0
+    let magIndex = 0
 
     filtered.forEach((item, i) => {
       result.push(item)
 
-      const pos = i + 1  // 1-based 위치
+      const pos = i + 1
 
-      // 추천 슬롯: RECOMMENDATION_INTERVAL 마다
+      // 매거진 슬롯: MAGAZINE_INTERVAL 마다
+      if (pos % MAGAZINE_INTERVAL === 0 && magazinePosts.length > 0) {
+        const post = magazinePosts[magIndex % magazinePosts.length]
+        result.push({ __mag: true, slotId: `mag-${magIndex}`, post })
+        magIndex++
+      }
+
+      // 추천 슬롯
       if (pos % RECOMMENDATION_INTERVAL === 0 && effectiveCats.length > 0) {
-        // pool이 부족한 카테고리는 건너뛰며 순환 (recIndex 고착 방지)
         let inserted = false
         for (let attempt = 0; attempt < effectiveCats.length; attempt++) {
           const cat = effectiveCats[(recIndex + attempt) % effectiveCats.length]
@@ -445,17 +460,17 @@ export default function SquarePage() {
             break
           }
         }
-        if (!inserted) recIndex++  // 모든 카테고리 부족 시에도 다음 순환으로 이동
+        if (!inserted) recIndex++
       }
 
-      // 광고 슬롯: AD_INTERVAL 마다 (추천과 같은 위치면 다음 칸으로 밀림)
+      // 광고 슬롯
       if (pos % AD_INTERVAL === 0) {
         result.push({ __ad: true, slotId: `ad-${adIndex++}` })
       }
     })
 
     return result
-  }, [filtered, effectiveCats, isPersonalized, recommendationPool])
+  }, [filtered, effectiveCats, isPersonalized, recommendationPool, magazinePosts])
 
   // flat 배열 → N열에 행 우선(좌→우) 순서로 분배
   // CSS columns는 열 우선이라 추천/광고 카드 위치가 틀어지므로, 직접 분배
@@ -563,6 +578,7 @@ export default function SquarePage() {
             {columns.map((col, ci) => (
               <div key={ci} className="flex-1 flex flex-col gap-3 min-w-0">
                 {col.map(item => {
+                  if ('__mag' in item) return <MagazineCard key={item.slotId} post={item.post} />
                   if ('__rec' in item) return <RecommendationCard key={item.slotId} slot={item} />
                   if ('__ad'  in item) return <AdCard key={item.slotId} slot={item} />
                   return (

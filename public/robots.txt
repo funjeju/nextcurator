@@ -1,0 +1,15 @@
+User-agent: *
+Allow: /
+Allow: /square
+Allow: /result/
+
+Disallow: /admin
+Disallow: /api/
+Disallow: /mypage
+Disallow: /messages
+Disallow: /classroom/
+Disallow: /report
+Disallow: /room/
+Disallow: /profile/
+
+Sitemap: https://ssoktube.com/sitemap.xml
