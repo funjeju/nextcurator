@@ -914,7 +914,7 @@ export default function SquareClient({ initialSummaries = [], initialMagazinePos
             ))}
           </div>
         )}
-        </> {/* feed tab end */}
+        </>
         )}
       </div>
 
