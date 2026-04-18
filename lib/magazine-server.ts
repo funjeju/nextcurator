@@ -3,7 +3,6 @@ import { getFirestore } from 'firebase-admin/firestore'
 import type { CurationSettings } from '@/lib/magazine'
 
 initAdminApp()
-function adminDb() { return getFirestore() }
 
 const SETTINGS_DEFAULTS: CurationSettings = {
   enabled: false,
@@ -17,14 +16,15 @@ const SETTINGS_DEFAULTS: CurationSettings = {
 
 export async function getCurationSettings(): Promise<CurationSettings> {
   try {
-    const snap = await adminDb().collection('settings').doc('curation').get()
+    const snap = await getFirestore().collection('settings').doc('curation').get()
     if (!snap.exists) return { ...SETTINGS_DEFAULTS }
     return { ...SETTINGS_DEFAULTS, ...snap.data() } as CurationSettings
-  } catch {
+  } catch (e) {
+    console.error('[getCurationSettings]', e)
     return { ...SETTINGS_DEFAULTS }
   }
 }
 
 export async function saveCurationSettings(settings: Partial<CurationSettings>) {
-  await adminDb().collection('settings').doc('curation').set(settings, { merge: true })
+  await getFirestore().collection('settings').doc('curation').set(settings, { merge: true })
 }
