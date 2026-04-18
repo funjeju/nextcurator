@@ -80,16 +80,25 @@ export async function saveCurationSettings(settings: Partial<CurationSettings>, 
   for (const [k, v] of Object.entries(settings)) fields[k] = toFV(v)
 
   const updateMask = Object.keys(settings).map(k => `updateMask.fieldPaths=${encodeURIComponent(k)}`).join('&')
-  const url = `${BASE}/settings/curation?key=${API_KEY}&${updateMask}`
 
-  const res = await fetch(url, {
-    method: 'PATCH',
-    headers: makeHeaders(idToken),
-    body: JSON.stringify({ fields }),
-  })
+  // 1차 시도: ID 토큰으로 인증
+  // 2차 시도: API Key만으로 (Firestore 규칙이 열려있을 경우)
+  const attempts = idToken
+    ? [makeHeaders(idToken), makeHeaders(undefined)]
+    : [makeHeaders(undefined)]
 
-  if (!res.ok) {
+  let lastError = ''
+  for (const headers of attempts) {
+    const url = `${BASE}/settings/curation?key=${API_KEY}&${updateMask}`
+    const res = await fetch(url, {
+      method: 'PATCH',
+      headers,
+      body: JSON.stringify({ fields }),
+    })
+    if (res.ok) return
     const body = await res.text().catch(() => '')
-    throw new Error(`Firestore PATCH failed (${res.status}): ${body}`)
+    lastError = `Firestore PATCH failed (${res.status}): ${body}`
+    console.error('[saveCurationSettings]', lastError)
   }
+  throw new Error(lastError)
 }

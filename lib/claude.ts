@@ -115,9 +115,17 @@ const SUMMARY_PROMPTS: Record<Category, string> = {
 
 {"square_meta":{"tags":["키워드1","키워드2","키워드3","키워드4","키워드5"],"topic_cluster":"대주제","vibe":"분위기"},"dish_name":"요리명","difficulty":"초보","total_time":"시간","servings":"인분","ingredient_groups":[{"group":"메인 재료","items":[{"name":"재료","amount":"분량"}]},{"group":"양념","items":[{"name":"재료","amount":"분량"}]}],"steps":[{"step":1,"desc":"설명","timestamp":"MM:SS"}],"key_tips":["팁"]}`,
 
-  english: `다음 영어학습 영상 자막을 분석해서 학습카드 JSON을 만드세요.
+  english: `다음 영어 영상 자막을 분석해서 한국인 영어 학습자를 위한 학습카드 JSON을 만드세요.
 
-{"square_meta":{"tags":["키워드1","키워드2","키워드3","키워드4","키워드5"],"topic_cluster":"대주제","vibe":"분위기"},"song_or_title":"제목","artist":"아티스트","expressions":[{"text":"표현","meaning":"의미","note":"설명","timestamp":"MM:SS"}],"vocabulary":[{"word":"단어","meaning":"뜻","pronunciation":"발음"}],"patterns":["패턴"],"cultural_context":"맥락"}`,
+[필수 지침]
+- 이 결과물은 한국인이 영어를 공부하기 위한 자료입니다. 모든 설명(meaning, note, desc)은 반드시 한국어로 작성하세요.
+- expressions: 영상에서 실제로 사용된 핵심 영어 표현을 그대로 추출하고, 한국어로 의미와 뉘앙스를 설명하세요.
+- vocabulary: 고급 어휘나 헷갈리기 쉬운 단어를 선별하고, 한국어로 뜻과 예문 설명을 담으세요.
+- patterns: 영상에서 반복되는 문법 패턴이나 표현 구조를 "영어 패턴 → 한국어 설명" 형식으로 작성하세요.
+- cultural_context: 문화적 배경이나 뉘앙스를 한국어로 설명하세요.
+- key_message: 이 영상의 핵심 내용을 한국어로 2~3문장 요약하세요.
+
+{"square_meta":{"tags":["키워드1","키워드2","키워드3","키워드4","키워드5"],"topic_cluster":"대주제","vibe":"분위기"},"title":"영상 제목(영어)","key_message":"영상 핵심 내용 한국어 요약 2~3문장","expressions":[{"text":"영어 원문 표현","meaning":"한국어 의미","note":"한국어로 뉘앙스·사용법 설명","timestamp":"MM:SS"}],"vocabulary":[{"word":"영어 단어","meaning":"한국어 뜻","example":"영어 예문","example_ko":"한국어 번역"}],"patterns":[{"pattern":"영어 문법/표현 패턴","desc":"한국어 설명"}],"cultural_context":"문화적 맥락 한국어 설명"}`,
 
   learning: `다음 학습 영상 자막을 분석해서 학습정리 JSON을 만드세요.
 

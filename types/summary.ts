@@ -20,11 +20,13 @@ export interface RecipeSummary {
 
 export interface EnglishSummary {
   square_meta: SquareMeta
-  song_or_title: string
-  artist?: string
+  song_or_title?: string  // legacy
+  artist?: string         // legacy
+  title?: string
+  key_message?: string
   expressions: { text: string; meaning: string; note: string; timestamp: string }[]
-  vocabulary: { word: string; meaning: string; pronunciation: string }[]
-  patterns: string[]
+  vocabulary: { word: string; meaning: string; pronunciation?: string; example?: string; example_ko?: string }[]
+  patterns: (string | { pattern: string; desc: string })[]
   cultural_context?: string
 }
 

@@ -179,16 +179,15 @@ export async function saveCurationSettings(settings: Partial<CurationSettings>) 
 // ─── Summaries for curation ──────────────────────────────────────────────────
 
 export async function getRecentPublicSummaries(lookbackDays: number): Promise<SummaryForCuration[]> {
-  const since = new Date(Date.now() - lookbackDays * 24 * 60 * 60 * 1000).toISOString()
+  const sinceMs = Date.now() - lookbackDays * 24 * 60 * 60 * 1000
 
+  // 복합 인덱스 불필요: isPublic 단일 필터로 조회 후 날짜를 JS에서 필터링
   const docs = await fsQuery('saved_summaries', {
     where: {
-      compositeFilter: {
-        op: 'AND',
-        filters: [
-          { fieldFilter: { field: { fieldPath: 'isPublic' }, op: 'EQUAL', value: { booleanValue: true } } },
-          { fieldFilter: { field: { fieldPath: 'createdAt' }, op: 'GREATER_THAN_OR_EQUAL', value: { timestampValue: since } } },
-        ],
+      fieldFilter: {
+        field: { fieldPath: 'isPublic' },
+        op: 'EQUAL',
+        value: { booleanValue: true },
       },
     },
     select: {
@@ -197,29 +196,44 @@ export async function getRecentPublicSummaries(lookbackDays: number): Promise<Su
         'square_meta', 'contextSummary', 'reportSummary', 'createdAt',
       ].map(f => ({ fieldPath: f })),
     },
-    limit: 200,
+    orderBy: [{ field: { fieldPath: 'createdAt' }, direction: 'DESCENDING' }],
+    limit: 500,
   })
 
-  return docs.map(({ id, data }) => {
-    const meta = (data.square_meta as Record<string, unknown>) ?? {}
-    const createdAt = data.createdAt
-    const summarizedAt = typeof createdAt === 'number'
-      ? new Date(createdAt).toISOString()
-      : typeof createdAt === 'string' ? createdAt : ''
-    return {
-      id,
-      sessionId: (data.sessionId as string) ?? '',
-      title: (data.title as string) ?? '',
-      channel: (data.channel as string) ?? '',
-      thumbnail: (data.thumbnail as string) ?? '',
-      category: (data.category as string) ?? '',
-      topicCluster: (meta.topic_cluster as string) ?? '',
-      tags: (meta.tags as string[]) ?? [],
-      contextSummary: (data.contextSummary as string) ?? '',
-      reportSummary: (data.reportSummary as string) ?? '',
-      summarizedAt,
-    }
-  })
+  return docs
+    .map(({ id, data }) => {
+      const meta = (data.square_meta as Record<string, unknown>) ?? {}
+      const createdAt = data.createdAt
+      // createdAt: Firestore Timestamp → 숫자(ms) or ISO string
+      let summarizedAt = ''
+      let createdAtMs = 0
+      if (typeof createdAt === 'number') {
+        createdAtMs = createdAt
+        summarizedAt = new Date(createdAt).toISOString()
+      } else if (typeof createdAt === 'object' && createdAt !== null && 'seconds' in (createdAt as any)) {
+        createdAtMs = (createdAt as any).seconds * 1000
+        summarizedAt = new Date(createdAtMs).toISOString()
+      } else if (typeof createdAt === 'string') {
+        createdAtMs = new Date(createdAt).getTime()
+        summarizedAt = createdAt
+      }
+      return {
+        id,
+        sessionId: (data.sessionId as string) ?? '',
+        title: (data.title as string) ?? '',
+        channel: (data.channel as string) ?? '',
+        thumbnail: (data.thumbnail as string) ?? '',
+        category: (data.category as string) ?? '',
+        topicCluster: (meta.topic_cluster as string) ?? '',
+        tags: (meta.tags as string[]) ?? [],
+        contextSummary: (data.contextSummary as string) ?? '',
+        reportSummary: (data.reportSummary as string) ?? '',
+        summarizedAt,
+        _createdAtMs: createdAtMs,
+      }
+    })
+    .filter(s => s._createdAtMs === 0 || s._createdAtMs >= sinceMs)
+    .map(({ _createdAtMs: _, ...s }) => s)
 }
 
 // ─── Clustering ──────────────────────────────────────────────────────────────
