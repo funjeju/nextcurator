@@ -83,7 +83,7 @@ export async function POST(req: NextRequest) {
 
     if (!cluster) {
       return NextResponse.json({
-        error: `클러스터 부족. 최소 ${settings.minVideoCount}개 이상의 영상이 같은 주제여야 합니다.`,
+        error: `클러스터 부족. 최소 ${settings.minVideoCount}개 이상의 영상이 같은 주제(또는 카테고리)여야 합니다. 현재 조회된 공개 영상: ${summaries.length}개 (최근 ${settings.lookbackDays}일 기준)`,
         availableCount: summaries.length,
       }, { status: 422 })
     }

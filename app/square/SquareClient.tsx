@@ -77,6 +77,7 @@ function useColumnCount() {
 }
 
 type SortType = 'latest' | 'popular' | 'views'
+type ViewMode = 'grid' | 'list'
 
 function getUserTopCategories(likedIds: Set<string>, summaries: SavedSummary[]): string[] {
   const counts: Record<string, number> = {}

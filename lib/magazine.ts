@@ -229,20 +229,40 @@ export function findBestCluster(
   minCount: number,
   maxCount: number,
 ): { cluster: string; items: SummaryForCuration[] } | null {
-  const clusters: Record<string, SummaryForCuration[]> = {}
+  // 1차: topic_cluster 기반 클러스터링
+  const topicClusters: Record<string, SummaryForCuration[]> = {}
   for (const s of summaries) {
-    if (!s.topicCluster) continue
-    clusters[s.topicCluster] = clusters[s.topicCluster] ?? []
-    clusters[s.topicCluster].push(s)
+    const key = s.topicCluster?.trim()
+    if (!key) continue
+    topicClusters[key] = topicClusters[key] ?? []
+    topicClusters[key].push(s)
   }
 
-  const valid = Object.entries(clusters)
+  const topicValid = Object.entries(topicClusters)
     .filter(([, items]) => items.length >= minCount)
     .sort((a, b) => b[1].length - a[1].length)
 
-  if (!valid.length) return null
-  const [cluster, items] = valid[0]
-  // Sort by newest first, cap at maxCount
+  if (topicValid.length) {
+    const [cluster, items] = topicValid[0]
+    const sorted = [...items].sort((a, b) => b.summarizedAt.localeCompare(a.summarizedAt))
+    return { cluster, items: sorted.slice(0, maxCount) }
+  }
+
+  // 2차 폴백: category 기반 클러스터링 (topic_cluster 미설정 영상 대응)
+  const catClusters: Record<string, SummaryForCuration[]> = {}
+  for (const s of summaries) {
+    const key = s.category?.trim()
+    if (!key) continue
+    catClusters[key] = catClusters[key] ?? []
+    catClusters[key].push(s)
+  }
+
+  const catValid = Object.entries(catClusters)
+    .filter(([, items]) => items.length >= minCount)
+    .sort((a, b) => b[1].length - a[1].length)
+
+  if (!catValid.length) return null
+  const [cluster, items] = catValid[0]
   const sorted = [...items].sort((a, b) => b.summarizedAt.localeCompare(a.summarizedAt))
   return { cluster, items: sorted.slice(0, maxCount) }
 }
