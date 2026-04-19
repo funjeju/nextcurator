@@ -27,22 +27,19 @@ function isAuthorized(req: NextRequest): boolean {
 
 // YouTube Data API로 카테고리별 핫한 영상 조회
 async function searchHotVideos(query: string, maxResults = 3): Promise<string[]> {
-  const publishedAfter = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString()
-
   const url = new URL('https://www.googleapis.com/youtube/v3/search')
   url.searchParams.set('part', 'snippet')
   url.searchParams.set('q', query)
-  url.searchParams.set('type', 'video')
-  url.searchParams.set('regionCode', 'KR')
-  url.searchParams.set('relevanceLanguage', 'ko')
-  url.searchParams.set('order', 'viewCount')
-  url.searchParams.set('publishedAfter', publishedAfter)
-  url.searchParams.set('videoDuration', 'medium') // 4분~20분
-  url.searchParams.set('maxResults', String(maxResults + 2)) // 여유분
+  url.searchParams.set('maxResults', String(maxResults + 2))
   url.searchParams.set('key', YOUTUBE_API_KEY)
 
+  console.log('[AutoCollect] YouTube search URL (key redacted):', url.toString().replace(YOUTUBE_API_KEY, 'REDACTED'))
+
   const res = await fetch(url.toString(), { signal: AbortSignal.timeout(10000) })
-  if (!res.ok) throw new Error(`YouTube search failed: ${res.status}`)
+  if (!res.ok) {
+    const errBody = await res.text().catch(() => '(empty)')
+    throw new Error(`YouTube search failed: ${res.status} | ${errBody}`)
+  }
 
   const data = await res.json() as { items?: { id?: { videoId?: string } }[] }
   return (data.items ?? [])
