@@ -143,8 +143,8 @@ async function collectAndSummarize(videoId: string, categoryHint: string): Promi
     const sessionId = randomUUID()
 
     const square_meta = {
-      topic_cluster: classified.topicCluster ?? category,
-      tags: classified.tags ?? [],
+      topic_cluster: category,
+      tags: [] as string[],
       channel: basicInfo.channel,
       thumbnail: basicInfo.thumbnail,
       ytViewCount: stats.viewCount,
