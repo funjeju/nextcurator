@@ -831,6 +831,17 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
           </div>
         )}
 
+        {/* 자막 없음 경고 배너 */}
+        {(data as any).transcriptWarning && (
+          <div className="flex items-start gap-3 bg-yellow-500/10 border border-yellow-500/20 rounded-2xl px-4 py-3">
+            <span className="text-yellow-400 text-base shrink-0 mt-0.5">⚠️</span>
+            <div className="flex-1 min-w-0">
+              <p className="text-yellow-300 text-sm font-semibold">자막 추출 실패</p>
+              <p className="text-yellow-400/70 text-xs leading-relaxed mt-0.5">{(data as any).transcriptWarning}</p>
+            </div>
+          </div>
+        )}
+
         {/* 영상 정보 */}
         <div>
           <div className="flex items-center justify-between gap-2 mb-2">

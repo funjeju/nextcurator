@@ -75,16 +75,21 @@ async function getTranscriptViaSocialKit(videoId: string): Promise<string> {
 
   const videoUrl = `https://www.youtube.com/watch?v=${videoId}`
 
+  const startTime = Date.now()
+
   const res = await fetch(
     `https://api.socialkit.dev/youtube/transcript?url=${encodeURIComponent(videoUrl)}`,
     {
       headers: { 'x-access-key': apiKey },
-      signal: AbortSignal.timeout(90000),  // STT 변환 시간을 충분히 확보
+      signal: AbortSignal.timeout(240000),  // 4분 — STT 긴 영상 대응 (Vercel maxDuration 300s 기준)
     }
   )
 
+  const elapsed = ((Date.now() - startTime) / 1000).toFixed(1)
+
   if (!res.ok) {
     const errText = await res.text().catch(() => '')
+    console.warn(`[SocialKit] ❌ HTTP ${res.status} (${elapsed}s): ${errText.slice(0, 200)}`)
     throw new Error(`SOCIALKIT_${res.status}: ${errText.slice(0, 100)}`)
   }
 
@@ -95,17 +100,35 @@ async function getTranscriptViaSocialKit(videoId: string): Promise<string> {
       transcriptSegments?: Array<{ text: string; start: number; duration: number; timestamp: string }>
       wordCount?: number
       segments?: number
+      method?: string       // SocialKit이 어떤 방식 사용했는지 (있을 수도 있음)
+      language?: string
     }
     error?: string
+    message?: string
   }
 
+  // STT vs 자막 구분 추적 로그 (테스트용)
+  console.log(`[SocialKit] 응답 (${elapsed}s):`, JSON.stringify({
+    success: data.success,
+    error: data.error,
+    message: data.message,
+    wordCount: data.data?.wordCount,
+    segments: data.data?.segments,
+    method: data.data?.method,
+    language: data.data?.language,
+    hasTranscriptSegments: !!(data.data?.transcriptSegments?.length),
+    hasTranscript: !!(data.data?.transcript?.length),
+    transcriptPreview: data.data?.transcript?.slice(0, 100),
+  }))
+
   if (!data.success || !data.data) {
-    throw new Error(`SOCIALKIT_FAILED: ${data.error || 'unknown'}`)
+    throw new Error(`SOCIALKIT_FAILED: ${data.error || data.message || 'unknown'}`)
   }
 
   // transcriptSegments → 타임스탬프 포함 포맷으로 변환
   const segs = data.data.transcriptSegments
   if (segs && segs.length > 0) {
+    console.log(`[SocialKit] ✅ 세그먼트 ${segs.length}개 추출 완료 (${elapsed}s)`)
     return segs
       .map(s => `[${s.timestamp}] ${s.text.replace(/\n/g, ' ').trim()}`)
       .filter(line => line.length > 10)
@@ -114,6 +137,7 @@ async function getTranscriptViaSocialKit(videoId: string): Promise<string> {
 
   // 세그먼트 없으면 full transcript 사용
   if (data.data.transcript && data.data.transcript.trim().length > 50) {
+    console.log(`[SocialKit] ✅ full transcript 사용 (${elapsed}s, ${data.data.transcript.length}자)`)
     return data.data.transcript.trim()
   }
 

@@ -3,7 +3,7 @@ import { extractVideoId, getTranscript, getVideoMeta, detectTranscriptLang } fro
 import { classifyCategory, generateSummary, generateReportSummary, generateContextSummary } from '@/lib/claude'
 import { randomUUID } from 'crypto'
 
-export const maxDuration = 120
+export const maxDuration = 300
 
 const PROJECT_ID = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID!
 const API_KEY = process.env.NEXT_PUBLIC_FIREBASE_API_KEY!
@@ -358,9 +358,16 @@ export async function POST(req: NextRequest) {
 
     const fullContext = contextParts.join('\n\n')
 
-    // 자막·설명 모두 없을 때 (제목만으로 요약) — 로그로 트래킹
-    if (!transcript && !description) {
-      console.warn(`[Summarize] ⚠️ No transcript or description for ${videoId} — summarizing from title only`)
+    // 자막 실패 시 경고 메시지 생성
+    let transcriptWarning = ''
+    if (transcriptSource === 'none') {
+      if (!description) {
+        transcriptWarning = '이 영상은 자막과 설명 정보를 모두 가져올 수 없어 제목만으로 요약했습니다. 정확도가 낮을 수 있습니다.'
+        console.warn(`[Summarize] ⚠️ No transcript or description for ${videoId} — summarizing from title only`)
+      } else {
+        transcriptWarning = '이 영상은 자막을 가져올 수 없어 영상 설명과 댓글을 기반으로 요약했습니다. 실제 내용과 다를 수 있습니다.'
+        console.warn(`[Summarize] ⚠️ No transcript for ${videoId} — summarizing from description/comments`)
+      }
     }
 
     let category = userCategory
@@ -388,6 +395,7 @@ export async function POST(req: NextRequest) {
       contextSummary,
       transcript,
       transcriptSource,
+      transcriptWarning,
       videoPublishedAt: videoInfo.publishedAt || '',
       summarizedAt: new Date().toISOString(),
       reportSummary: reportSummary || '',
