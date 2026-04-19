@@ -150,6 +150,34 @@ export async function incrementPostViewAdmin(id: string) {
   await db.collection('curated_posts').doc(id).update({ viewCount: FieldValue.increment(1) })
 }
 
+export async function getSummaryBySessionIdAdmin(sessionId: string): Promise<import('@/lib/magazine').SummaryForCuration | null> {
+  initAdminApp()
+  const { getFirestore } = await import('firebase-admin/firestore')
+  const db = getFirestore()
+  const snap = await db.collection('saved_summaries').where('sessionId', '==', sessionId).limit(1).get()
+  if (snap.empty) return null
+  const data = snap.docs[0].data()
+  const id = snap.docs[0].id
+  const meta = data.square_meta ?? {}
+  return {
+    id,
+    sessionId: data.sessionId ?? '',
+    videoId: data.videoId ?? '',
+    title: data.title ?? '',
+    channel: data.channel ?? meta.channel ?? '',
+    thumbnail: data.thumbnail ?? meta.thumbnail ?? '',
+    category: data.category ?? meta.category ?? 'learning',
+    topicCluster: data.topicCluster ?? meta.topicCluster ?? '',
+    tags: data.tags ?? meta.tags ?? [],
+    contextSummary: data.contextSummary ?? '',
+    reportSummary: data.reportSummary ?? '',
+    summarizedAt: data.createdAt ?? '',
+    videoPublishedAt: data.videoPublishedAt ?? '',
+    ytViewCount: data.ytViewCount ?? meta.ytViewCount ?? 0,
+    postedToMagazine: data.postedToMagazine ?? false,
+  }
+}
+
 export async function listCuratedPostsAdmin(): Promise<CuratedPost[]> {
   initAdminApp()
   const { getFirestore } = await import('firebase-admin/firestore')

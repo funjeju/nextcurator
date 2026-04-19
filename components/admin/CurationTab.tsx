@@ -53,6 +53,9 @@ export default function CurationTab({ getAuthHeader }: {
   const [saving, setSaving]       = useState(false)
   const [triggering, setTriggering] = useState(false)
   const [triggerResult, setTriggerResult] = useState<string>('')
+  const [urlInput, setUrlInput]   = useState('')
+  const [urlTriggering, setUrlTriggering] = useState(false)
+  const [urlResult, setUrlResult] = useState<string>('')
   const [actionId, setActionId]   = useState<string | null>(null)
   const [previewPost, setPreviewPost] = useState<CuratedPost | null>(null)
 
@@ -87,6 +90,47 @@ export default function CurationTab({ getAuthHeader }: {
     setSaving(true)
     await callAdmin('saveSettings', { settings })
     setSaving(false)
+  }
+
+  const extractSessionId = (input: string): string => {
+    const trimmed = input.trim()
+    try {
+      const url = new URL(trimmed)
+      const parts = url.pathname.split('/').filter(Boolean)
+      const idx = parts.indexOf('result')
+      if (idx !== -1 && parts[idx + 1]) return parts[idx + 1]
+    } catch { /* not a URL */ }
+    return trimmed
+  }
+
+  const handleUrlTrigger = async (autoPublish: boolean) => {
+    const sessionId = extractSessionId(urlInput)
+    if (!sessionId) return
+    setUrlTriggering(true)
+    setUrlResult('')
+    try {
+      const res = await fetch('/api/cron/generate-post', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ force: true, autoPublish, sessionId }),
+      })
+      const data = await res.json()
+      if (data.success) {
+        setUrlResult(`✅ 생성 완료: "${data.title}" (${data.status})`)
+        setUrlInput('')
+        const [updatedPosts, updatedLogs] = await Promise.all([
+          callAdmin('listPosts'),
+          callAdmin('getLogs'),
+        ])
+        if (Array.isArray(updatedPosts)) setPosts(updatedPosts)
+        if (Array.isArray(updatedLogs)) setLogs(updatedLogs)
+      } else {
+        setUrlResult(`⚠️ ${data.error ?? '알 수 없는 오류'}`)
+      }
+    } catch (e) {
+      setUrlResult(`❌ 오류: ${String(e)}`)
+    }
+    setUrlTriggering(false)
   }
 
   const handleTrigger = async (autoPublish: boolean) => {
@@ -314,6 +358,46 @@ export default function CurationTab({ getAuthHeader }: {
             {triggerResult}
           </p>
         )}
+
+        {/* ── URL 지정 생성 ── */}
+        <div className="mt-5 pt-5 border-t border-white/8">
+          <p className="text-xs text-[#75716e] font-bold uppercase tracking-wide mb-2">
+            특정 요약 페이지로 생성
+          </p>
+          <p className="text-[11px] text-[#4a4846] mb-3">
+            마이페이지·스퀘어의 요약 페이지 URL 또는 sessionId를 입력하세요
+          </p>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={urlInput}
+              onChange={e => { setUrlInput(e.target.value); setUrlResult('') }}
+              placeholder="https://ssoktube.com/result/abc123 또는 sessionId"
+              className="flex-1 bg-[#1c1a18] border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-[#4a4846] focus:outline-none focus:border-orange-500/50 min-w-0"
+            />
+          </div>
+          <div className="flex gap-2 mt-2">
+            <button
+              onClick={() => handleUrlTrigger(false)}
+              disabled={urlTriggering || !urlInput.trim()}
+              className="px-4 py-2 rounded-xl bg-[#32302e] hover:bg-[#3a3836] text-white text-sm font-bold border border-white/10 transition-colors disabled:opacity-40"
+            >
+              {urlTriggering ? '생성 중...' : '📝 초안으로 생성'}
+            </button>
+            <button
+              onClick={() => handleUrlTrigger(true)}
+              disabled={urlTriggering || !urlInput.trim()}
+              className="px-4 py-2 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 text-sm font-bold border border-emerald-500/30 transition-colors disabled:opacity-40"
+            >
+              {urlTriggering ? '생성 중...' : '🚀 생성 + 즉시 발행'}
+            </button>
+          </div>
+          {urlResult && (
+            <p className="mt-2 text-sm text-[#a4a09c] bg-[#1c1a18] rounded-xl px-3 py-2 border border-white/8">
+              {urlResult}
+            </p>
+          )}
+        </div>
       </div>
 
       {/* ── 발행 로그 ── */}

@@ -7,6 +7,7 @@ import {
 import {
   getCurationSettings,
   saveCuratedPostAdmin, publishCuratedPostAdmin, saveCurationSettingsAdmin,
+  getSummaryBySessionIdAdmin,
 } from '@/lib/magazine-server'
 import { fetchVideoComments, formatCommentsForPrompt } from '@/lib/youtube-comments'
 import { initAdminApp } from '@/lib/firebase-admin'
@@ -87,24 +88,33 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json().catch(() => ({}))
-    const { force, autoPublish } = body as { force?: boolean; autoPublish?: boolean }
+    const { force, autoPublish, sessionId } = body as { force?: boolean; autoPublish?: boolean; sessionId?: string }
 
     const settings = await getCurationSettings()
 
-    if (!force && !shouldGenerate(settings)) {
-      return NextResponse.json({ skipped: true, reason: 'Use force:true to override schedule' })
-    }
+    let item
+    if (sessionId) {
+      // 특정 요약 지정 생성
+      item = await getSummaryBySessionIdAdmin(sessionId)
+      if (!item) {
+        return NextResponse.json({ error: `sessionId "${sessionId}"에 해당하는 요약을 찾을 수 없습니다.` }, { status: 404 })
+      }
+    } else {
+      if (!force && !shouldGenerate(settings)) {
+        return NextResponse.json({ skipped: true, reason: 'Use force:true to override schedule' })
+      }
 
-    const summaries = await getRecentPublicSummaries(settings.lookbackDays)
-    const item = pickBestSingle(summaries)
+      const summaries = await getRecentPublicSummaries(settings.lookbackDays)
+      item = pickBestSingle(summaries)
 
-    if (!item) {
-      const reason = `최근 ${settings.lookbackDays}일 이내 미발행 요약 없음`
-      await writeLog({ status: 'skipped', triggerType: 'manual', reason, createdAt: new Date().toISOString() })
-      return NextResponse.json({
-        error: `발행할 영상이 없습니다. ${reason}`,
-        availableCount: summaries.length,
-      }, { status: 422 })
+      if (!item) {
+        const reason = `최근 ${settings.lookbackDays}일 이내 미발행 요약 없음`
+        await writeLog({ status: 'skipped', triggerType: 'manual', reason, createdAt: new Date().toISOString() })
+        return NextResponse.json({
+          error: `발행할 영상이 없습니다. ${reason}`,
+          availableCount: summaries.length,
+        }, { status: 422 })
+      }
     }
 
     const { popular, recent } = item.videoId

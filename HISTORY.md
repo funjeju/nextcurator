@@ -5,6 +5,15 @@
 
 ---
 
+## 2026-04-20
+
+### [기능] 매거진 URL 지정 수동 생성
+- **증상**: 어드민에서 특정 요약 페이지를 지정해 매거진을 바로 만들 수 없었음
+- **원인**: 기존 수동 트리거는 자동 선택 알고리즘(hotScore)에 의존
+- **해결**: `lib/magazine-server.ts`에 `getSummaryBySessionIdAdmin()` 추가, `app/api/cron/generate-post/route.ts` POST에 `sessionId` 파라미터 처리, `components/admin/CurationTab.tsx` "지금 바로 생성" 섹션에 URL 입력 + 초안/즉시발행 버튼 추가. 요약 URL(`/result/SESSION_ID`) 또는 sessionId 직접 입력 지원
+
+---
+
 ## 2026-04-19 (추가)
 
 ### [기능] 어드민 GA4 대시보드 링크 추가
