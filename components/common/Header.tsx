@@ -81,6 +81,7 @@ export default function Header({ title = 'SSOKTUBE' }: { title?: string }) {
                   ? <Link href="/" onClick={handleNav} className="text-orange-400 hover:text-orange-300 transition-colors font-bold">✦ 요약하기</Link>
                   : <Link href="/square" onClick={handleNav} className="text-[#a4a09c] hover:text-white transition-colors">SQUARE K</Link>
                 }
+                <Link href="/magazine" onClick={handleNav} className="text-[#a4a09c] hover:text-white transition-colors">매거진</Link>
               </>
             ) : (
               /* 일반 계정 */
@@ -90,6 +91,7 @@ export default function Header({ title = 'SSOKTUBE' }: { title?: string }) {
                   ? <Link href="/" onClick={handleNav} className="text-orange-400 hover:text-orange-300 transition-colors font-bold">✦ 요약하기</Link>
                   : <Link href="/square" onClick={handleNav} className="text-[#a4a09c] hover:text-white transition-colors">SQUARE K</Link>
                 }
+                <Link href="/magazine" onClick={handleNav} className="text-[#a4a09c] hover:text-white transition-colors">매거진</Link>
               </>
             )}
             {/* 교사: 클래스 없으면 개설 유도 */}
@@ -166,6 +168,9 @@ export default function Header({ title = 'SSOKTUBE' }: { title?: string }) {
                   </>
                 )}
                 <div className="border-t border-white/5 mt-1 pt-1">
+                  <Link href="/magazine" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-2 px-4 py-2.5 text-sm text-[#a4a09c] hover:text-white hover:bg-white/5 transition-colors">
+                    <span>✍️</span> 매거진
+                  </Link>
                   <button
                     onClick={() => { setShowContact(true); setMobileMenuOpen(false) }}
                     className="w-full text-left flex items-center gap-2 px-4 py-2.5 text-sm text-[#a4a09c] hover:text-white hover:bg-white/5 transition-colors"
