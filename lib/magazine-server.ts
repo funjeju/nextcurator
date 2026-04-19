@@ -150,6 +150,27 @@ export async function incrementPostViewAdmin(id: string) {
   await db.collection('curated_posts').doc(id).update({ viewCount: FieldValue.increment(1) })
 }
 
+export interface PlatformComment {
+  text: string
+  segmentLabel: string | null
+  parentId: string | null
+}
+
+export async function getPlatformCommentsBySessionIdAdmin(sessionId: string): Promise<PlatformComment[]> {
+  initAdminApp()
+  const { getFirestore } = await import('firebase-admin/firestore')
+  const db = getFirestore()
+  const snap = await db.collection('comments').where('sessionId', '==', sessionId).get()
+  return snap.docs
+    .map(d => d.data())
+    .filter(c => !c.isAI && typeof c.text === 'string' && c.text.trim())
+    .map(c => ({
+      text: c.text as string,
+      segmentLabel: (c.segmentLabel as string | null) ?? null,
+      parentId: (c.parentId as string | null) ?? null,
+    }))
+}
+
 export async function getSummaryBySessionIdAdmin(sessionId: string): Promise<import('@/lib/magazine').SummaryForCuration | null> {
   initAdminApp()
   const { getFirestore } = await import('firebase-admin/firestore')

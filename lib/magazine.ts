@@ -32,6 +32,7 @@ export interface CuratedPost {
   faq?: { question: string; answer: string }[]
   checklist?: string[]
   comments?: { popular_summary: string; popular_highlights: { text: string; likes: number }[]; recent_summary: string; recent_highlights: { text: string; likes: number }[] }
+  platformReactions?: { summary: string; highlights: { text: string; context: string }[] }
   readTime: number           // Estimated minutes
   status: 'draft' | 'published'
   publishedAt: string
@@ -348,13 +349,33 @@ function estimateReadTime(body: string): number {
   return Math.max(1, Math.round(body.replace(/\s+/g, ' ').split(' ').length / 200))
 }
 
+export interface PlatformCommentInput {
+  text: string
+  segmentLabel: string | null
+  parentId: string | null
+}
+
 export async function generateMagazinePost(
   item: SummaryForCuration,
   commentsContext?: string,
+  platformComments?: PlatformCommentInput[],
 ): Promise<Omit<CuratedPost, 'id' | 'viewCount' | 'likeCount'>> {
   const today = new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' })
   const year = new Date().getFullYear()
   const hasComments = !!commentsContext
+  const hasPlatform = !!platformComments?.length
+
+  // 플랫폼 댓글 포맷: 세그먼트 말풍선은 구간 표시
+  let platformContext = ''
+  if (hasPlatform) {
+    const lines = platformComments!
+      .filter(c => !c.parentId) // 최상위 댓글만 (대댓글 제외)
+      .slice(0, 20)
+      .map(c => c.segmentLabel
+        ? `[${c.segmentLabel} 구간] "${c.text}"`
+        : `[전체] "${c.text}"`)
+    platformContext = lines.join('\n')
+  }
 
   const prompt = `다음 유튜브 영상 요약 데이터를 구글 SEO에 최적화된 매거진 글로 변환하세요.
 작성 기준일: ${today}
@@ -366,34 +387,41 @@ export async function generateMagazinePost(
 요약 데이터:
 ${item.contextSummary ?? ''}
 ${item.reportSummary ? '\n추가 분석:\n' + item.reportSummary : ''}
-${hasComments ? `\n유튜브 댓글 데이터:\n${commentsContext}` : ''}
+${hasComments ? `\n[유튜브 시청자 댓글]\n${commentsContext}` : ''}
+${hasPlatform ? `\n[SSOKTUBE 플랫폼 유저 반응 — 실제 학습자들의 구간별 반응]\n${platformContext}` : ''}
 
 [SEO 최적화 규칙]
 - title: 핵심 키워드를 앞에 배치, 40-60자, ${year}년 포함 권장, 클릭 유도 (숫자/How-to/질문형)
 - seoDescription: 핵심 내용 + 클릭 유도 문구, 140-155자, 핵심 키워드 포함
 - slug: 영문 소문자+하이픈 (예: "real-estate-auction-guide-2026")
 - seoKeywords: 검색량 높을 법한 키워드 6-10개
+- body 내 주요 키워드를 자연스럽게 2-3회 반복 배치 (키워드 스터핑 금지)
+- H2/H3 제목에 핵심 키워드 포함
 
 [섹션 작성 원칙]
 - 단순 요약 나열 금지. 에디터의 분석·평가·실용 조언 반드시 포함
 - body는 마크다운(##, ###, **볼드**) 적극 활용, 최소 800자
-- intro: 검색자의 핵심 궁금증을 바로 해결하는 도입부
+- intro: 검색자의 핵심 궁금증을 바로 해결하는 도입부 (featured snippet 노출 목표)
 - 각 섹션 300-450자, 분석·비교·맥락 설명 포함
 - conclusion: 핵심 요약 + 독자 행동 유도(CTA)
 
-[FAQ — 5개 필수]
+[FAQ — 5개 필수 — People Also Ask 최적화]
 - 이 주제로 구글에서 실제로 검색할 법한 질문과 답변
-- 질문: 검색 쿼리 형태
-- 답변: 2-4문장
+- 질문: 검색 쿼리 형태 (How/What/Why/Is 구조)
+- 답변: 2-4문장, 첫 문장에 질문 키워드 재포함
 
 [체크리스트 — 3-5개]
 - 이 영상 시청 후 독자가 바로 실천할 수 있는 구체적 행동 항목
 ${hasComments ? `
-[댓글 분석]
+[유튜브 댓글 분석]
 - popular_summary: 인기 댓글 전체 경향 2-3문장
 - popular_highlights: 인기 댓글 중 인상적인 것 3-5개 원문 인용 (likes 포함)
 - recent_summary: 최신 댓글 경향 2-3문장
 - recent_highlights: 최신 댓글 중 흥미로운 것 3-5개 원문 인용` : ''}
+${hasPlatform ? `
+[SSOKTUBE 플랫폼 반응 분석]
+- summary: 플랫폼 학습자들의 전반적 반응 2-3문장 (구간별 집중 포인트 포함)
+- highlights: 인상적인 댓글 3-5개, context는 구간명 또는 "전체"` : ''}
 
 JSON 형식:
 {
@@ -417,6 +445,10 @@ JSON 형식:
     "popular_highlights": [{"text": "댓글 원문", "likes": 123}],
     "recent_summary": "최신 댓글 경향 요약",
     "recent_highlights": [{"text": "최신 댓글 원문", "likes": 0}]
+  }` : ''}${hasPlatform ? `,
+  "platformReactions": {
+    "summary": "플랫폼 학습자 반응 요약",
+    "highlights": [{"text": "댓글 원문", "context": "구간명 또는 전체"}]
   }` : ''}
 }`
 
@@ -429,6 +461,7 @@ JSON 형식:
     faq?: { question: string; answer: string }[]
     checklist?: string[]
     comments?: { popular_summary: string; popular_highlights: any[]; recent_summary: string; recent_highlights: any[] }
+    platformReactions?: { summary: string; highlights: { text: string; context: string }[] }
   }
   try {
     const match = raw.match(/\{[\s\S]*\}/)
@@ -457,6 +490,7 @@ JSON 형식:
     faq: parsed.faq ?? [],
     checklist: parsed.checklist ?? [],
     comments: parsed.comments,
+    platformReactions: parsed.platformReactions,
     readTime: estimateReadTime(parsed.body),
     status: 'draft',
     publishedAt: '',

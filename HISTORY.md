@@ -7,6 +7,19 @@
 
 ## 2026-04-20
 
+### [기능] 매거진에 SSOKTUBE 플랫폼 댓글 반영
+- **증상**: 매거진 시청자반응 섹션이 유튜브 댓글만 사용, 플랫폼 자체 댓글/세그먼트 말풍선 미반영
+- **원인**: `generateMagazinePost`에 플랫폼 댓글 파라미터 없음
+- **해결**: `magazine-server.ts`에 `getPlatformCommentsBySessionIdAdmin()` 추가, `magazine.ts` 프롬프트·타입에 `platformReactions` 추가, `generate-post/route.ts` GET·POST 모두 플랫폼 댓글 병렬 수집 후 전달, `MagazinePostClient.tsx`·`CurationTab.tsx` 렌더링 추가 (초록색 "SSOKTUBE 학습자 반응" 섹션)
+
+### [개선] 매거진 SEO 프롬프트 강화
+- **증상**: H2/H3 제목 키워드 배치, FAQ People Also Ask 최적화, featured snippet 구조 미명시
+- **해결**: `magazine.ts` 프롬프트에 키워드 H2/H3 배치 규칙, FAQ 첫 문장 키워드 재포함, featured snippet 도입부 구조 추가
+
+---
+
+## 2026-04-20
+
 ### [기능] 매거진 URL 지정 수동 생성
 - **증상**: 어드민에서 특정 요약 페이지를 지정해 매거진을 바로 만들 수 없었음
 - **원인**: 기존 수동 트리거는 자동 선택 알고리즘(hotScore)에 의존

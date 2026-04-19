@@ -607,6 +607,20 @@ export default function CurationTab({ getAuthHeader }: {
                   </div>
                 </div>
               )}
+              {(previewPost as any).platformReactions && (
+                <div className="mt-3">
+                  <div className="bg-emerald-500/8 rounded-xl p-3 border border-emerald-500/20">
+                    <p className="text-[10px] font-bold text-emerald-400 mb-1.5">💡 SSOKTUBE 학습자 반응</p>
+                    <p className="text-xs text-[#a4a09c] leading-relaxed mb-2">{(previewPost as any).platformReactions.summary}</p>
+                    {(previewPost as any).platformReactions.highlights?.map((h: any, i: number) => (
+                      <div key={i} className="bg-[#1c1a18] rounded-lg px-3 py-2 mb-1.5 border-l-2 border-emerald-500">
+                        <p className="text-[9px] text-emerald-400/70 font-bold mb-0.5">[{h.context}]</p>
+                        <p className="text-xs text-[#e4e4e7] leading-relaxed">"{h.text}"</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="flex items-center gap-2 px-6 py-4 border-t border-white/8 bg-[#161412]">

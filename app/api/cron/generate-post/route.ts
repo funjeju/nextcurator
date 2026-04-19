@@ -7,7 +7,7 @@ import {
 import {
   getCurationSettings,
   saveCuratedPostAdmin, publishCuratedPostAdmin, saveCurationSettingsAdmin,
-  getSummaryBySessionIdAdmin,
+  getSummaryBySessionIdAdmin, getPlatformCommentsBySessionIdAdmin,
 } from '@/lib/magazine-server'
 import { fetchVideoComments, formatCommentsForPrompt } from '@/lib/youtube-comments'
 import { initAdminApp } from '@/lib/firebase-admin'
@@ -49,14 +49,17 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ skipped: true, reason: `No unposted summaries found in last ${settings.lookbackDays} days` })
     }
 
-    const { popular, recent } = item.videoId
-      ? await fetchVideoComments(item.videoId).catch(() => ({ popular: [], recent: [], combined: [] }))
-      : { popular: [], recent: [] }
+    const [{ popular, recent }, platformComments] = await Promise.all([
+      item.videoId
+        ? fetchVideoComments(item.videoId).catch(() => ({ popular: [], recent: [], combined: [] }))
+        : Promise.resolve({ popular: [], recent: [], combined: [] }),
+      getPlatformCommentsBySessionIdAdmin(item.sessionId).catch(() => []),
+    ])
     const commentsContext = popular.length || recent.length
       ? formatCommentsForPrompt(popular as any, recent as any)
       : undefined
 
-    const post = await generateMagazinePost(item, commentsContext)
+    const post = await generateMagazinePost(item, commentsContext, platformComments)
     const id = await saveCuratedPostAdmin(post)
 
     if (settings.autoPublish) await publishCuratedPostAdmin(id)
@@ -117,14 +120,17 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const { popular, recent } = item.videoId
-      ? await fetchVideoComments(item.videoId).catch(() => ({ popular: [], recent: [], combined: [] }))
-      : { popular: [], recent: [] }
+    const [{ popular, recent }, platformComments] = await Promise.all([
+      item.videoId
+        ? fetchVideoComments(item.videoId).catch(() => ({ popular: [], recent: [], combined: [] }))
+        : Promise.resolve({ popular: [], recent: [], combined: [] }),
+      getPlatformCommentsBySessionIdAdmin(item.sessionId).catch(() => []),
+    ])
     const commentsContext = popular.length || recent.length
       ? formatCommentsForPrompt(popular as any, recent as any)
       : undefined
 
-    const post = await generateMagazinePost(item, commentsContext)
+    const post = await generateMagazinePost(item, commentsContext, platformComments)
     const id = await saveCuratedPostAdmin(post)
 
     const shouldPublish = autoPublish ?? settings.autoPublish

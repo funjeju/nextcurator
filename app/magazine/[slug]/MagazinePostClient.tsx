@@ -368,6 +368,23 @@ export default function MagazinePostClient({ post }: { post: CuratedPost }) {
                 </div>
               )}
             </div>
+
+            {/* SSOKTUBE 플랫폼 반응 */}
+            {(post as any).platformReactions && (
+              <div className="p-4 rounded-2xl bg-[#1e2a1e] border border-emerald-500/20">
+                <p className="text-xs font-bold text-emerald-400 mb-2">💡 SSOKTUBE 학습자 반응</p>
+                <p className="text-sm text-[#a4a09c] leading-relaxed mb-3">{(post as any).platformReactions.summary}</p>
+                {(post as any).platformReactions.highlights?.map((h: any, i: number) => (
+                  <div key={i} className="flex items-start gap-2 mt-2">
+                    <span className="shrink-0 text-[10px] font-bold text-emerald-500/60 mt-0.5 whitespace-nowrap">
+                      [{h.context}]
+                    </span>
+                    <p className="text-xs text-[#c4c0bc] leading-relaxed flex-1">"{h.text}"</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
           </section>
         )}
 
