@@ -120,6 +120,26 @@ export default function AnalyticsTab({ getAuthHeader }: { getAuthHeader: () => P
   return (
     <div className="space-y-6">
 
+      {/* ── GA4 외부 링크 ── */}
+      <div className="flex items-center justify-between bg-[#1a2235] rounded-2xl border border-blue-500/20 px-5 py-3.5">
+        <div>
+          <p className="text-white font-semibold text-sm">Google Analytics 4</p>
+          <p className="text-gray-400 text-xs mt-0.5">실시간 방문자 · 페이지뷰 · 유입 경로 · 이탈률</p>
+        </div>
+        <a
+          href="https://analytics.google.com"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 transition-colors text-white text-sm font-semibold px-4 py-2 rounded-xl whitespace-nowrap"
+        >
+          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M13.5 4.5L19.5 4.5L19.5 10.5L17.5 10.5L17.5 7.91L8.71 16.71L7.29 15.29L16.09 6.5L13.5 6.5Z"/>
+            <path d="M19 12v7H5V5h7V3H5C3.9 3 3 3.9 3 5v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-7h-2z"/>
+          </svg>
+          GA4 대시보드 열기
+        </a>
+      </div>
+
       {/* ── KPI 카드 ── */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <KpiCard label="누적 가입 유저" value={kpi.totalUsers} unit="명" icon="👥" color="text-white"
