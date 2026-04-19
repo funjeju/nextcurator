@@ -14,13 +14,21 @@ interface BlogSection {
   seconds: number | null
 }
 
+interface FaqItem {
+  question: string
+  answer: string
+}
+
 interface BlogDraft {
   seo_title: string
   meta_description: string
   slug: string
   tags: string[]
+  lsi_keywords: string[]
   reading_time: number
   sections: BlogSection[]
+  faq: FaqItem[]
+  checklist: string[]
   videoId: string
   sessionId: string
   thumbnail: string
@@ -36,6 +44,7 @@ interface Props {
 function buildHtml(draft: BlogDraft): string {
   const ytBase = `https://youtu.be/${draft.videoId}`
   const appUrl = `https://ssoktube.com/result/${draft.sessionId}`
+  const today = new Date().toISOString().split('T')[0]
 
   const sectionsHtml = draft.sections.map(s => {
     const tsLink = s.seconds
@@ -48,29 +57,76 @@ function buildHtml(draft: BlogDraft): string {
     return `<${tag} style="margin:32px 0 12px;font-weight:700;">${s.heading}</${tag}>\n<p style="margin:0 0 12px;line-height:1.8;">${s.text}</p>${tsLink}`
   }).join('\n')
 
+  const faq = draft.faq ?? []
+  const checklist = draft.checklist ?? []
+
+  const checklistHtml = checklist.length > 0
+    ? `<h2 style="margin:32px 0 12px;font-weight:700;">✅ 바로 실천하기</h2>
+<ul style="margin:0 0 24px;padding-left:20px;line-height:2;">
+${checklist.map(item => `  <li>${item}</li>`).join('\n')}
+</ul>`
+    : ''
+
+  const faqHtml = faq.length > 0
+    ? `<h2 style="margin:32px 0 12px;font-weight:700;">자주 묻는 질문</h2>
+${faq.map(f => `<details style="margin:0 0 10px;border:1px solid #e5e7eb;border-radius:8px;padding:12px 16px;">
+  <summary style="font-weight:600;cursor:pointer;color:#111827;">${f.question}</summary>
+  <p style="margin:10px 0 0;line-height:1.75;color:#374151;">${f.answer}</p>
+</details>`).join('\n')}`
+    : ''
+
   const tagsHtml = draft.tags.map(t =>
     `<span style="display:inline-block;margin:3px;padding:3px 10px;background:#f3f4f6;border-radius:999px;font-size:0.8em;color:#374151;">${t}</span>`
   ).join('')
 
-  const jsonLd = JSON.stringify({
+  const articleJsonLd = {
     '@context': 'https://schema.org',
     '@type': 'Article',
     headline: draft.seo_title,
     description: draft.meta_description,
     image: draft.thumbnail,
+    datePublished: today,
+    dateModified: today,
     author: { '@type': 'Organization', name: 'SSOKTUBE' },
-    publisher: { '@type': 'Organization', name: 'SSOKTUBE', url: 'https://ssoktube.com' },
-    mainEntityOfPage: appUrl,
-    keywords: draft.tags.join(', '),
-  })
+    publisher: { '@type': 'Organization', name: 'SSOKTUBE', logo: { '@type': 'ImageObject', url: 'https://ssoktube.com/logo.png' }, url: 'https://ssoktube.com' },
+    mainEntityOfPage: { '@type': 'WebPage', '@id': appUrl },
+    keywords: [...draft.tags, ...(draft.lsi_keywords ?? [])].join(', '),
+  }
+
+  const videoJsonLd = draft.videoId ? {
+    '@context': 'https://schema.org',
+    '@type': 'VideoObject',
+    name: draft.title,
+    description: draft.meta_description,
+    thumbnailUrl: draft.thumbnail,
+    uploadDate: today,
+    embedUrl: `https://www.youtube.com/embed/${draft.videoId}`,
+    url: ytBase,
+  } : null
+
+  const faqJsonLd = faq.length > 0 ? {
+    '@context': 'https://schema.org',
+    '@type': 'FAQPage',
+    mainEntity: faq.map(f => ({
+      '@type': 'Question',
+      name: f.question,
+      acceptedAnswer: { '@type': 'Answer', text: f.answer },
+    })),
+  } : null
+
+  const schemas = [
+    `<script type="application/ld+json">${JSON.stringify(articleJsonLd)}</script>`,
+    videoJsonLd ? `<script type="application/ld+json">${JSON.stringify(videoJsonLd)}</script>` : '',
+    faqJsonLd  ? `<script type="application/ld+json">${JSON.stringify(faqJsonLd)}</script>`  : '',
+  ].filter(Boolean).join('\n')
 
   return `<!-- SEO: ${draft.meta_description} -->
-<script type="application/ld+json">${jsonLd}</script>
+${schemas}
 
 <article>
 
 <h1 style="font-size:1.6em;font-weight:800;margin:0 0 12px;line-height:1.4;">${draft.seo_title}</h1>
-<p style="font-size:0.85em;color:#6b7280;margin:0 0 20px;">📹 원본 영상: <a href="${ytBase}" target="_blank" rel="noopener">${draft.channel} — ${draft.title}</a> &nbsp;|&nbsp; 읽는 시간: 약 ${draft.reading_time}분</p>
+<p style="font-size:0.85em;color:#6b7280;margin:0 0 20px;">📹 원본 영상: <a href="${ytBase}" target="_blank" rel="noopener">${draft.channel} — ${draft.title}</a> &nbsp;|&nbsp; 읽는 시간: 약 ${draft.reading_time}분 &nbsp;|&nbsp; ${today} 기준</p>
 
 <figure style="margin:0 0 28px;">
   <a href="${ytBase}" target="_blank" rel="noopener">
@@ -79,6 +135,10 @@ function buildHtml(draft: BlogDraft): string {
 </figure>
 
 ${sectionsHtml}
+
+${checklistHtml}
+
+${faqHtml}
 
 <div style="margin:32px 0 16px;padding:16px;background:#fff7ed;border-left:4px solid #f97316;border-radius:4px;">
   <p style="margin:0;font-size:0.9em;color:#92400e;">이 글은 <a href="${appUrl}" target="_blank" rel="noopener" style="color:#f97316;font-weight:600;">SSOKTUBE AI</a>로 분석된 콘텐츠입니다. 원본 영상 전체 요약·타임스탬프 이동은 링크에서 확인하세요.</p>
@@ -113,6 +173,17 @@ function buildPlainText(draft: BlogDraft): string {
       lines.push(`▶ ${ytBase}?t=${s.seconds} (${s.timestamp})`)
     }
     lines.push('')
+  }
+  if (draft.checklist?.length) {
+    lines.push('─'.repeat(40), '', '✅ 바로 실천하기', '')
+    draft.checklist.forEach((item, i) => lines.push(`${i + 1}. ${item}`))
+    lines.push('')
+  }
+  if (draft.faq?.length) {
+    lines.push('─'.repeat(40), '', '■ 자주 묻는 질문', '')
+    draft.faq.forEach(f => {
+      lines.push(`Q. ${f.question}`, `A. ${f.answer}`, '')
+    })
   }
   return lines.join('\n')
 }
@@ -294,6 +365,34 @@ export default function BlogDraftModal({ data, onClose }: Props) {
                       )}
                     </div>
                   ))}
+
+                  {/* 체크리스트 */}
+                  {draft.checklist?.length > 0 && (
+                    <div className="mt-4 p-3 bg-emerald-50 rounded-xl border border-emerald-100">
+                      <p className="text-xs font-bold text-emerald-700 mb-2">✅ 바로 실천하기</p>
+                      <ul className="space-y-1">
+                        {draft.checklist.map((item, i) => (
+                          <li key={i} className="text-xs text-emerald-800 flex gap-2">
+                            <span className="shrink-0">{i + 1}.</span>{item}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* FAQ */}
+                  {draft.faq?.length > 0 && (
+                    <div className="mt-4 space-y-2">
+                      <p className="text-xs font-bold text-zinc-500">💬 자주 묻는 질문</p>
+                      {draft.faq.map((f, i) => (
+                        <details key={i} className="border border-zinc-200 rounded-lg px-3 py-2 text-xs">
+                          <summary className="font-semibold text-zinc-700 cursor-pointer">{f.question}</summary>
+                          <p className="mt-2 text-zinc-500 leading-relaxed">{f.answer}</p>
+                        </details>
+                      ))}
+                    </div>
+                  )}
+
                   <div className="flex flex-wrap gap-1 pt-2">
                     {draft.tags.map(t => (
                       <span key={t} className="px-2 py-0.5 bg-zinc-100 rounded-full text-[10px] text-zinc-500">

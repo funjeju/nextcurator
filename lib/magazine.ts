@@ -29,6 +29,8 @@ export interface CuratedPost {
   body: string               // Full markdown article
   seoDescription: string     // 150-char Google snippet
   seoKeywords: string[]
+  faq?: { question: string; answer: string }[]
+  checklist?: string[]
   readTime: number           // Estimated minutes
   status: 'draft' | 'published'
   publishedAt: string
@@ -312,8 +314,12 @@ export async function generateMagazinePost(
     )
     .join('\n\n---\n\n')
 
+  const today = new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' })
+  const year = new Date().getFullYear()
+
   const prompt = `당신은 SSOKTUBE의 수석 콘텐츠 에디터입니다.
 아래 ${items.length}개 영상을 기반으로 구글 검색 상위 랭크를 목표로 한 전문 큐레이션 포스트를 작성하세요.
+작성 기준일: ${today}
 
 주제 클러스터: "${cluster}"
 
@@ -321,24 +327,34 @@ export async function generateMagazinePost(
 ${videoBlocks}
 
 [작성 원칙]
-- 유튜브에는 없는 SSOKTUBE만의 독자적 분석과 에디터 관점을 반드시 포함할 것
-- 영상들을 단순 나열하지 말고, 공통점·차이점·흐름·시사점을 뽑아낼 것
-- 검색자가 실제로 검색할 법한 자연스러운 키워드를 본문에 녹일 것
+- title에 ${year}년 또는 구체적 숫자 포함 권장 (예: "${year}년 기준", "TOP 5")
+- 영상들을 단순 나열 금지. 각 영상의 관점 차이·강약점·실용성을 직접 비교 평가할 것
+- "A 채널은 ~를 강조하는 반면, B 채널은 ~에 집중한다" 형태의 실제 비교 분석 포함
+- 검색자가 실제로 검색할 LSI 연관 키워드를 본문에 자연스럽게 녹일 것
 - 마크다운 헤딩(##, ###)과 볼드(**) 적극 활용
+- body는 최소 800자 이상, 에디터 고유 관점과 실용 조언 반드시 포함
 
-[JSON 형식으로 응답 — 다른 텍스트 없이 JSON만]:
+[JSON 형식으로 응답]:
 {
-  "title": "SEO 최적화된 포스트 제목 (숫자/연도 포함 권장, 30-60자)",
+  "title": "SEO 최적화 제목 (연도/숫자 포함, 40-60자)",
   "subtitle": "독자 호기심 자극 부제 (20-40자)",
-  "body": "## 시작\n\n[서론 2-3문장: 이 주제가 왜 지금 중요한지]\n\n## 핵심 분석\n\n[각 영상의 핵심을 비교 분석하는 메인 섹션. 각 영상마다 ### 소제목 사용. 단순 소개가 아닌 비교·인사이트·평가를 포함]\n\n## 흐름과 트렌드\n\n[이 주제의 현재 흐름, 공통 패턴, 앞으로의 방향]\n\n## 에디터 총평\n\n[SSOKTUBE 에디터만의 독자적 관점. 유튜브 영상에 없는 내용. 실용적 조언이나 비판적 시각 포함]\n\n(실제 내용으로 채워주세요, 위 구조는 가이드라인)",
-  "seoDescription": "구글 스니펫용 설명. 핵심 키워드 자연스럽게 포함. 150자 이내.",
-  "seoKeywords": ["검색키워드1", "검색키워드2", "검색키워드3", "검색키워드4", "검색키워드5"]
+  "body": "## 왜 지금 이 주제인가\\n\\n[${today} 기준 이 주제의 시의성과 중요성. 2-3문장]\\n\\n## 영상별 핵심 비교 분석\\n\\n[각 영상마다 ### 소제목. 단순 소개 아닌 다른 영상과의 비교·평가 포함]\\n\\n## 공통점과 차이점\\n\\n[여러 영상을 가로질러 보이는 패턴, 시각 차이, 모순점]\\n\\n## 실전 활용 가이드\\n\\n[독자가 이 정보를 실제로 어떻게 써야 하는지 구체적 조언]\\n\\n## 에디터 총평\\n\\n[SSOKTUBE 에디터만의 독자적 관점. 비판적 시각이나 놓친 부분 지적도 가능]\\n\\n(위 구조는 가이드라인, 실제 내용으로 채울 것)",
+  "seoDescription": "구글 스니펫용 설명. ${year}년 기준, 핵심 키워드 자연스럽게 포함. 150자 이내.",
+  "seoKeywords": ["검색키워드1", "검색키워드2", "검색키워드3", "검색키워드4", "검색키워드5", "검색키워드6"],
+  "faq": [
+    {"question": "이 주제로 실제 검색할 법한 질문?", "answer": "2-4문장 답변"},
+    {"question": "질문2?", "answer": "답변2"},
+    {"question": "질문3?", "answer": "답변3"},
+    {"question": "질문4?", "answer": "답변4"},
+    {"question": "질문5?", "answer": "답변5"}
+  ],
+  "checklist": ["독자가 바로 실천할 항목1", "항목2", "항목3"]
 }`
 
   const result = await magazineModel.generateContent(prompt)
   const raw = result.response.text().trim()
 
-  let parsed: { title: string; subtitle: string; body: string; seoDescription: string; seoKeywords: string[] }
+  let parsed: { title: string; subtitle: string; body: string; seoDescription: string; seoKeywords: string[]; faq?: { question: string; answer: string }[]; checklist?: string[] }
   try {
     const match = raw.match(/\{[\s\S]*\}/)
     parsed = JSON.parse(match ? match[0] : raw)
@@ -362,6 +378,8 @@ ${videoBlocks}
     body: parsed.body,
     seoDescription: parsed.seoDescription.slice(0, 155),
     seoKeywords: parsed.seoKeywords ?? [],
+    faq: parsed.faq ?? [],
+    checklist: parsed.checklist ?? [],
     readTime: estimateReadTime(parsed.body),
     status: 'draft',
     publishedAt: '',
