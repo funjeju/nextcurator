@@ -737,26 +737,19 @@ export default function SquareClient({ initialSummaries = [], initialMagazinePos
           >
             피드
           </button>
-          <button
-            onClick={() => setActiveTab('magazine')}
-            className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-bold transition-all border-b-2 -mb-px ${
-              activeTab === 'magazine'
-                ? 'border-orange-500 text-white'
-                : 'border-transparent text-[#75716e] hover:text-white'
-            }`}
+          <Link
+            href="/magazine"
+            className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-bold transition-all border-b-2 -mb-px border-transparent text-[#75716e] hover:text-white hover:border-orange-500/50"
           >
             ✍️ 매거진
-            {magazinePosts.length > 0 && (
+            {initialMagazinePosts.length > 0 && (
               <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-orange-500/20 text-orange-400 border border-orange-500/30">
                 {magazinePosts.length}
               </span>
             )}
-          </button>
+          </Link>
         </div>
 
-        {activeTab === 'magazine' ? (
-          <MagazineBoard posts={magazinePosts} />
-        ) : (
         <>
 
         {/* 검색창 */}
