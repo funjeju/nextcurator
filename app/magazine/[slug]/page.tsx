@@ -1,6 +1,6 @@
 import { Metadata } from 'next'
 import { notFound } from 'next/navigation'
-import { getPostBySlugAdmin, incrementPostViewAdmin } from '@/lib/magazine-server'
+import { getPostBySlugAdmin, incrementPostViewAdmin, getRelatedPostsAdmin } from '@/lib/magazine-server'
 import MagazinePostClient from './MagazinePostClient'
 
 export async function generateMetadata(
@@ -40,6 +40,8 @@ export default async function MagazinePage(
   const { slug } = await params
   const post = await getPostBySlugAdmin(slug)
   if (!post || post.status !== 'published') notFound()
+
+  const relatedPosts = await getRelatedPostsAdmin(post.category, post.id).catch(() => [])
 
   // JSON-LD: Article + ItemList for included videos
   const jsonLd = {
@@ -83,7 +85,7 @@ export default async function MagazinePage(
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
-      <MagazinePostClient post={post} />
+      <MagazinePostClient post={post} relatedPosts={relatedPosts} />
     </>
   )
 }

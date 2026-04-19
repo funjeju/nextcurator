@@ -10,7 +10,7 @@ async function getPublicSessionIds(): Promise<{ sessionId: string; updatedAt?: s
     const url = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents:runQuery?key=${API_KEY}`
     const body = {
       structuredQuery: {
-        from: [{ collectionId: 'summaries' }],
+        from: [{ collectionId: 'saved_summaries' }],
         where: {
           fieldFilter: {
             field: { fieldPath: 'isPublic' },

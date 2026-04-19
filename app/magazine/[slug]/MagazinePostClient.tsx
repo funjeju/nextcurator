@@ -160,7 +160,7 @@ function CommentsSection({ postId }: { postId: string }) {
   )
 }
 
-export default function MagazinePostClient({ post }: { post: CuratedPost }) {
+export default function MagazinePostClient({ post, relatedPosts = [] }: { post: CuratedPost; relatedPosts?: CuratedPost[] }) {
   return (
     <div className="min-h-screen bg-[#252423]">
       <Header />
@@ -416,19 +416,69 @@ export default function MagazinePostClient({ post }: { post: CuratedPost }) {
           </div>
         </section>
 
+        {/* 관련 매거진 */}
+        {relatedPosts.length > 0 && (
+          <section className="mt-14">
+            <h2 className="text-base font-black text-white mb-4 flex items-center gap-2">
+              <span className="w-1 h-4 rounded-full bg-orange-500" />
+              관련 매거진
+            </h2>
+            <div className="grid gap-3 sm:grid-cols-3">
+              {relatedPosts.map(p => (
+                <Link
+                  key={p.id}
+                  href={`/magazine/${p.slug}`}
+                  className="group flex flex-col rounded-2xl bg-[#2a2826] border border-white/6 hover:border-orange-500/30 overflow-hidden transition-all"
+                >
+                  {p.heroThumbnail && !p.heroThumbnail.startsWith('data:') ? (
+                    <img src={p.heroThumbnail} alt={p.title} className="w-full h-28 object-cover" />
+                  ) : (
+                    <div className="w-full h-28 bg-[#1c1a18] flex items-center justify-center text-3xl">📰</div>
+                  )}
+                  <div className="p-3 flex flex-col gap-1">
+                    <span className="text-[10px] text-orange-400 font-bold">
+                      {CATEGORY_LABEL[p.category] ?? p.category}
+                    </span>
+                    <p className="text-sm text-white font-bold line-clamp-2 group-hover:text-orange-400 transition-colors leading-snug">
+                      {p.title}
+                    </p>
+                    <p className="text-[11px] text-[#75716e] mt-1">{p.readTime}분 읽기</p>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </section>
+        )}
+
         {/* 댓글 */}
         <CommentsSection postId={post.id} />
 
         {/* 하단 CTA */}
-        <div className="mt-12 p-6 rounded-2xl bg-gradient-to-br from-orange-500/10 to-amber-500/5 border border-orange-500/20 text-center">
-          <p className="text-white font-bold mb-1">더 많은 큐레이션이 궁금하다면?</p>
-          <p className="text-[#a4a09c] text-sm mb-4">SQUARE K에서 다른 사람들의 요약을 둘러보세요.</p>
-          <Link
-            href="/square"
-            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-sm font-bold transition-colors"
-          >
-            SQUARE K 둘러보기 →
-          </Link>
+        <div className="mt-12 grid sm:grid-cols-2 gap-4">
+          {/* 영상 직접 분석 */}
+          <div className="p-6 rounded-2xl bg-gradient-to-br from-orange-500/10 to-amber-500/5 border border-orange-500/20">
+            <p className="text-xs font-bold text-orange-400 mb-1">✦ AI 영상 분석</p>
+            <p className="text-white font-bold mb-1">유튜브 영상을 바로 요약해보세요</p>
+            <p className="text-[#a4a09c] text-sm mb-4">링크 하나로 핵심 내용을 AI가 정리해드립니다.</p>
+            <Link
+              href="/"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-sm font-bold transition-colors"
+            >
+              지금 바로 요약하기 →
+            </Link>
+          </div>
+          {/* 스퀘어 K */}
+          <div className="p-6 rounded-2xl bg-gradient-to-br from-white/5 to-white/0 border border-white/8">
+            <p className="text-xs font-bold text-[#a4a09c] mb-1">📺 SQUARE K</p>
+            <p className="text-white font-bold mb-1">다른 사람들은 뭘 보고 있을까?</p>
+            <p className="text-[#a4a09c] text-sm mb-4">지금 트렌딩 중인 영상 요약을 피드에서 확인하세요.</p>
+            <Link
+              href="/square"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-white text-sm font-bold border border-white/10 transition-colors"
+            >
+              SQUARE K 둘러보기 →
+            </Link>
+          </div>
         </div>
 
       </article>

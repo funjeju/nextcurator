@@ -206,3 +206,38 @@ export async function listCuratedPostsAdmin(): Promise<CuratedPost[]> {
   const snap = await db.collection('curated_posts').orderBy('createdAt', 'desc').limit(50).get()
   return snap.docs.map(d => d.data() as CuratedPost)
 }
+
+export async function getRelatedPostsAdmin(
+  category: string,
+  excludeId: string,
+  limit = 3,
+): Promise<CuratedPost[]> {
+  initAdminApp()
+  const { getFirestore } = await import('firebase-admin/firestore')
+  const db = getFirestore()
+
+  // 같은 카테고리 우선
+  const snap = await db.collection('curated_posts')
+    .where('status', '==', 'published')
+    .where('category', '==', category)
+    .orderBy('publishedAt', 'desc')
+    .limit(limit + 1)
+    .get()
+
+  const same = snap.docs.map(d => d.data() as CuratedPost).filter(p => p.id !== excludeId)
+
+  if (same.length >= limit) return same.slice(0, limit)
+
+  // 부족하면 최신 발행 글로 채움
+  const rest = await db.collection('curated_posts')
+    .where('status', '==', 'published')
+    .orderBy('publishedAt', 'desc')
+    .limit(limit + 5)
+    .get()
+
+  const fallback = rest.docs
+    .map(d => d.data() as CuratedPost)
+    .filter(p => p.id !== excludeId && !same.find(s => s.id === p.id))
+
+  return [...same, ...fallback].slice(0, limit)
+}

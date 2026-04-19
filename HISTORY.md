@@ -7,6 +7,11 @@
 
 ## 2026-04-20
 
+### [기능] 매거진 하단 관련 포스트 + CTA 추가
+- **증상**: 매거진 글 읽고 바로 이탈 — 내부 링크 없어 체류시간 짧음
+- **원인**: 하단 CTA가 SQUARE K 버튼 하나뿐
+- **해결**: `magazine-server.ts`에 `getRelatedPostsAdmin()` 추가(같은 카테고리 우선, 부족하면 최신순), `page.tsx`에서 서버사이드 조회 후 전달, `MagazinePostClient.tsx`에 관련 매거진 카드 3개 + "AI 요약하기" / "SQUARE K" 2단 CTA 추가
+
 ### [기능] 매거진에 SSOKTUBE 플랫폼 댓글 반영
 - **증상**: 매거진 시청자반응 섹션이 유튜브 댓글만 사용, 플랫폼 자체 댓글/세그먼트 말풍선 미반영
 - **원인**: `generateMagazinePost`에 플랫폼 댓글 파라미터 없음
