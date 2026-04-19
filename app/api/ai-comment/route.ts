@@ -95,7 +95,7 @@ ${summaryContext ? `---영상 요약 (참고용)---\n${summaryContext.slice(0, 1
     const model = genAI.getGenerativeModel({
       model: 'gemini-2.5-flash',
       systemInstruction,
-      generationConfig: { temperature: 0.85, maxOutputTokens: 600 },
+      generationConfig: { temperature: 0.85, maxOutputTokens: 1500 },
       ...(needsSearch ? { tools: [{ googleSearch: {} }] } : {}),
     } as Parameters<typeof genAI.getGenerativeModel>[0])
 

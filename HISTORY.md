@@ -31,6 +31,11 @@
 - **원인**: Firestore `where + orderBy` 복합 인덱스 미생성
 - **해결**: `orderBy` 제거하고 JS에서 `sort()` 처리
 
+### [이슈] AI 댓글 문장 중간 잘림 (2차)
+- **증상**: AI 댓글이 "그의" 같은 조사/단어 중간에서 잘림
+- **원인**: `maxOutputTokens: 600` — 한글 300자 ≈ 600토큰인데 시스템 프롬프트 토큰까지 합산되면 이미 초과
+- **해결**: `app/api/ai-comment/route.ts` `maxOutputTokens` 600 → 1500. 실제 길이 제한은 코드(350자)가 담당하므로 토큰은 여유 있게 설정
+
 ### [이슈] AI 반응 MAX_TOKENS 에러
 - **증상**: AI 반응 버튼 클릭 시 "AI 응답이 너무 길어 잘렸습니다" 에러
 - **원인**: `MAX_TOKENS` finish reason 감지 즉시 throw — 350자 제한 로직 도달 전에 에러 처리
