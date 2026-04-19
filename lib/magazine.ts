@@ -83,6 +83,7 @@ export interface SummaryForCuration {
   videoPublishedAt: string
   ytViewCount: number
   postedToMagazine?: boolean
+  ytCommentsContext?: string  // 요약 시점에 수집된 유튜브 댓글 (매거진 재사용)
 }
 
 // ─── Firestore REST helpers ─────────────────────────────────────────────────
@@ -217,7 +218,7 @@ export async function getRecentPublicSummaries(lookbackDays: number): Promise<Su
       fields: [
         'sessionId', 'videoId', 'title', 'channel', 'thumbnail', 'category',
         'square_meta', 'contextSummary', 'reportSummary', 'createdAt',
-        'videoPublishedAt', 'ytViewCount', 'postedToMagazine',
+        'videoPublishedAt', 'ytViewCount', 'postedToMagazine', 'ytCommentsContext',
       ].map(f => ({ fieldPath: f })),
     },
     orderBy: [{ field: { fieldPath: 'createdAt' }, direction: 'DESCENDING' }],
@@ -257,6 +258,7 @@ export async function getRecentPublicSummaries(lookbackDays: number): Promise<Su
         videoPublishedAt: (data.videoPublishedAt as string) ?? '',
         ytViewCount: Number(data.ytViewCount ?? 0),
         postedToMagazine: (data.postedToMagazine as boolean) ?? false,
+        ytCommentsContext: (data.ytCommentsContext as string) ?? '',
         _createdAtMs: createdAtMs,
       }
     })

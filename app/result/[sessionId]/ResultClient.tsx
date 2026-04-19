@@ -89,6 +89,10 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
   const [focusSegment, setFocusSegment] = useState<{ id: string; label: string } | null>(null)
   const commentSectionRef = useRef<HTMLDivElement>(null)
 
+  // 유튜브 댓글 방향성 요약
+  const [ytCommentSummary, setYtCommentSummary] = useState<string | null>(null)
+  const [ytCommentSummaryLoading, setYtCommentSummaryLoading] = useState(false)
+
   // PDF
   const [downloading, setDownloading] = useState(false)
   const pdfRef = useRef<HTMLDivElement>(null)
@@ -281,6 +285,26 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
       })
       .catch(() => {})
   }, [sessionId])
+
+  // 유튜브 댓글 방향성 요약 — 저장된 값 우선, 없으면 API 호출
+  useEffect(() => {
+    if (!data?.videoId || ytCommentSummary !== null || ytCommentSummaryLoading) return
+    // 요약 시점에 이미 생성된 값이 있으면 API 호출 없이 바로 사용
+    if ((data as any).ytCommentSummary) {
+      setYtCommentSummary((data as any).ytCommentSummary)
+      return
+    }
+    setYtCommentSummaryLoading(true)
+    fetch('/api/yt-comment-summary', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ videoId: data.videoId }),
+    })
+      .then(r => r.ok ? r.json() : null)
+      .then(res => setYtCommentSummary(res?.summary ?? ''))
+      .catch(() => setYtCommentSummary(''))
+      .finally(() => setYtCommentSummaryLoading(false))
+  }, [data?.videoId])
 
   // 이 영상의 북마크 로드
   useEffect(() => {
@@ -1401,6 +1425,27 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
             )}
           </button>
         </div>
+
+        {/* 유튜브 댓글 방향성 요약 */}
+        {data.videoId && (ytCommentSummaryLoading || ytCommentSummary) && (
+          <div className="rounded-2xl bg-[#1e1c1a] border border-white/8 p-4">
+            <div className="flex items-center gap-2 mb-2.5">
+              <span className="text-base">💬</span>
+              <span className="text-sm font-semibold text-zinc-200">유튜브 시청자 반응</span>
+            </div>
+            {ytCommentSummaryLoading ? (
+              <div className="flex items-center gap-2 text-zinc-500 text-sm">
+                <svg className="animate-spin w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                </svg>
+                댓글 분석 중...
+              </div>
+            ) : ytCommentSummary ? (
+              <p className="text-zinc-300 text-sm leading-relaxed">{ytCommentSummary}</p>
+            ) : null}
+          </div>
+        )}
 
         {/* 댓글 섹션 */}
         <div ref={commentSectionRef}>

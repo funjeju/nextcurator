@@ -7,6 +7,14 @@
 
 ## 2026-04-20
 
+### [개선] 유튜브 댓글 요약 시점 통합 (중복 SocialKit 호출 제거)
+- **증상**: 매거진 발행 시 SocialKit 댓글 API 재호출 — 요약 때도, 매거진 때도 각각 호출
+- **해결**: `summarize/route.ts` Phase 1 병렬 배치에 `fetchVideoComments` 추가, Phase 3에 `generateYtCommentSummary` 추가. `ytCommentSummary`(280자 표시용) + `ytCommentsContext`(매거진 프롬프트용 raw) 모두 `saved_summaries`에 저장. `generate-post/route.ts`에서 `ytCommentsContext` 존재 시 SocialKit 스킵. `ResultClient.tsx`에서 저장된 값 우선 사용 후 없으면 fallback API 호출. 딜레이 없음 (모두 병렬)
+
+### [기능] 유튜브 시청자 반응 요약 섹션 추가
+- **증상**: 요약 결과 페이지에 유튜브 댓글 관련 정보 없음
+- **해결**: `app/api/yt-comment-summary/route.ts` 신설 — SocialKit으로 인기 댓글 30개 수집 후 Gemini가 방향성(긍정/부정/혼재, 주요 언급 포인트) 280자 요약. `ResultClient.tsx`에 lazy 로드 카드 추가 (videoId 확정 후 백그라운드 fetch, CommentSection 위에 표시)
+
 ### [기능] 자동 수집 크론 추가 (auto-collect)
 - **증상**: 매거진/요약 콘텐츠가 수작업 의존 — 자동 누적 없음
 - **해결**: `app/api/cron/auto-collect/route.ts` 신설. YouTube Data API로 뉴스/자기계발/여행/팁/영어/요리 6개 카테고리에서 KR 핫한 영상 자동 검색 → 자막 추출 → 분류·요약 → `saved_summaries` 저장(`autoCollected:true`). 1회 실행 시 3개 카테고리 로테이션(UTC 시간 기반). `vercel.json`에 KST 새벽 4시(UTC 19:00) 크론 추가, maxDuration 120s 등록

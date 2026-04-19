@@ -1,7 +1,32 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { extractVideoId, getTranscript, getVideoMeta, detectTranscriptLang } from '@/lib/transcript'
 import { classifyCategory, generateSummary, generateReportSummary, generateContextSummary } from '@/lib/claude'
+import { fetchVideoComments, formatCommentsForPrompt } from '@/lib/youtube-comments'
+import { GoogleGenerativeAI } from '@google/generative-ai'
 import { randomUUID } from 'crypto'
+
+async function generateYtCommentSummary(popular: { text: string; likes: number }[]): Promise<string> {
+  if (popular.length === 0) return ''
+  try {
+    const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GENERATIVE_AI_API_KEY!)
+    const model = genAI.getGenerativeModel({
+      model: 'gemini-2.5-flash',
+      generationConfig: {
+        temperature: 0.3,
+        maxOutputTokens: 600,
+        // @ts-expect-error thinkingConfig not yet in types but supported
+        thinkingConfig: { thinkingBudget: 0 },
+      },
+    })
+    const lines = popular.slice(0, 25).map(c => `- [👍${c.likes}] ${c.text.slice(0, 150)}`).join('\n')
+    const result = await model.generateContent(
+      `다음은 유튜브 영상의 인기 댓글입니다.\n\n${lines}\n\n시청자 반응의 방향성을 280자 이내로 요약해주세요. 긍정/부정/혼재 여부, 주요 언급 포인트, 전체 분위기를 간결하게. 마크다운 없이 문장만.`
+    )
+    return result.response.text().trim().slice(0, 300)
+  } catch {
+    return ''
+  }
+}
 
 export const maxDuration = 300
 
@@ -284,8 +309,8 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 영상정보 + 자막 + 메타 병렬 실행 (서로 의존성 없음)
-    const [videoInfo, transcriptResult, metaResult] = await Promise.all([
+    // 영상정보 + 자막 + 메타 + 댓글 병렬 실행 (서로 의존성 없음)
+    const [videoInfo, transcriptResult, metaResult, commentResult] = await Promise.all([
       cachedVideoInfo
         ? Promise.resolve(cachedVideoInfo as { title: string; channel: string; thumbnail: string; publishedAt: string; ytViewCount?: number; description?: string })
         : getVideoInfo(videoId),
@@ -296,6 +321,7 @@ export async function POST(req: NextRequest) {
             return { text: '', source: 'none', lang: 'ko' as const }
           }),
       getVideoMeta(videoId).catch(() => ({ pinnedComment: '', description: '' })),
+      fetchVideoComments(videoId).catch(() => ({ popular: [], recent: [], combined: [] })),
     ])
 
     let transcript = transcriptResult.text
@@ -359,11 +385,16 @@ export async function POST(req: NextRequest) {
       category = classified.category
     }
 
-    const [summary, reportSummary] = await Promise.all([
+    const [summary, reportSummary, ytCommentSummary] = await Promise.all([
       generateSummary(category, fullContext, 'youtube', outputLang),
       generateReportSummary(category, videoInfo.title, fullContext).catch(() => ''),
+      generateYtCommentSummary(commentResult.popular),
     ])
     const contextSummary = await generateContextSummary(videoInfo.title, category, summary).catch(() => '')
+
+    const ytCommentsContext = commentResult.popular.length > 0
+      ? formatCommentsForPrompt(commentResult.popular, commentResult.recent).slice(0, 3000)
+      : ''
 
     const sessionId = randomUUID()
     const result = {
@@ -384,6 +415,8 @@ export async function POST(req: NextRequest) {
       ytViewCount: videoInfo.ytViewCount ?? 0,
       summarizedAt: new Date().toISOString(),
       reportSummary: reportSummary || '',
+      ytCommentSummary,
+      ytCommentsContext,
     }
 
     // Firestore 저장 (noSave=true 이면 임시 재분석이므로 저장 스킵)

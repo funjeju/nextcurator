@@ -196,6 +196,7 @@ export async function getSummaryBySessionIdAdmin(sessionId: string): Promise<imp
     videoPublishedAt: data.videoPublishedAt ?? '',
     ytViewCount: data.ytViewCount ?? meta.ytViewCount ?? 0,
     postedToMagazine: data.postedToMagazine ?? false,
+    ytCommentsContext: data.ytCommentsContext ?? '',
   }
 }
 

@@ -49,15 +49,18 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ skipped: true, reason: `No unposted summaries found in last ${settings.lookbackDays} days` })
     }
 
-    const [{ popular, recent }, platformComments] = await Promise.all([
-      item.videoId
-        ? fetchVideoComments(item.videoId).catch(() => ({ popular: [], recent: [], combined: [] }))
-        : Promise.resolve({ popular: [], recent: [], combined: [] }),
+    const [ytResult, platformComments] = await Promise.all([
+      item.ytCommentsContext
+        ? Promise.resolve(null)
+        : item.videoId
+          ? fetchVideoComments(item.videoId).catch(() => ({ popular: [], recent: [], combined: [] }))
+          : Promise.resolve({ popular: [], recent: [], combined: [] }),
       getPlatformCommentsBySessionIdAdmin(item.sessionId).catch(() => []),
     ])
-    const commentsContext = popular.length || recent.length
-      ? formatCommentsForPrompt(popular as any, recent as any)
-      : undefined
+    const commentsContext = item.ytCommentsContext
+      || (ytResult && (ytResult.popular.length || ytResult.recent.length)
+        ? formatCommentsForPrompt(ytResult.popular as any, ytResult.recent as any)
+        : undefined)
 
     const post = await generateMagazinePost(item, commentsContext, platformComments)
     const id = await saveCuratedPostAdmin(post)
@@ -120,15 +123,18 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const [{ popular, recent }, platformComments] = await Promise.all([
-      item.videoId
-        ? fetchVideoComments(item.videoId).catch(() => ({ popular: [], recent: [], combined: [] }))
-        : Promise.resolve({ popular: [], recent: [], combined: [] }),
+    const [ytResult, platformComments] = await Promise.all([
+      item.ytCommentsContext
+        ? Promise.resolve(null)
+        : item.videoId
+          ? fetchVideoComments(item.videoId).catch(() => ({ popular: [], recent: [], combined: [] }))
+          : Promise.resolve({ popular: [], recent: [], combined: [] }),
       getPlatformCommentsBySessionIdAdmin(item.sessionId).catch(() => []),
     ])
-    const commentsContext = popular.length || recent.length
-      ? formatCommentsForPrompt(popular as any, recent as any)
-      : undefined
+    const commentsContext = item.ytCommentsContext
+      || (ytResult && (ytResult.popular.length || ytResult.recent.length)
+        ? formatCommentsForPrompt(ytResult.popular as any, ytResult.recent as any)
+        : undefined)
 
     const post = await generateMagazinePost(item, commentsContext, platformComments)
     const id = await saveCuratedPostAdmin(post)
