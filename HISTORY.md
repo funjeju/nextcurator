@@ -7,6 +7,12 @@
 
 ## 2026-04-20
 
+### [기능] 자동 수집 크론 추가 (auto-collect)
+- **증상**: 매거진/요약 콘텐츠가 수작업 의존 — 자동 누적 없음
+- **해결**: `app/api/cron/auto-collect/route.ts` 신설. YouTube Data API로 뉴스/자기계발/여행/팁/영어/요리 6개 카테고리에서 KR 핫한 영상 자동 검색 → 자막 추출 → 분류·요약 → `saved_summaries` 저장(`autoCollected:true`). 1회 실행 시 3개 카테고리 로테이션(UTC 시간 기반). `vercel.json`에 KST 새벽 4시(UTC 19:00) 크론 추가, maxDuration 120s 등록
+
+---
+
 ### [기능] 매거진 하단 관련 포스트 + CTA 추가
 - **증상**: 매거진 글 읽고 바로 이탈 — 내부 링크 없어 체류시간 짧음
 - **원인**: 하단 CTA가 SQUARE K 버튼 하나뿐

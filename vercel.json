@@ -1,14 +1,16 @@
 {
   "functions": {
-    "app/api/summarize/route.ts":          { "maxDuration": 120 },
-    "app/api/summarize-pdf/route.ts":      { "maxDuration": 120 },
-    "app/api/summarize-voice/route.ts":    { "maxDuration": 120 },
-    "app/api/embed/route.ts":              { "maxDuration": 30  },
-    "app/api/cron/generate-post/route.ts": { "maxDuration": 120 }
+    "app/api/summarize/route.ts":           { "maxDuration": 120 },
+    "app/api/summarize-pdf/route.ts":       { "maxDuration": 120 },
+    "app/api/summarize-voice/route.ts":     { "maxDuration": 120 },
+    "app/api/embed/route.ts":               { "maxDuration": 30  },
+    "app/api/cron/generate-post/route.ts":  { "maxDuration": 120 },
+    "app/api/cron/auto-collect/route.ts":   { "maxDuration": 120 }
   },
   "crons": [
-    { "path": "/api/cron/generate-post", "schedule": "0 21 * * *" },
-    { "path": "/api/cron/generate-post", "schedule": "0 5 * * *" },
-    { "path": "/api/cron/generate-post", "schedule": "0 13 * * *" }
+    { "path": "/api/cron/generate-post",  "schedule": "0 21 * * *" },
+    { "path": "/api/cron/generate-post",  "schedule": "0 5 * * *"  },
+    { "path": "/api/cron/generate-post",  "schedule": "0 13 * * *" },
+    { "path": "/api/cron/auto-collect",   "schedule": "0 19 * * *" }
   ]
 }
