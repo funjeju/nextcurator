@@ -908,7 +908,6 @@ export default function SquareClient({ initialSummaries = [], initialMagazinePos
           </div>
         )}
         </>
-        )}
       </div>
 
       <FloatingChat summaries={allSummaries} source="square" />
