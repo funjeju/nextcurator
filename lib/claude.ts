@@ -75,9 +75,28 @@ function extractJSON(text: string): unknown {
           })
         )
         return JSON.parse(cleaned)
-      } catch (finalError) {
-        console.error('[JSON Parse Error Source]:', text.slice(0, 500))
-        throw finalError
+      } catch {
+        // 5. 미완성 JSON 복구 — 열린 괄호/배열 자동 닫기
+        try {
+          let depth = 0
+          let inString = false
+          let escape = false
+          const stack: string[] = []
+          for (const ch of cleaned) {
+            if (escape) { escape = false; continue }
+            if (ch === '\\' && inString) { escape = true; continue }
+            if (ch === '"') { inString = !inString; continue }
+            if (inString) continue
+            if (ch === '{') stack.push('}')
+            else if (ch === '[') stack.push(']')
+            else if (ch === '}' || ch === ']') stack.pop()
+          }
+          const repaired = cleaned + stack.reverse().join('')
+          return JSON.parse(repaired)
+        } catch (finalError) {
+          console.error('[JSON Parse Error Source]:', text.slice(0, 500))
+          throw finalError
+        }
       }
     }
   }
