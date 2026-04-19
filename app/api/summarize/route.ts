@@ -101,60 +101,46 @@ function fromFirestoreValue(v: Record<string, unknown>): unknown {
 
 async function getVideoInfo(videoId: string) {
   const socialkitKey = process.env.SOCIALKIT_API_KEY
-  let title = '', channel = '', publishedAt = '', ytViewCount = 0, description = ''
+  const videoUrl = `https://www.youtube.com/watch?v=${videoId}`
 
-  // SocialKit Stats API — title, channel, views, description 한 번에
-  if (socialkitKey) {
-    try {
-      const videoUrl = `https://www.youtube.com/watch?v=${videoId}`
-      const res = await fetch(
-        `https://api.socialkit.dev/youtube/stats?url=${encodeURIComponent(videoUrl)}`,
-        { headers: { 'x-access-key': socialkitKey }, signal: AbortSignal.timeout(10000) }
-      )
-      if (res.ok) {
-        const data = await res.json() as {
-          data?: { title?: string; channelName?: string; views?: number; description?: string; thumbnailUrl?: string }
-        }
-        title = data.data?.title ?? ''
-        channel = data.data?.channelName ?? ''
-        ytViewCount = data.data?.views ?? 0
-        description = data.data?.description ?? ''
-      }
-    } catch (e) {
-      console.warn('[getVideoInfo] SocialKit stats error:', e)
-    }
-  }
+  // SocialKit stats + YouTube HTML publishedAt 병렬 실행
+  const [socialkitData, htmlPublishedAt] = await Promise.all([
+    socialkitKey
+      ? fetch(`https://api.socialkit.dev/youtube/stats?url=${encodeURIComponent(videoUrl)}`, {
+          headers: { 'x-access-key': socialkitKey },
+          signal: AbortSignal.timeout(10000),
+        })
+          .then(r => r.ok ? r.json() as Promise<{ data?: { title?: string; channelName?: string; views?: number; description?: string } }> : null)
+          .catch(e => { console.warn('[getVideoInfo] SocialKit stats error:', e); return null })
+      : Promise.resolve(null),
+    fetch(videoUrl, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1)' },
+      signal: AbortSignal.timeout(7000),
+    })
+      .then(r => r.ok ? r.text() : '')
+      .then(html => {
+        const m = html.match(/"datePublished"\s*:\s*"([^"]+)"/) ?? html.match(/"publishDate"\s*:\s*"([^"]+)"/)
+        return m ? new Date(m[1]).toISOString() : ''
+      })
+      .catch(() => ''),
+  ])
+
+  let title = socialkitData?.data?.title ?? ''
+  let channel = socialkitData?.data?.channelName ?? ''
+  const ytViewCount = socialkitData?.data?.views ?? 0
+  const description = socialkitData?.data?.description ?? ''
+  const publishedAt = htmlPublishedAt
 
   // title/channel 없으면 oEmbed 폴백
   if (!title || !channel) {
     try {
-      const res = await fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`, { signal: AbortSignal.timeout(5000) })
+      const res = await fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent(videoUrl)}&format=json`, { signal: AbortSignal.timeout(5000) })
       if (res.ok) {
         const data = await res.json()
         if (!title) title = data.title as string
         if (!channel) channel = data.author_name as string
       }
     } catch { /* ignore */ }
-  }
-
-  // publishedAt — YouTube 페이지 HTML 파싱 (youtube.com은 Vercel에서 접근 가능)
-  try {
-    const pageRes = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1)' },
-      signal: AbortSignal.timeout(7000),
-    })
-    if (pageRes.ok) {
-      const html = await pageRes.text()
-      const metaMatch = html.match(/"datePublished"\s*:\s*"([^"]+)"/)
-      if (metaMatch) {
-        publishedAt = new Date(metaMatch[1]).toISOString()
-      } else {
-        const publishMatch = html.match(/"publishDate"\s*:\s*"([^"]+)"/)
-        if (publishMatch) publishedAt = new Date(publishMatch[1]).toISOString()
-      }
-    }
-  } catch (e) {
-    console.warn('[getVideoInfo] HTML publishedAt parse failed:', e)
   }
 
   if (!title) throw new Error('VIDEO_NOT_FOUND')
@@ -298,41 +284,32 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 2차 호출(언어 선택 후)이면 캐시된 영상 정보 재사용, 아니면 새로 가져옴
-    const videoInfo = cachedVideoInfo
-      ? (cachedVideoInfo as { title: string; channel: string; thumbnail: string; publishedAt: string; ytViewCount?: number })
-      : await getVideoInfo(videoId)
+    // 영상정보 + 자막 + 메타 병렬 실행 (서로 의존성 없음)
+    const [videoInfo, transcriptResult, metaResult] = await Promise.all([
+      cachedVideoInfo
+        ? Promise.resolve(cachedVideoInfo as { title: string; channel: string; thumbnail: string; publishedAt: string; ytViewCount?: number; description?: string })
+        : getVideoInfo(videoId),
+      cachedTranscript
+        ? Promise.resolve({ text: cachedTranscript as string, source: 'cached', lang: detectTranscriptLang(cachedTranscript as string) })
+        : getTranscript(videoId).catch((e: Error) => {
+            console.warn(`[Summarize] ⚠️ 자막 추출 실패 (${videoId}): ${e.message} — 영상 설명 및 댓글 요약으로 대체합니다.`)
+            return { text: '', source: 'none', lang: 'ko' as const }
+          }),
+      getVideoMeta(videoId).catch(() => ({ pinnedComment: '', description: '' })),
+    ])
 
-    let transcript: string = ''
-    let transcriptSource: string = ''
-    let transcriptLang: 'ko' | 'en' | 'other' = 'ko'
-
-    // 캐시된 자막이 있으면 재추출 스킵 (2차 호출 — 언어 선택 후)
-    if (cachedTranscript) {
-      transcript = cachedTranscript
-      transcriptSource = 'cached'
-      transcriptLang = detectTranscriptLang(cachedTranscript)
-    } else {
-      try {
-        const result = await getTranscript(videoId)
-        transcript = result.text
-        transcriptSource = result.source
-        transcriptLang = result.lang
-      } catch (e) {
-        const errMsg = (e as Error).message
-        console.warn(`[Summarize] ⚠️ 자막 추출 실패 (${videoId}): ${errMsg} — 영상 설명 및 댓글 요약으로 대체합니다.`)
-        transcriptSource = 'none'
-      }
-    }
+    let transcript = transcriptResult.text
+    let transcriptSource = transcriptResult.source
+    let transcriptLang = transcriptResult.lang as 'ko' | 'en' | 'other'
 
     // ── 언어 선택 필요 여부 확인 ──
     // summaryLang 미지정 + 비한국어 자막 → 프론트에서 선택하도록 early return
     if (!summaryLang && transcriptLang !== 'ko' && transcript.trim().length > 50) {
       return NextResponse.json({
         needsLangChoice: true,
-        detectedLang: transcriptLang,          // 'en' | 'other'
-        cachedTranscript: transcript,           // 재호출 시 재사용
-        cachedVideoInfo: cachedVideoInfo || {   // 영상 정보도 캐시
+        detectedLang: transcriptLang,
+        cachedTranscript: transcript,
+        cachedVideoInfo: cachedVideoInfo || {
           title: videoInfo.title,
           channel: videoInfo.channel,
           thumbnail: videoInfo.thumbnail,
@@ -343,9 +320,8 @@ export async function POST(req: NextRequest) {
 
     const outputLang: 'ko' | 'original' = summaryLang === 'original' ? 'original' : 'ko'
 
-    // description은 getVideoInfo에서 이미 가져옴, pinnedComment만 별도 수집
     const description = (videoInfo as any).description ?? ''
-    const { pinnedComment } = await getVideoMeta(videoId)
+    const { pinnedComment } = metaResult
 
     const contextParts = []
 

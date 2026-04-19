@@ -100,7 +100,6 @@ export default function Header({ title = 'SSOKTUBE' }: { title?: string }) {
                 + 클래스 만들기
               </Link>
             )}
-            <Link href="/magazine" onClick={handleNav} className="text-[#a4a09c] hover:text-white transition-colors">매거진</Link>
             {/* 문의·제안 */}
             <button
               onClick={() => setShowContact(true)}
