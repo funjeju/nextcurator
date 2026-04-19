@@ -7,8 +7,8 @@
     "app/api/cron/generate-post/route.ts": { "maxDuration": 120 }
   },
   "crons": [
-    { "path": "/api/cron/generate-post", "schedule": "0 8 * * *" },
-    { "path": "/api/cron/generate-post", "schedule": "0 16 * * *" },
-    { "path": "/api/cron/generate-post", "schedule": "0 0 * * *" }
+    { "path": "/api/cron/generate-post", "schedule": "0 21 * * *" },
+    { "path": "/api/cron/generate-post", "schedule": "0 5 * * *" },
+    { "path": "/api/cron/generate-post", "schedule": "0 13 * * *" }
   ]
 }
