@@ -41,6 +41,52 @@ function mdToHtml(md: string): string {
     .replace(/^(?!<h[23])(.+)$/gm, (m) => m.startsWith('<') ? m : `<p style="margin:0 0 12px;line-height:1.75;color:#a1a1aa;">${m}</p>`)
 }
 
+function AutoCollectTrigger({ getAuthHeader }: { getAuthHeader: () => Promise<Record<string, string>> }) {
+  const [running, setRunning] = useState(false)
+  const [result, setResult]   = useState('')
+
+  const run = async () => {
+    setRunning(true)
+    setResult('')
+    try {
+      const res = await fetch('/api/cron/auto-collect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ force: true }),
+      })
+      const data = await res.json()
+      if (data.skipped) {
+        setResult(`⏭️ 스킵: ${data.reason}`)
+      } else if (data.success) {
+        const ok = (data.results ?? []).filter((r: any) => r.status === 'success')
+        setResult(`✅ ${data.collected}개 수집 완료${ok.length ? ': ' + ok.map((r: any) => r.title).join(', ') : ''}`)
+      } else {
+        setResult(`⚠️ ${data.error ?? '알 수 없는 오류'}`)
+      }
+    } catch (e) {
+      setResult(`❌ 오류: ${String(e)}`)
+    }
+    setRunning(false)
+  }
+
+  return (
+    <div>
+      <button
+        onClick={run}
+        disabled={running}
+        className="px-4 py-2 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 text-xs font-bold border border-emerald-500/30 transition-colors disabled:opacity-50"
+      >
+        {running ? '수집 중...' : '▶ 지금 바로 수집'}
+      </button>
+      {result && (
+        <p className="mt-2 text-xs text-[#a4a09c] bg-[#1c1a18] rounded-xl px-3 py-2 border border-white/8">
+          {result}
+        </p>
+      )}
+    </div>
+  )
+}
+
 export default function CurationTab({ getAuthHeader }: {
   getAuthHeader: () => Promise<Record<string, string>>
 }) {
@@ -331,6 +377,35 @@ export default function CurationTab({ getAuthHeader }: {
           {settings?.lastGeneratedAt && (
             <span className="text-xs text-[#75716e]">마지막 생성: {formatDate(settings.lastGeneratedAt)}</span>
           )}
+        </div>
+      </div>
+
+      {/* ── 자동 수집 설정 ── */}
+      <div className="bg-[#2a2826] rounded-2xl border border-white/8 p-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-white font-black text-base">🤖 유튜브 자동 수집</h2>
+            <p className="text-[11px] text-[#75716e] mt-1">매일 KST 새벽 4시 — 뉴스·자기계발·여행·팁·영어·요리 카테고리에서 핫한 영상 3개 자동 수집·요약</p>
+          </div>
+          <label className="flex items-center gap-2 cursor-pointer shrink-0 ml-4">
+            <span className="text-xs text-[#a4a09c]">{settings?.autoCollectEnabled ? 'ON' : 'OFF'}</span>
+            <button
+              onClick={() => settings && setSettings({ ...settings, autoCollectEnabled: !settings.autoCollectEnabled })}
+              className={`relative w-11 h-6 rounded-full transition-colors ${settings?.autoCollectEnabled ? 'bg-emerald-500' : 'bg-[#3d3a38]'}`}
+            >
+              <span className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${settings?.autoCollectEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
+            </button>
+          </label>
+        </div>
+        <div className="mt-4 pt-4 border-t border-white/8 flex items-center gap-3">
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="px-4 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold transition-colors disabled:opacity-50"
+          >
+            {saving ? '저장 중...' : '설정 저장'}
+          </button>
+          <AutoCollectTrigger getAuthHeader={getAuthHeader} />
         </div>
       </div>
 

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { randomUUID } from 'crypto'
 import { getTranscript, detectTranscriptLang } from '@/lib/transcript'
 import { classifyCategory, generateSummary, generateReportSummary, generateContextSummary } from '@/lib/claude'
+import { getCurationSettings } from '@/lib/magazine'
 import { initAdminApp } from '@/lib/firebase-admin'
 
 export const maxDuration = 120
@@ -185,6 +186,11 @@ async function collectAndSummarize(videoId: string, categoryHint: string): Promi
 export async function GET(req: NextRequest) {
   if (!isAuthorized(req)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const settings = await getCurationSettings().catch(() => null)
+  if (!settings?.autoCollectEnabled) {
+    return NextResponse.json({ skipped: true, reason: 'autoCollectEnabled=false' })
   }
 
   return runCollect()

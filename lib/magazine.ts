@@ -52,6 +52,7 @@ export interface CurationSettings {
   lastGeneratedAt: string
   autoPublish: boolean      // false = 초안으로 저장
   categoryFilter: string[]  // 빈 배열 = 전체 카테고리
+  autoCollectEnabled: boolean  // 유튜브 자동 수집 크론 ON/OFF
 }
 
 export interface MagazineLog {
@@ -184,6 +185,7 @@ const SETTINGS_DEFAULTS: CurationSettings = {
   lastGeneratedAt: '',
   autoPublish: false,
   categoryFilter: [],
+  autoCollectEnabled: false,
 }
 
 export async function getCurationSettings(): Promise<CurationSettings> {
