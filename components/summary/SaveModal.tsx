@@ -188,14 +188,17 @@ export default function SaveModal({ data, onClose }: { data: any, onClose: (save
       clearTimeout(timeout)
       const result = await res.json()
       
+      const suggestedName = (result.suggestedFolder || '기타').trim()
+      const normalize = (s: string) => s.trim().toLowerCase()
+      const existingFolder = folders.find(f => normalize(f.name) === normalize(suggestedName))
       let targetFolderId = ''
-      if (result.isNew || !folders.find(f => f.name === result.suggestedFolder)) {
+      if (result.isNew || !existingFolder) {
         const uid = getLocalUserId()
-        const newFolder = await withTimeout(createFolder(uid, result.suggestedFolder || '기타'))
+        // createFolder 내부에서도 중복 체크하여 기존 폴더 반환
+        const newFolder = await withTimeout(createFolder(uid, suggestedName))
         targetFolderId = newFolder.id
       } else {
-        const existing = folders.find(f => f.name === result.suggestedFolder)
-        if (existing) targetFolderId = existing.id
+        targetFolderId = existingFolder.id
       }
 
       if (targetFolderId) {

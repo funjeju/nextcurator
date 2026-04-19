@@ -102,14 +102,22 @@ export async function getUserFolders(userId: string): Promise<Folder[]> {
 }
 
 export async function createFolder(userId: string, name: string): Promise<Folder> {
+  const trimmedName = name.trim()
+  // 같은 이름 폴더가 이미 있으면 기존 것 반환 (중복 방지)
+  const existing = await getDocs(
+    query(collection(db, 'folders'), where('userId', '==', userId), where('name', '==', trimmedName))
+  )
+  if (!existing.empty) {
+    return { id: existing.docs[0].id, ...existing.docs[0].data() } as Folder
+  }
   const foldersRef = collection(db, 'folders')
   const docRef = await addDoc(foldersRef, {
     userId,
-    name,
-    visibility: 'private', // 기본값은 비공개
+    name: trimmedName,
+    visibility: 'private',
     createdAt: serverTimestamp()
   })
-  return { id: docRef.id, userId, name, createdAt: new Date() }
+  return { id: docRef.id, userId, name: trimmedName, createdAt: new Date() }
 }
 
 export async function renameFolder(folderId: string, newName: string): Promise<void> {
