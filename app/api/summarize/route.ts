@@ -281,18 +281,23 @@ export async function POST(req: NextRequest) {
       try {
         const cached = await getCachedByVideoId(videoId)
         if (cached) {
-          console.log('[Summarize] ✅ Cache hit for videoId:', videoId)
-          // videoPublishedAt 없으면 YouTube API에서 보완 후 저장
-          if (!cached.videoPublishedAt) {
-            try {
-              const info = await getVideoInfo(videoId)
-              if (info.publishedAt) {
-                cached.videoPublishedAt = info.publishedAt
-                await saveToFirestore(cached.sessionId as string, cached)
-              }
-            } catch { /* 보완 실패해도 캐시 반환은 진행 */ }
+          // 자막 없이 요약된 캐시는 재분석 (고정댓글/설명 활용 못했을 수 있음)
+          if (cached.transcriptSource === 'none') {
+            console.log('[Summarize] ⚠️ Cache has no transcript — re-analyzing for better quality:', videoId)
+          } else {
+            console.log('[Summarize] ✅ Cache hit for videoId:', videoId)
+            // videoPublishedAt 없으면 YouTube API에서 보완 후 저장
+            if (!cached.videoPublishedAt) {
+              try {
+                const info = await getVideoInfo(videoId)
+                if (info.publishedAt) {
+                  cached.videoPublishedAt = info.publishedAt
+                  await saveToFirestore(cached.sessionId as string, cached)
+                }
+              } catch { /* 보완 실패해도 캐시 반환은 진행 */ }
+            }
+            return NextResponse.json(cached)
           }
-          return NextResponse.json(cached)
         }
       } catch (e) {
         console.warn('[Summarize] ⚠️ Cache check failed, proceeding fresh:', e)

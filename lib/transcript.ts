@@ -249,6 +249,9 @@ export async function getVideoMeta(videoId: string): Promise<VideoMeta> {
     }
     const comments: string[] = (commentData.items ?? []).map(
       item => item.snippet.topLevelComment.snippet.textDisplay
+        ?.replace(/<br\s*\/?>/gi, '\n')
+        .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&#39;/g, "'").replace(/&quot;/g, '"')
+        .replace(/<[^>]+>/g, '') ?? ''
     )
     const pinnedComment = comments.slice(0, 3).join('\n---\n')
 
