@@ -4,11 +4,13 @@ const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GENERATIVE_AI_API_KEY!)
 
 const magazineModel = genAI.getGenerativeModel({
   model: 'gemini-2.5-flash',
+  systemInstruction: 'You are a JSON generator. Always respond with valid JSON only. No explanation, no markdown code fences. Start with { and end with }. All string values must be properly JSON-escaped.',
   generationConfig: {
     temperature: 0.55,
     maxOutputTokens: 8192,
     // @ts-expect-error thinkingConfig not in types
     thinkingConfig: { thinkingBudget: 0 },
+    responseMimeType: 'application/json',
   },
 })
 
@@ -340,8 +342,9 @@ ${videoBlocks}
   try {
     const match = raw.match(/\{[\s\S]*\}/)
     parsed = JSON.parse(match ? match[0] : raw)
-  } catch {
-    throw new Error('Magazine generation returned invalid JSON')
+  } catch (parseErr) {
+    console.error('[Magazine] JSON parse failed. Raw response (first 500 chars):', raw.slice(0, 500))
+    throw new Error(`Magazine generation returned invalid JSON: ${(parseErr as Error).message}`)
   }
 
   const now = new Date().toISOString()
