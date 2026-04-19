@@ -887,6 +887,7 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
             summary={data.summary}
             category={data.category}
             totalSec={(data as any).transcriptDuration}
+            videoId={data.videoId}
           />
         )}
 
@@ -1563,10 +1564,11 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
 }
 
 // ─── 영상 타임라인 바 ───────────────────────────
-function VideoTimeline({ summary, category, totalSec }: {
+function VideoTimeline({ summary, category, totalSec, videoId }: {
   summary: any
   category: string
   totalSec: number
+  videoId?: string
 }) {
   if (!totalSec || totalSec < 60) return null
 
@@ -1628,16 +1630,24 @@ function VideoTimeline({ summary, category, totalSec }: {
         {/* 마커들 */}
         {valid.map((p, i) => {
           const pct = Math.min(99, (tsToSec(p.ts) / totalSec) * 100)
+          const sec = tsToSec(p.ts)
+          const ytUrl = videoId ? `https://www.youtube.com/watch?v=${videoId}&t=${sec}s` : undefined
           return (
             <div
               key={i}
               className="absolute top-1/2 -translate-y-1/2 group"
               style={{ left: `${pct}%` }}
             >
-              <div className="w-2.5 h-2.5 rounded-full bg-orange-500 border-2 border-zinc-900 -translate-x-1/2 cursor-default" />
+              {ytUrl ? (
+                <a href={ytUrl} target="_blank" rel="noopener">
+                  <div className="w-2.5 h-2.5 rounded-full bg-orange-500 border-2 border-zinc-900 -translate-x-1/2 cursor-pointer hover:scale-125 hover:bg-orange-400 transition-transform" />
+                </a>
+              ) : (
+                <div className="w-2.5 h-2.5 rounded-full bg-orange-500 border-2 border-zinc-900 -translate-x-1/2" />
+              )}
               <div className="absolute bottom-5 left-1/2 -translate-x-1/2 hidden group-hover:flex flex-col items-center pointer-events-none z-10">
                 <div className="bg-zinc-900 border border-white/15 rounded-lg px-2.5 py-1.5 shadow-xl min-w-max max-w-[180px]">
-                  <p className="text-orange-400 font-mono text-[10px] font-bold">{p.ts}</p>
+                  <p className="text-orange-400 font-mono text-[10px] font-bold">{p.ts} ▶</p>
                   <p className="text-zinc-200 text-[10px] leading-snug line-clamp-2">{p.label}</p>
                 </div>
                 <div className="w-1.5 h-1.5 bg-zinc-900 border-b border-r border-white/15 rotate-45 -mt-[3px]" />
@@ -1646,8 +1656,8 @@ function VideoTimeline({ summary, category, totalSec }: {
           )
         })}
         {/* 시작/끝 레이블 */}
-        <span className="absolute -bottom-4 left-0 text-[9px] text-zinc-700">0:00</span>
-        <span className="absolute -bottom-4 right-0 text-[9px] text-zinc-700">{fmtSec(totalSec)}</span>
+        <span className="absolute -bottom-4 left-0 text-[9px] text-white/60">0:00</span>
+        <span className="absolute -bottom-4 right-0 text-[9px] text-white/60">{fmtSec(totalSec)}</span>
       </div>
       <div className="h-3" />
     </div>

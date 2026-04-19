@@ -31,9 +31,11 @@ export async function POST(req: NextRequest) {
     if (!summary) return NextResponse.json({ error: '요약 데이터가 없습니다.' }, { status: 400 })
 
     // YouTube 댓글 병렬 수집 (실패해도 계속 진행)
-    const { popular: popularComments, recent: recentComments } = videoId
-      ? await fetchVideoComments(videoId).catch(() => ({ popular: [], recent: [], combined: [] }))
-      : { popular: [], recent: [], combined: [] }
+    const _comments = videoId
+      ? await fetchVideoComments(videoId).catch(() => null)
+      : null
+    const popularComments = _comments?.popular ?? []
+    const recentComments = _comments?.recent ?? []
     const hasComments = popularComments.length > 0 || recentComments.length > 0
     const commentsContext = hasComments
       ? formatCommentsForPrompt(popularComments, recentComments)

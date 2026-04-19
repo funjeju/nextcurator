@@ -101,18 +101,19 @@ function fromFirestoreValue(v: Record<string, unknown>): unknown {
 
 async function getVideoInfo(videoId: string) {
   const apiKey = process.env.YOUTUBE_API_KEY
-  let title = '', channel = '', publishedAt = ''
+  let title = '', channel = '', publishedAt = '', ytViewCount = 0
 
   // YouTube Data API v3 — title, channel, publishedAt 모두 가져옴
   if (apiKey) {
     try {
-      const apiRes = await fetch(`https://www.googleapis.com/youtube/v3/videos?id=${videoId}&part=snippet&key=${apiKey}`, { signal: AbortSignal.timeout(5000) })
+      const apiRes = await fetch(`https://www.googleapis.com/youtube/v3/videos?id=${videoId}&part=snippet,statistics&key=${apiKey}`, { signal: AbortSignal.timeout(5000) })
       if (apiRes.ok) {
         const data = await apiRes.json()
         if (data.items && data.items.length > 0) {
           title = data.items[0].snippet.title
           channel = data.items[0].snippet.channelTitle
           publishedAt = data.items[0].snippet.publishedAt ?? ''
+          ytViewCount = Number(data.items[0].statistics?.viewCount ?? 0)
         } else {
           console.warn(`[getVideoInfo] YouTube API returned no items for ${videoId}:`, JSON.stringify(data).slice(0, 200))
         }
@@ -170,6 +171,7 @@ async function getVideoInfo(videoId: string) {
     channel,
     thumbnail: `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`,
     publishedAt,
+    ytViewCount,
   }
 }
 
@@ -299,7 +301,7 @@ export async function POST(req: NextRequest) {
 
     // 2차 호출(언어 선택 후)이면 캐시된 영상 정보 재사용, 아니면 새로 가져옴
     const videoInfo = cachedVideoInfo
-      ? (cachedVideoInfo as { title: string; channel: string; thumbnail: string; publishedAt: string })
+      ? (cachedVideoInfo as { title: string; channel: string; thumbnail: string; publishedAt: string; ytViewCount?: number })
       : await getVideoInfo(videoId)
 
     let transcript: string = ''
@@ -405,6 +407,7 @@ export async function POST(req: NextRequest) {
       transcriptSource,
       transcriptWarning,
       videoPublishedAt: videoInfo.publishedAt || '',
+      ytViewCount: videoInfo.ytViewCount ?? 0,
       summarizedAt: new Date().toISOString(),
       reportSummary: reportSummary || '',
     }

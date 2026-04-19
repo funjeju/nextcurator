@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import {
-  getRecentPublicSummaries, findBestCluster,
+  getRecentPublicSummaries, pickBestSingle,
   generateMagazinePost,
   shouldGenerate,
 } from '@/lib/magazine'
@@ -8,6 +8,8 @@ import {
   getCurationSettings,
   saveCuratedPostAdmin, publishCuratedPostAdmin, saveCurationSettingsAdmin,
 } from '@/lib/magazine-server'
+import { fetchVideoComments, formatCommentsForPrompt } from '@/lib/youtube-comments'
+import { initAdminApp } from '@/lib/firebase-admin'
 
 export const maxDuration = 120
 
@@ -32,26 +34,30 @@ export async function GET(req: NextRequest) {
     }
 
     const summaries = await getRecentPublicSummaries(settings.lookbackDays)
-    const cluster = findBestCluster(summaries, settings.minVideoCount, settings.maxVideoCount)
+    const item = pickBestSingle(summaries)
 
-    if (!cluster) {
-      return NextResponse.json({
-        skipped: true,
-        reason: `Not enough videos (need ${settings.minVideoCount}, found max ${Math.max(...Object.values(
-          summaries.reduce<Record<string, number>>((acc, s) => {
-            if (s.topicCluster) acc[s.topicCluster] = (acc[s.topicCluster] ?? 0) + 1
-            return acc
-          }, {}),
-        ).concat(0))})`
-      })
+    if (!item) {
+      return NextResponse.json({ skipped: true, reason: `No unposted summaries found in last ${settings.lookbackDays} days` })
     }
 
-    const post = await generateMagazinePost(cluster.cluster, cluster.items)
+    const { popular, recent } = item.videoId
+      ? await fetchVideoComments(item.videoId).catch(() => ({ popular: [], recent: [], combined: [] }))
+      : { popular: [], recent: [] }
+    const commentsContext = popular.length || recent.length
+      ? formatCommentsForPrompt(popular as any, recent as any)
+      : undefined
+
+    const post = await generateMagazinePost(item, commentsContext)
     const id = await saveCuratedPostAdmin(post)
 
-    if (settings.autoPublish) {
-      await publishCuratedPostAdmin(id)
-    }
+    if (settings.autoPublish) await publishCuratedPostAdmin(id)
+
+    // 발행된 summary에 postedToMagazine 마킹
+    try {
+      initAdminApp()
+      const { getFirestore } = await import('firebase-admin/firestore')
+      await getFirestore().collection('saved_summaries').doc(item.id).update({ postedToMagazine: true })
+    } catch { /* non-critical */ }
 
     await saveCurationSettingsAdmin({ lastGeneratedAt: new Date().toISOString() })
 
@@ -60,8 +66,8 @@ export async function GET(req: NextRequest) {
       id,
       title: post.title,
       status: settings.autoPublish ? 'published' : 'draft',
-      videoCount: cluster.items.length,
-      cluster: cluster.cluster,
+      videoCount: 1,
+      videoTitle: item.title,
     })
   } catch (e) {
     console.error('[Cron] Magazine post generation failed:', e)
@@ -82,20 +88,34 @@ export async function POST(req: NextRequest) {
     }
 
     const summaries = await getRecentPublicSummaries(settings.lookbackDays)
-    const cluster = findBestCluster(summaries, settings.minVideoCount, settings.maxVideoCount)
+    const item = pickBestSingle(summaries)
 
-    if (!cluster) {
+    if (!item) {
       return NextResponse.json({
-        error: `클러스터 부족. 최소 ${settings.minVideoCount}개 이상의 영상이 같은 주제(또는 카테고리)여야 합니다. 현재 조회된 공개 영상: ${summaries.length}개 (최근 ${settings.lookbackDays}일 기준)`,
+        error: `발행할 영상이 없습니다. 최근 ${settings.lookbackDays}일 이내 공개된 미발행 요약: ${summaries.filter(s => !s.postedToMagazine).length}개`,
         availableCount: summaries.length,
       }, { status: 422 })
     }
 
-    const post = await generateMagazinePost(cluster.cluster, cluster.items)
+    const { popular, recent } = item.videoId
+      ? await fetchVideoComments(item.videoId).catch(() => ({ popular: [], recent: [], combined: [] }))
+      : { popular: [], recent: [] }
+    const commentsContext = popular.length || recent.length
+      ? formatCommentsForPrompt(popular as any, recent as any)
+      : undefined
+
+    const post = await generateMagazinePost(item, commentsContext)
     const id = await saveCuratedPostAdmin(post)
 
     const shouldPublish = autoPublish ?? settings.autoPublish
     if (shouldPublish) await publishCuratedPostAdmin(id)
+
+    // 발행된 summary에 postedToMagazine 마킹
+    try {
+      initAdminApp()
+      const { getFirestore } = await import('firebase-admin/firestore')
+      await getFirestore().collection('saved_summaries').doc(item.id).update({ postedToMagazine: true })
+    } catch { /* non-critical */ }
 
     await saveCurationSettingsAdmin({ lastGeneratedAt: new Date().toISOString() })
 
@@ -105,8 +125,8 @@ export async function POST(req: NextRequest) {
       title: post.title,
       slug: post.slug,
       status: shouldPublish ? 'published' : 'draft',
-      videoCount: cluster.items.length,
-      cluster: cluster.cluster,
+      videoCount: 1,
+      videoTitle: item.title,
     })
   } catch (e) {
     console.error('[Manual trigger] Magazine post generation failed:', e)

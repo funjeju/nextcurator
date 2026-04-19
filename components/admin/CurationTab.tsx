@@ -328,6 +328,33 @@ export default function CurationTab({ getAuthHeader }: {
                   </ul>
                 </div>
               )}
+
+              {/* 댓글 분석 */}
+              {(previewPost as any).comments && (
+                <div className="mt-5 space-y-3">
+                  <h3 className="text-white font-bold text-sm">💬 시청자 반응</h3>
+                  <div className="bg-orange-500/8 rounded-xl p-3 border border-orange-500/20">
+                    <p className="text-[10px] font-bold text-orange-400 mb-1.5">🔥 인기 댓글 경향</p>
+                    <p className="text-xs text-[#a4a09c] leading-relaxed mb-2">{(previewPost as any).comments.popular_summary}</p>
+                    {(previewPost as any).comments.popular_highlights?.map((h: any, i: number) => (
+                      <div key={i} className="bg-[#1c1a18] rounded-lg px-3 py-2 mb-1.5 border-l-2 border-orange-500">
+                        <p className="text-xs text-[#e4e4e7] leading-relaxed">"{h.text}"</p>
+                        <p className="text-[9px] text-[#75716e] mt-0.5">👍 {h.likes?.toLocaleString()}</p>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="bg-indigo-500/8 rounded-xl p-3 border border-indigo-500/20">
+                    <p className="text-[10px] font-bold text-indigo-400 mb-1.5">🕐 최신 댓글 경향</p>
+                    <p className="text-xs text-[#a4a09c] leading-relaxed mb-2">{(previewPost as any).comments.recent_summary}</p>
+                    {(previewPost as any).comments.recent_highlights?.map((h: any, i: number) => (
+                      <div key={i} className="bg-[#1c1a18] rounded-lg px-3 py-2 mb-1.5 border-l-2 border-indigo-500">
+                        <p className="text-xs text-[#e4e4e7] leading-relaxed">"{h.text}"</p>
+                        <p className="text-[9px] text-[#75716e] mt-0.5">👍 {h.likes?.toLocaleString()}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* 액션 버튼 */}

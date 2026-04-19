@@ -31,6 +31,7 @@ export interface CuratedPost {
   seoKeywords: string[]
   faq?: { question: string; answer: string }[]
   checklist?: string[]
+  comments?: { popular_summary: string; popular_highlights: { text: string; likes: number }[]; recent_summary: string; recent_highlights: { text: string; likes: number }[] }
   readTime: number           // Estimated minutes
   status: 'draft' | 'published'
   publishedAt: string
@@ -55,6 +56,7 @@ export interface CurationSettings {
 export interface SummaryForCuration {
   id: string
   sessionId: string
+  videoId: string
   title: string
   channel: string
   thumbnail: string
@@ -64,6 +66,9 @@ export interface SummaryForCuration {
   contextSummary: string
   reportSummary: string
   summarizedAt: string
+  videoPublishedAt: string
+  ytViewCount: number
+  postedToMagazine?: boolean
 }
 
 // ─── Firestore REST helpers ─────────────────────────────────────────────────
@@ -161,7 +166,7 @@ const SETTINGS_DEFAULTS: CurationSettings = {
   schedule: '3x_weekly',
   minVideoCount: 5,
   maxVideoCount: 8,
-  lookbackDays: 3,
+  lookbackDays: 5,
   lastGeneratedAt: '',
   autoPublish: false,
 }
@@ -196,8 +201,9 @@ export async function getRecentPublicSummaries(lookbackDays: number): Promise<Su
     },
     select: {
       fields: [
-        'sessionId', 'title', 'channel', 'thumbnail', 'category',
+        'sessionId', 'videoId', 'title', 'channel', 'thumbnail', 'category',
         'square_meta', 'contextSummary', 'reportSummary', 'createdAt',
+        'videoPublishedAt', 'ytViewCount', 'postedToMagazine',
       ].map(f => ({ fieldPath: f })),
     },
     orderBy: [{ field: { fieldPath: 'createdAt' }, direction: 'DESCENDING' }],
@@ -224,6 +230,7 @@ export async function getRecentPublicSummaries(lookbackDays: number): Promise<Su
       return {
         id,
         sessionId: (data.sessionId as string) ?? '',
+        videoId: (data.videoId as string) ?? '',
         title: (data.title as string) ?? '',
         channel: (data.channel as string) ?? '',
         thumbnail: (data.thumbnail as string) ?? '',
@@ -233,6 +240,9 @@ export async function getRecentPublicSummaries(lookbackDays: number): Promise<Su
         contextSummary: (data.contextSummary as string) ?? '',
         reportSummary: (data.reportSummary as string) ?? '',
         summarizedAt,
+        videoPublishedAt: (data.videoPublishedAt as string) ?? '',
+        ytViewCount: Number(data.ytViewCount ?? 0),
+        postedToMagazine: (data.postedToMagazine as boolean) ?? false,
         _createdAtMs: createdAtMs,
       }
     })
@@ -240,7 +250,31 @@ export async function getRecentPublicSummaries(lookbackDays: number): Promise<Su
     .map(({ _createdAtMs: _, ...s }) => s)
 }
 
-// ─── Clustering ──────────────────────────────────────────────────────────────
+// ─── Single video selection (hot_score 기반) ─────────────────────────────────
+
+export function pickBestSingle(summaries: SummaryForCuration[]): SummaryForCuration | null {
+  const candidates = summaries.filter(s => !s.postedToMagazine && s.title)
+  if (!candidates.length) return null
+
+  const now = Date.now()
+  const scored = candidates.map(s => {
+    const publishedMs = s.videoPublishedAt ? new Date(s.videoPublishedAt).getTime() : 0
+    const ageHours = publishedMs ? Math.max(1, (now - publishedMs) / 3600000) : 720
+    const hotScore = s.ytViewCount > 0 ? s.ytViewCount / ageHours : 0
+    // ytViewCount 없으면 최신 요약 우선
+    const summarizedMs = s.summarizedAt ? new Date(s.summarizedAt).getTime() : 0
+    return { s, hotScore, summarizedMs }
+  })
+
+  // hot_score 있는 것 우선, 없으면 최신 요약순
+  const withScore = scored.filter(x => x.hotScore > 0).sort((a, b) => b.hotScore - a.hotScore)
+  if (withScore.length) return withScore[0].s
+
+  const byRecent = scored.sort((a, b) => b.summarizedMs - a.summarizedMs)
+  return byRecent[0]?.s ?? null
+}
+
+// ─── Clustering (레거시) ──────────────────────────────────────────────────────
 
 export function findBestCluster(
   summaries: SummaryForCuration[],
@@ -302,89 +336,119 @@ function estimateReadTime(body: string): number {
 }
 
 export async function generateMagazinePost(
-  cluster: string,
-  items: SummaryForCuration[],
+  item: SummaryForCuration,
+  commentsContext?: string,
 ): Promise<Omit<CuratedPost, 'id' | 'viewCount' | 'likeCount'>> {
-  const allTags = [...new Set(items.flatMap(v => v.tags))].slice(0, 12)
-  const mainCategory = items[0]?.category ?? 'news'
-
-  const videoBlocks = items
-    .map((v, i) =>
-      `[영상 ${i + 1}] "${v.title}" — ${v.channel}\n${v.contextSummary ?? ''}${v.reportSummary ? '\n' + v.reportSummary.slice(0, 400) : ''}`,
-    )
-    .join('\n\n---\n\n')
-
   const today = new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' })
   const year = new Date().getFullYear()
+  const hasComments = !!commentsContext
 
-  const prompt = `당신은 SSOKTUBE의 수석 콘텐츠 에디터입니다.
-아래 ${items.length}개 영상을 기반으로 구글 검색 상위 랭크를 목표로 한 전문 큐레이션 포스트를 작성하세요.
+  const prompt = `다음 유튜브 영상 요약 데이터를 구글 SEO에 최적화된 매거진 글로 변환하세요.
 작성 기준일: ${today}
 
-주제 클러스터: "${cluster}"
+영상 제목: ${item.title}
+채널: ${item.channel}
+카테고리: ${item.category}
 
-[포함 영상 요약 데이터]
-${videoBlocks}
+요약 데이터:
+${item.contextSummary ?? ''}
+${item.reportSummary ? '\n추가 분석:\n' + item.reportSummary : ''}
+${hasComments ? `\n유튜브 댓글 데이터:\n${commentsContext}` : ''}
 
-[작성 원칙]
-- title에 ${year}년 또는 구체적 숫자 포함 권장 (예: "${year}년 기준", "TOP 5")
-- 영상들을 단순 나열 금지. 각 영상의 관점 차이·강약점·실용성을 직접 비교 평가할 것
-- "A 채널은 ~를 강조하는 반면, B 채널은 ~에 집중한다" 형태의 실제 비교 분석 포함
-- 검색자가 실제로 검색할 LSI 연관 키워드를 본문에 자연스럽게 녹일 것
-- 마크다운 헤딩(##, ###)과 볼드(**) 적극 활용
-- body는 최소 800자 이상, 에디터 고유 관점과 실용 조언 반드시 포함
+[SEO 최적화 규칙]
+- title: 핵심 키워드를 앞에 배치, 40-60자, ${year}년 포함 권장, 클릭 유도 (숫자/How-to/질문형)
+- seoDescription: 핵심 내용 + 클릭 유도 문구, 140-155자, 핵심 키워드 포함
+- slug: 영문 소문자+하이픈 (예: "real-estate-auction-guide-2026")
+- seoKeywords: 검색량 높을 법한 키워드 6-10개
 
-[JSON 형식으로 응답]:
+[섹션 작성 원칙]
+- 단순 요약 나열 금지. 에디터의 분석·평가·실용 조언 반드시 포함
+- body는 마크다운(##, ###, **볼드**) 적극 활용, 최소 800자
+- intro: 검색자의 핵심 궁금증을 바로 해결하는 도입부
+- 각 섹션 300-450자, 분석·비교·맥락 설명 포함
+- conclusion: 핵심 요약 + 독자 행동 유도(CTA)
+
+[FAQ — 5개 필수]
+- 이 주제로 구글에서 실제로 검색할 법한 질문과 답변
+- 질문: 검색 쿼리 형태
+- 답변: 2-4문장
+
+[체크리스트 — 3-5개]
+- 이 영상 시청 후 독자가 바로 실천할 수 있는 구체적 행동 항목
+${hasComments ? `
+[댓글 분석]
+- popular_summary: 인기 댓글 전체 경향 2-3문장
+- popular_highlights: 인기 댓글 중 인상적인 것 3-5개 원문 인용 (likes 포함)
+- recent_summary: 최신 댓글 경향 2-3문장
+- recent_highlights: 최신 댓글 중 흥미로운 것 3-5개 원문 인용` : ''}
+
+JSON 형식:
 {
-  "title": "SEO 최적화 제목 (연도/숫자 포함, 40-60자)",
-  "subtitle": "독자 호기심 자극 부제 (20-40자)",
-  "body": "## 왜 지금 이 주제인가\\n\\n[${today} 기준 이 주제의 시의성과 중요성. 2-3문장]\\n\\n## 영상별 핵심 비교 분석\\n\\n[각 영상마다 ### 소제목. 단순 소개 아닌 다른 영상과의 비교·평가 포함]\\n\\n## 공통점과 차이점\\n\\n[여러 영상을 가로질러 보이는 패턴, 시각 차이, 모순점]\\n\\n## 실전 활용 가이드\\n\\n[독자가 이 정보를 실제로 어떻게 써야 하는지 구체적 조언]\\n\\n## 에디터 총평\\n\\n[SSOKTUBE 에디터만의 독자적 관점. 비판적 시각이나 놓친 부분 지적도 가능]\\n\\n(위 구조는 가이드라인, 실제 내용으로 채울 것)",
-  "seoDescription": "구글 스니펫용 설명. ${year}년 기준, 핵심 키워드 자연스럽게 포함. 150자 이내.",
-  "seoKeywords": ["검색키워드1", "검색키워드2", "검색키워드3", "검색키워드4", "검색키워드5", "검색키워드6"],
+  "title": "SEO 최적화 제목",
+  "subtitle": "독자 호기심 자극 부제 20-40자",
+  "body": "## 섹션\\n\\n내용...",
+  "seoDescription": "155자 이내 메타 설명",
+  "slug": "english-slug-here",
+  "seoKeywords": ["키워드1","키워드2","키워드3","키워드4","키워드5"],
+  "tags": ["태그1","태그2","태그3","태그4","태그5"],
   "faq": [
-    {"question": "이 주제로 실제 검색할 법한 질문?", "answer": "2-4문장 답변"},
+    {"question": "질문1?", "answer": "답변1"},
     {"question": "질문2?", "answer": "답변2"},
     {"question": "질문3?", "answer": "답변3"},
     {"question": "질문4?", "answer": "답변4"},
     {"question": "질문5?", "answer": "답변5"}
   ],
-  "checklist": ["독자가 바로 실천할 항목1", "항목2", "항목3"]
+  "checklist": ["항목1","항목2","항목3"]${hasComments ? `,
+  "comments": {
+    "popular_summary": "인기 댓글 경향 요약",
+    "popular_highlights": [{"text": "댓글 원문", "likes": 123}],
+    "recent_summary": "최신 댓글 경향 요약",
+    "recent_highlights": [{"text": "최신 댓글 원문", "likes": 0}]
+  }` : ''}
 }`
 
   const result = await magazineModel.generateContent(prompt)
   const raw = result.response.text().trim()
 
-  let parsed: { title: string; subtitle: string; body: string; seoDescription: string; seoKeywords: string[]; faq?: { question: string; answer: string }[]; checklist?: string[] }
+  let parsed: {
+    title: string; subtitle: string; body: string; seoDescription: string; slug?: string
+    seoKeywords: string[]; tags?: string[]
+    faq?: { question: string; answer: string }[]
+    checklist?: string[]
+    comments?: { popular_summary: string; popular_highlights: any[]; recent_summary: string; recent_highlights: any[] }
+  }
   try {
     const match = raw.match(/\{[\s\S]*\}/)
     parsed = JSON.parse(match ? match[0] : raw)
   } catch (parseErr) {
-    console.error('[Magazine] JSON parse failed. Raw response (first 500 chars):', raw.slice(0, 500))
+    console.error('[Magazine] JSON parse failed. Raw (first 500):', raw.slice(0, 500))
     throw new Error(`Magazine generation returned invalid JSON: ${(parseErr as Error).message}`)
   }
 
   const now = new Date().toISOString()
-  const heroThumbnail = items.find(v => v.thumbnail && !v.thumbnail.startsWith('data:'))?.thumbnail ?? ''
+  const heroThumbnail = item.thumbnail && !item.thumbnail.startsWith('data:') ? item.thumbnail : ''
+  const allTags = [...new Set([...(parsed.tags ?? []), ...item.tags])].slice(0, 12)
 
   return {
-    slug: slugify(parsed.title),
+    slug: parsed.slug ? `${parsed.slug}-${now.slice(0, 10)}` : slugify(parsed.title),
     title: parsed.title,
     subtitle: parsed.subtitle,
     heroThumbnail,
-    category: mainCategory,
+    category: item.category,
     tags: allTags,
-    summaryIds: items.map(v => v.id),
-    videoTitles: items.map(v => v.title),
+    summaryIds: [item.id],
+    videoTitles: [item.title],
     body: parsed.body,
-    seoDescription: parsed.seoDescription.slice(0, 155),
+    seoDescription: (parsed.seoDescription ?? '').slice(0, 155),
     seoKeywords: parsed.seoKeywords ?? [],
     faq: parsed.faq ?? [],
     checklist: parsed.checklist ?? [],
+    comments: parsed.comments,
     readTime: estimateReadTime(parsed.body),
     status: 'draft',
     publishedAt: '',
     createdAt: now,
-    topicCluster: cluster,
+    topicCluster: item.topicCluster || item.category,
   }
 }
 
