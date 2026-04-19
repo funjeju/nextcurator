@@ -384,7 +384,6 @@ export default function MagazinePostClient({ post }: { post: CuratedPost }) {
                 ))}
               </div>
             )}
-          </div>
           </section>
         )}
 
