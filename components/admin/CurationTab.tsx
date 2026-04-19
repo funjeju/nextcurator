@@ -41,13 +41,24 @@ function mdToHtml(md: string): string {
     .replace(/^(?!<h[23])(.+)$/gm, (m) => m.startsWith('<') ? m : `<p style="margin:0 0 12px;line-height:1.75;color:#a1a1aa;">${m}</p>`)
 }
 
+interface CollectResultItem {
+  status: 'success' | 'skip' | 'error'
+  title: string
+  videoId: string
+  category: string
+  sessionId?: string
+  thumbnail?: string
+}
+
 function AutoCollectTrigger({ getAuthHeader }: { getAuthHeader: () => Promise<Record<string, string>> }) {
   const [running, setRunning] = useState(false)
-  const [result, setResult]   = useState('')
+  const [error, setError]     = useState('')
+  const [items, setItems]     = useState<CollectResultItem[]>([])
 
   const run = async () => {
     setRunning(true)
-    setResult('')
+    setError('')
+    setItems([])
     try {
       const res = await fetch('/api/cron/auto-collect', {
         method: 'POST',
@@ -56,21 +67,22 @@ function AutoCollectTrigger({ getAuthHeader }: { getAuthHeader: () => Promise<Re
       })
       const data = await res.json()
       if (data.skipped) {
-        setResult(`⏭️ 스킵: ${data.reason}`)
+        setError(`⏭️ 스킵: ${data.reason}`)
       } else if (data.success) {
-        const ok = (data.results ?? []).filter((r: any) => r.status === 'success')
-        setResult(`✅ ${data.collected}개 수집 완료${ok.length ? ': ' + ok.map((r: any) => r.title).join(', ') : ''}`)
+        setItems(data.results ?? [])
       } else {
-        setResult(`⚠️ ${data.error ?? '알 수 없는 오류'}`)
+        setError(`⚠️ ${data.error ?? '알 수 없는 오류'}`)
       }
     } catch (e) {
-      setResult(`❌ 오류: ${String(e)}`)
+      setError(`❌ 오류: ${String(e)}`)
     }
     setRunning(false)
   }
 
+  const successItems = items.filter(r => r.status === 'success')
+
   return (
-    <div>
+    <div className="flex-1">
       <button
         onClick={run}
         disabled={running}
@@ -78,10 +90,50 @@ function AutoCollectTrigger({ getAuthHeader }: { getAuthHeader: () => Promise<Re
       >
         {running ? '수집 중...' : '▶ 지금 바로 수집'}
       </button>
-      {result && (
-        <p className="mt-2 text-xs text-[#a4a09c] bg-[#1c1a18] rounded-xl px-3 py-2 border border-white/8">
-          {result}
-        </p>
+      {error && (
+        <p className="mt-2 text-xs text-[#a4a09c] bg-[#1c1a18] rounded-xl px-3 py-2 border border-white/8">{error}</p>
+      )}
+      {successItems.length > 0 && (
+        <div className="mt-3 flex flex-col gap-2">
+          <p className="text-xs text-emerald-400 font-bold">✅ {successItems.length}개 수집 완료</p>
+          {successItems.map((item) => (
+            <div key={item.videoId} className="flex items-center gap-3 bg-[#1c1a18] rounded-xl p-3 border border-white/8">
+              {item.videoId && (
+                <img
+                  src={`https://img.youtube.com/vi/${item.videoId}/mqdefault.jpg`}
+                  alt={item.title}
+                  className="w-20 h-[45px] object-cover rounded-lg shrink-0"
+                />
+              )}
+              <div className="flex-1 min-w-0">
+                <p className="text-xs text-white font-medium leading-snug line-clamp-2">{item.title}</p>
+                <p className="text-[10px] text-[#75716e] mt-0.5">{item.category}</p>
+              </div>
+              <div className="flex flex-col gap-1.5 shrink-0">
+                {item.videoId && (
+                  <a
+                    href={`https://www.youtube.com/watch?v=${item.videoId}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-2 py-1 rounded-lg bg-red-500/20 hover:bg-red-500/30 text-red-400 text-[10px] font-bold border border-red-500/30 transition-colors text-center"
+                  >
+                    YouTube
+                  </a>
+                )}
+                {item.sessionId && (
+                  <a
+                    href={`/result/${item.sessionId}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-2 py-1 rounded-lg bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 text-[10px] font-bold border border-blue-500/30 transition-colors text-center"
+                  >
+                    요약 보기
+                  </a>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
       )}
     </div>
   )

@@ -1684,6 +1684,7 @@ function VideoTimeline({ summary, category, totalSec, onSeekAndScroll }: {
     addPts(summary.concepts, 'timestamp', 'name')
   } else if (category === 'news') {
     addPts(summary.implications, 'timestamp', 'point')
+    addPts(summary.key_moments, 'timestamp', 'point')
   } else if (category === 'selfdev') {
     addPts(summary.insights, 'timestamp', 'point')
     addPts(summary.quotes, 'timestamp', 'text')

@@ -44,6 +44,7 @@ export interface NewsSummary {
   three_line_summary: string
   five_w: { who: string; when: string; where: string; what: string; how: string; why: string }
   background: { desc: string; timestamp: string }
+  key_moments: { point: string; timestamp: string }[]
   implications: { point: string; timestamp: string }[]
 }
 

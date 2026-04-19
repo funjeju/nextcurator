@@ -108,7 +108,7 @@ async function saveToSavedSummaries(doc: Record<string, unknown>): Promise<strin
 }
 
 // 영상 1개 자동 수집·요약·저장
-async function collectAndSummarize(videoId: string, categoryHint: string): Promise<{ title: string } | null> {
+async function collectAndSummarize(videoId: string, categoryHint: string): Promise<{ title: string; sessionId: string } | null> {
   try {
     const alreadyDone = await isAlreadyCollected(videoId)
     if (alreadyDone) {
@@ -173,7 +173,7 @@ async function collectAndSummarize(videoId: string, categoryHint: string): Promi
     })
 
     console.log(`[AutoCollect] ✅ Saved: "${basicInfo.title}" (${category})`)
-    return { title: basicInfo.title }
+    return { title: basicInfo.title, sessionId }
   } catch (e) {
     console.error(`[AutoCollect] ❌ Failed for ${videoId}:`, e)
     return null
@@ -204,7 +204,7 @@ export async function POST(req: NextRequest) {
 }
 
 async function runCollect() {
-  const results: { category: string; title: string; videoId: string; status: 'success' | 'skip' | 'error' }[] = []
+  const results: { category: string; title: string; videoId: string; sessionId?: string; status: 'success' | 'skip' | 'error' }[] = []
 
   // 이번 실행에서 수집할 카테고리 3개 — 시간 기반으로 로테이션
   const hour = new Date().getUTCHours()
@@ -221,7 +221,7 @@ async function runCollect() {
       for (const videoId of videoIds) {
         const result = await collectAndSummarize(videoId, target.category)
         if (result) {
-          results.push({ category: target.label, title: result.title, videoId, status: 'success' })
+          results.push({ category: target.label, title: result.title, videoId, sessionId: result.sessionId, status: 'success' })
           collected = true
           break // 카테고리당 1개만
         }

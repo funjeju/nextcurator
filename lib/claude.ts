@@ -155,23 +155,24 @@ const SUMMARY_PROMPTS: Record<Category, string> = {
 
 {"square_meta":{"tags":["키워드1","키워드2","키워드3","키워드4","키워드5"],"topic_cluster":"대주제","vibe":"분위기"},"subject":"주제","concepts":[{"name":"개념명","desc":"개념 설명 2문장 (정의 + 중요성/맥락)","timestamp":"MM:SS"}],"key_points":[{"point":"핵심 포인트 완전한 문장","timestamp":"MM:SS"}],"examples":[{"desc":"강사가 든 구체적 예시나 비유","timestamp":"MM:SS"}]}`,
 
-  news: `자막을 처음부터 끝까지 읽고, 이 뉴스의 핵심 사건·사실만 추출해서 JSON을 완성하세요.
+  news: `자막을 처음부터 끝까지 읽고, 이 뉴스/시사 영상의 핵심 내용을 JSON으로 완성하세요.
 
 [필수 지침]
 - 자막에 나온 실제 인물명·기관명·날짜·장소·수치를 그대로 사용하세요. 추측하거나 일반론으로 채우지 마세요.
-- headline: 이 뉴스의 핵심 사건을 담은 제목 (기사 헤드라인처럼).
+- headline: 이 영상의 핵심을 담은 제목 (기사 헤드라인처럼).
 - three_line_summary: 반드시 3개의 독립 문장. 1문장=무슨 일이 발생했는가, 2문장=왜 발생했는가(배경·원인), 3문장=결과·현재 상황 또는 전망. 줄바꿈(\n)으로 구분.
-- five_w: 이 뉴스 사건을 관통하는 육하원칙. 각 항목은 구체적인 사실이어야 함.
-  · who: 사건의 핵심 주체 (인물명 또는 기관명 명시)
-  · when: 사건 발생 시점 (날짜·시간 등 자막에 언급된 시점)
+- five_w: 이 영상을 관통하는 육하원칙. 각 항목은 구체적인 사실이어야 함.
+  · who: 핵심 주체 (인물명 또는 기관명 명시)
+  · when: 사건 발생 시점
   · where: 사건 발생 장소 또는 국가·지역
-  · what: 실제로 일어난 일 — 가장 구체적으로, 행동·결정·사건을 직접 서술
-  · how: 어떤 경위나 방법으로 벌어졌는지 (과정·절차·수단)
+  · what: 실제로 일어난 일 — 가장 구체적으로 서술
+  · how: 어떤 경위나 방법으로 벌어졌는지
   · why: 자막에 명시된 원인·동기·이유 (없으면 "" 로 둘 것)
-- background: 이번 사건 이전에 있었던 관련 맥락 또는 역사적 배경 (현재 사건 내용 반복 금지).
-- implications: 2~4개, 서로 겹치지 않는 독립적 시사점. 자막 근거 기반으로 작성.
+- background: 이번 사건 이전에 있었던 관련 맥락 또는 역사적 배경.
+- key_moments: 영상 전체를 시간 순서대로 커버하는 핵심 장면/발언/논점. 영상 길이에 비례해 5~10개. 자막 전체에서 고르게 추출하고, 각 항목의 timestamp는 해당 내용이 실제 언급되는 자막 시점으로.
+- implications: 2~4개, 서로 겹치지 않는 독립적 시사점.
 
-{"square_meta":{"tags":["키워드1","키워드2","키워드3","키워드4","키워드5"],"topic_cluster":"대주제","vibe":"분위기"},"headline":"핵심 사건 중심 제목","three_line_summary":"무슨 일 문장.\n왜 발생했나 문장.\n결과·전망 문장.","five_w":{"who":"","when":"","where":"","what":"","how":"","why":""},"background":{"desc":"","timestamp":"MM:SS"},"implications":[{"point":"","timestamp":"MM:SS"}]}`,
+{"square_meta":{"tags":["키워드1","키워드2","키워드3","키워드4","키워드5"],"topic_cluster":"대주제","vibe":"분위기"},"headline":"제목","three_line_summary":"무슨 일.\n왜 발생했나.\n결과·전망.","five_w":{"who":"","when":"","where":"","what":"","how":"","why":""},"background":{"desc":"","timestamp":"MM:SS"},"key_moments":[{"point":"핵심 장면/발언 한 문장","timestamp":"MM:SS"}],"implications":[{"point":"","timestamp":"MM:SS"}]}`,
 
   selfdev: `다음 자기계발 영상 자막을 분석해서 인사이트 JSON을 만드세요.
 

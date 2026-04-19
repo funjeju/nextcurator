@@ -98,6 +98,32 @@ export default function NewsSummary({ data, onSeek, sessionId, commentCounts = {
           <p className="text-zinc-300 text-sm">{data.background.desc}</p>
         </div>
 
+        {/* 주요 장면 타임라인 */}
+        {data.key_moments?.length > 0 && (
+          <>
+            <Separator className="bg-zinc-800" />
+            <div>
+              <h3 className="text-zinc-300 font-semibold mb-3">🕐 주요 장면</h3>
+              <div className="flex flex-col gap-2">
+                {data.key_moments.map((km, i) => {
+                  const segId = `key-moment-${i}`
+                  return (
+                    <div key={i} id={`seg-${segId}`} className="flex items-start gap-3">
+                      <TimestampBadge timestamp={km.timestamp} onSeek={onSeek} />
+                      <div className="flex-1 flex flex-col gap-1">
+                        <p className="text-zinc-200 text-sm">{km.point}</p>
+                      </div>
+                      {sessionId && (
+                        <CommentBubble sessionId={sessionId} segmentId={segId} segmentLabel={`주요 장면 ${i + 1}`} initialCount={commentCounts[segId] ?? 0} />
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          </>
+        )}
+
         {/* 시사점 */}
         {data.implications.length > 0 && (
           <>
