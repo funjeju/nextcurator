@@ -17,6 +17,31 @@ function formatDate(iso: string) {
   return new Intl.DateTimeFormat('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' }).format(new Date(iso))
 }
 
+function FaqItem({ question, answer }: { question: string; answer: string }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="rounded-xl bg-[#2a2826] border border-white/8 overflow-hidden">
+      <button
+        onClick={() => setOpen(v => !v)}
+        className="w-full flex items-center justify-between px-4 py-3.5 text-left"
+      >
+        <span className="text-sm font-bold text-white pr-4">{question}</span>
+        <svg
+          className={`shrink-0 w-4 h-4 text-[#75716e] transition-transform ${open ? 'rotate-180' : ''}`}
+          fill="none" stroke="currentColor" viewBox="0 0 24 24"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+      {open && (
+        <div className="px-4 pb-4 pt-1 border-t border-white/6">
+          <p className="text-sm text-[#a4a09c] leading-relaxed">{answer}</p>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function CommentsSection({ postId }: { postId: string }) {
   const [comments, setComments] = useState<MagazineComment[]>([])
   const [author, setAuthor] = useState('')
@@ -271,6 +296,81 @@ export default function MagazinePostClient({ post }: { post: CuratedPost }) {
           </ReactMarkdown>
         </div>
 
+        {/* FAQ */}
+        {post.faq && post.faq.length > 0 && (
+          <section className="mt-14">
+            <h2 className="text-base font-black text-white mb-5 flex items-center gap-2">
+              <span className="w-1 h-4 rounded-full bg-orange-500" />
+              자주 묻는 질문
+            </h2>
+            <div className="space-y-3">
+              {post.faq.map((item, i) => (
+                <FaqItem key={i} question={item.question} answer={item.answer} />
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* 핵심 체크리스트 */}
+        {post.checklist && post.checklist.length > 0 && (
+          <section className="mt-14">
+            <h2 className="text-base font-black text-white mb-5 flex items-center gap-2">
+              <span className="w-1 h-4 rounded-full bg-orange-500" />
+              핵심 체크리스트
+            </h2>
+            <div className="p-5 rounded-2xl bg-[#2a2826] border border-white/8 space-y-3">
+              {post.checklist.map((item, i) => (
+                <div key={i} className="flex items-start gap-3">
+                  <span className="shrink-0 w-5 h-5 rounded-full bg-orange-500/20 border border-orange-500/40 flex items-center justify-center mt-0.5">
+                    <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
+                      <path d="M2 6l3 3 5-5" stroke="#f97316" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  </span>
+                  <p className="text-sm text-[#c4c0bc] leading-relaxed">{item}</p>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* 시청자 댓글 경향 */}
+        {post.comments && (
+          <section className="mt-14">
+            <h2 className="text-base font-black text-white mb-5 flex items-center gap-2">
+              <span className="w-1 h-4 rounded-full bg-orange-500" />
+              시청자 반응
+            </h2>
+            <div className="space-y-4">
+              {post.comments.popular_summary && (
+                <div className="p-4 rounded-2xl bg-[#2a2826] border border-white/8">
+                  <p className="text-xs font-bold text-orange-400 mb-2">🔥 인기 댓글 경향</p>
+                  <p className="text-sm text-[#a4a09c] leading-relaxed mb-3">{post.comments.popular_summary}</p>
+                  {post.comments.popular_highlights?.map((h, i) => (
+                    <div key={i} className="flex items-start gap-2 mt-2">
+                      <span className="shrink-0 text-xs text-[#4a4845] mt-0.5">❝</span>
+                      <p className="text-xs text-[#c4c0bc] leading-relaxed flex-1">{h.text}</p>
+                      {h.likes > 0 && <span className="shrink-0 text-[10px] text-orange-400">♥ {h.likes}</span>}
+                    </div>
+                  ))}
+                </div>
+              )}
+              {post.comments.recent_summary && (
+                <div className="p-4 rounded-2xl bg-[#2a2826] border border-white/8">
+                  <p className="text-xs font-bold text-blue-400 mb-2">💬 최근 댓글 경향</p>
+                  <p className="text-sm text-[#a4a09c] leading-relaxed mb-3">{post.comments.recent_summary}</p>
+                  {post.comments.recent_highlights?.map((h, i) => (
+                    <div key={i} className="flex items-start gap-2 mt-2">
+                      <span className="shrink-0 text-xs text-[#4a4845] mt-0.5">❝</span>
+                      <p className="text-xs text-[#c4c0bc] leading-relaxed flex-1">{h.text}</p>
+                      {h.likes > 0 && <span className="shrink-0 text-[10px] text-blue-400">♥ {h.likes}</span>}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </section>
+        )}
+
         {/* 포함된 영상 목록 */}
         <section className="mt-14">
           <h2 className="text-base font-black text-white mb-4 flex items-center gap-2">
@@ -279,9 +379,11 @@ export default function MagazinePostClient({ post }: { post: CuratedPost }) {
           </h2>
           <div className="space-y-2">
             {post.videoTitles.map((title, i) => (
-              <Link
+              <a
                 key={post.summaryIds[i]}
                 href={`/result/${post.summaryIds[i]}`}
+                target="_blank"
+                rel="noopener noreferrer"
                 className="flex items-center gap-3 p-3 rounded-xl bg-[#2a2826] border border-white/6 hover:border-orange-500/30 hover:bg-[#32302e] transition-all group"
               >
                 <span className="shrink-0 w-5 h-5 rounded-full bg-orange-500/20 flex items-center justify-center text-[10px] font-black text-orange-400">
@@ -293,7 +395,7 @@ export default function MagazinePostClient({ post }: { post: CuratedPost }) {
                 <svg className="shrink-0 ml-auto w-3.5 h-3.5 text-[#75716e] group-hover:text-orange-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                 </svg>
-              </Link>
+              </a>
             ))}
           </div>
         </section>
