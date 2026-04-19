@@ -134,7 +134,7 @@ async function collectAndSummarize(videoId: string, categoryHint: string): Promi
 
     // 요약 생성
     const [summary, reportSummary] = await Promise.all([
-      generateSummary(category, transcript || basicInfo.title, transcriptResult.source === 'none' ? 'description' : 'transcript'),
+      generateSummary(category, transcript || basicInfo.title, 'youtube'),
       generateReportSummary(category, basicInfo.title, transcript || basicInfo.title).catch(() => ''),
     ])
 
