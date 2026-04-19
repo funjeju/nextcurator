@@ -10,12 +10,12 @@ const BASE       = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/d
 
 const DEFAULTS: CurationSettings = {
   enabled: false,
-  schedule: '3x_weekly',
-  minVideoCount: 5,
-  maxVideoCount: 8,
-  lookbackDays: 3,
+  schedule: '1x_daily',
+  dailyLimit: 1,
+  lookbackDays: 5,
   lastGeneratedAt: '',
   autoPublish: false,
+  categoryFilter: [],
 }
 
 // ─── Firestore 타입 변환 ─────────────────────────────────────────────────────
