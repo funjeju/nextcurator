@@ -280,7 +280,7 @@ export default function SaveModal({ data, onClose }: { data: any, onClose: (save
             >
               로그인 / 회원가입
             </button>
-            <Button variant="ghost" className="w-full text-zinc-500 hover:text-zinc-300 text-sm" onClick={onClose}>
+            <Button variant="ghost" className="w-full text-zinc-500 hover:text-zinc-300 text-sm" onClick={() => onClose()}>
               취소
             </Button>
           </div>
@@ -355,7 +355,7 @@ export default function SaveModal({ data, onClose }: { data: any, onClose: (save
           </div>
         </div>
 
-        <Button variant="ghost" className="w-full text-zinc-500 hover:text-zinc-300" onClick={onClose} disabled={saving}>
+        <Button variant="ghost" className="w-full text-zinc-500 hover:text-zinc-300" onClick={() => onClose()} disabled={saving}>
           취소
         </Button>
         </>)}
