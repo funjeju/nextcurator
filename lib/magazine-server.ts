@@ -114,7 +114,10 @@ export async function saveCuratedPostAdmin(
   const { getFirestore } = await import('firebase-admin/firestore')
   const db = getFirestore()
   const id = `mag-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
-  await db.collection('curated_posts').doc(id).set({ ...post, id, viewCount: 0, likeCount: 0 })
+  const doc = Object.fromEntries(
+    Object.entries({ ...post, id, viewCount: 0, likeCount: 0 }).filter(([, v]) => v !== undefined)
+  )
+  await db.collection('curated_posts').doc(id).set(doc)
   return id
 }
 
