@@ -229,37 +229,48 @@ export interface VideoMeta {
 }
 
 export async function getVideoMeta(videoId: string): Promise<VideoMeta> {
-  const apiKey = process.env.YOUTUBE_API_KEY
-  if (!apiKey) return { description: '', pinnedComment: '' }
+  const youtubeApiKey = process.env.YOUTUBE_API_KEY
+  const socialkitKey = process.env.SOCIALKIT_API_KEY
 
-  try {
-    const videoRes = await fetch(
-      `https://www.googleapis.com/youtube/v3/videos?id=${videoId}&part=snippet&key=${apiKey}`
-    )
-    const videoData = await videoRes.json() as {
-      items?: Array<{ snippet: { description: string } }>
-    }
-    const description: string = videoData.items?.[0]?.snippet?.description ?? ''
+  // 영상 설명: YouTube Data API (description은 googleapis.com에서만 가져올 수 있음)
+  let description = ''
+  if (youtubeApiKey) {
+    try {
+      const videoRes = await fetch(
+        `https://www.googleapis.com/youtube/v3/videos?id=${videoId}&part=snippet&key=${youtubeApiKey}`,
+        { signal: AbortSignal.timeout(5000) }
+      )
+      if (videoRes.ok) {
+        const videoData = await videoRes.json() as { items?: Array<{ snippet: { description: string } }> }
+        description = videoData.items?.[0]?.snippet?.description ?? ''
+      }
+    } catch { /* ignore */ }
+  }
 
-    const commentRes = await fetch(
-      `https://www.googleapis.com/youtube/v3/commentThreads?videoId=${videoId}&part=snippet&order=relevance&maxResults=5&key=${apiKey}`
-    )
-    const commentData = await commentRes.json() as {
-      items?: Array<{ snippet: { topLevelComment: { snippet: { textDisplay: string } } } }>
-    }
-    const comments: string[] = (commentData.items ?? []).map(
-      item => item.snippet.topLevelComment.snippet.textDisplay
-        ?.replace(/<br\s*\/?>/gi, '\n')
-        .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&#39;/g, "'").replace(/&quot;/g, '"')
-        .replace(/<[^>]+>/g, '') ?? ''
-    )
-    const pinnedComment = comments.slice(0, 3).join('\n---\n')
+  // 상위 댓글: SocialKit 경유 (Vercel에서 googleapis.com 댓글 API 차단 우회)
+  let pinnedComment = ''
+  if (socialkitKey) {
+    try {
+      const videoUrl = `https://www.youtube.com/watch?v=${videoId}`
+      const commentRes = await fetch(
+        `https://api.socialkit.dev/youtube/comments?url=${encodeURIComponent(videoUrl)}&limit=5`,
+        { headers: { 'x-access-key': socialkitKey }, signal: AbortSignal.timeout(10000) }
+      )
+      if (commentRes.ok) {
+        const commentData = await commentRes.json() as {
+          data?: { comments?: Array<{ text: string; likes: number }> }
+        }
+        const comments = (commentData.data?.comments ?? [])
+          .map(c => c.text?.replace(/<[^>]+>/g, '').trim() ?? '')
+          .filter(t => t.length > 0)
+          .slice(0, 3)
+        pinnedComment = comments.join('\n---\n')
+      }
+    } catch { /* ignore */ }
+  }
 
-    return {
-      description: description.slice(0, 2000),
-      pinnedComment: pinnedComment.slice(0, 1000),
-    }
-  } catch {
-    return { description: '', pinnedComment: '' }
+  return {
+    description: description.slice(0, 2000),
+    pinnedComment: pinnedComment.slice(0, 1000),
   }
 }
