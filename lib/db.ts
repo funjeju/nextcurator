@@ -437,10 +437,19 @@ export async function getPublicSummaries(): Promise<SavedSummary[]> {
   const q = query(savedRef, where('isPublic', '==', true))
   const snapshot = await getDocs(q)
   const summaries = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }) as SavedSummary)
-  return summaries.sort((a, b) => {
+
+  // 최신순 정렬 후 videoId 기준 dedup (같은 영상 여러 번 분석 시 가장 최근 것만 표시)
+  summaries.sort((a, b) => {
     const aTime = a.createdAt?.toMillis?.() ?? a.createdAt?.getTime?.() ?? 0
     const bTime = b.createdAt?.toMillis?.() ?? b.createdAt?.getTime?.() ?? 0
     return bTime - aTime
+  })
+  const seen = new Set<string>()
+  return summaries.filter(s => {
+    const key = s.videoId || s.sessionId
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
   })
 }
 
@@ -764,7 +773,15 @@ export async function getSavedSummariesByFolder(userId: string, folderId: string
     const items = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as SavedSummary))
     // 특정 폴더: sortOrder 우선, 없으면 최신순 / 전체: 무조건 최신순
     if (folderId === 'all') {
-      return items.sort((a, b) => (b.createdAt?.toMillis?.() ?? 0) - (a.createdAt?.toMillis?.() ?? 0))
+      const sorted = items.sort((a, b) => (b.createdAt?.toMillis?.() ?? 0) - (a.createdAt?.toMillis?.() ?? 0))
+      // 같은 영상을 다른 카테고리로 분석한 경우 가장 최근 것만 표시
+      const seen = new Set<string>()
+      return sorted.filter(s => {
+        const key = s.videoId || s.sessionId
+        if (seen.has(key)) return false
+        seen.add(key)
+        return true
+      })
     }
     return items.sort((a, b) => {
       const aHasOrder = typeof a.sortOrder === 'number'
