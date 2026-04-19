@@ -105,7 +105,7 @@ export default function ClassDashboard() {
   const [classroom, setClassroom] = useState<ClassRoom | null>(null)
   const [students, setStudents] = useState<StudentRow[]>([])
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState<'students' | 'folders' | 'heatmap' | 'report' | 'setup'>('students')
+  const [activeTab, setActiveTab] = useState<'students' | 'folders' | 'heatmap' | 'setup'>('students')
   const [folders, setFolders] = useState<any[]>([])
   const [selectedStudent, setSelectedStudent] = useState<StudentRow | null>(null)
   const [studentLogs, setStudentLogs] = useState<ActivityLog[]>([])
@@ -113,8 +113,9 @@ export default function ClassDashboard() {
   const [studentReviews, setStudentReviews] = useState<any[]>([])
   const [studentBookmarks, setStudentBookmarks] = useState<VideoBookmark[]>([])
   const [loadingLogs, setLoadingLogs] = useState(false)
-  const [teacherNote, setTeacherNote] = useState('')
-  const [savingNote, setSavingNote] = useState(false)
+  const [reportFolder, setReportFolder] = useState<{ id: string; name: string } | null>(null)
+  const [reportNote, setReportNote] = useState('')
+  const [savingReportNote, setSavingReportNote] = useState(false)
   const [pdfRef, setPdfRef] = useState<HTMLDivElement | null>(null)
   const [pushingFolder, setPushingFolder] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
@@ -160,7 +161,7 @@ export default function ClassDashboard() {
 
       setClassroom(cls)
       setFolders(userFolders)
-      if ((cls as any).teacherNote) setTeacherNote((cls as any).teacherNote as string)
+
 
       const logs = await getClassLogs(classCode, 1000).catch(() => [])
       setClassLogs(logs)
@@ -241,22 +242,41 @@ export default function ClassDashboard() {
     }
   }
 
-  const handleSaveNote = async () => {
-    if (!classCode) return
-    setSavingNote(true)
+  const handleSaveReportNote = async () => {
+    if (!classCode || !reportFolder) return
+    setSavingReportNote(true)
     try {
-      await setDoc(doc(db, 'classes', classCode), { teacherNote }, { merge: true })
+      await setDoc(doc(db, 'class_reports', `${classCode}_${reportFolder.id}`), { note: reportNote }, { merge: true })
     } catch (e) {
       console.error('Note save failed:', e)
     } finally {
-      setSavingNote(false)
+      setSavingReportNote(false)
     }
   }
 
   const handleDownloadPdf = async () => {
-    if (!pdfRef) return
-    const filename = `${classroom?.schoolName ?? ''}_${classroom?.grade}학년_${classroom?.classNum}반_수업보고서.pdf`
+    if (!pdfRef || !reportFolder) return
+    const filename = `${classroom?.schoolName ?? ''}_${reportFolder.name}_수업보고서.pdf`
     await downloadPdf(pdfRef, filename)
+  }
+
+  const openFolderReport = async (folder: { id: string; name: string }) => {
+    setReportFolder(folder)
+    setReportNote('')
+    try {
+      const { getDoc, doc: fsDoc } = await import('firebase/firestore')
+      const snap = await getDoc(fsDoc(db, 'class_reports', `${classCode}_${folder.id}`))
+      if (snap.exists()) setReportNote(snap.data().note || '')
+    } catch { /* 없으면 빈 문자열 */ }
+    if (!folderVideos[folder.id] && user) {
+      setLoadingVideos(folder.id)
+      try {
+        const items = await getSavedSummariesByFolder(user.uid, folder.id)
+        setFolderVideos(prev => ({ ...prev, [folder.id]: items }))
+      } finally {
+        setLoadingVideos(null)
+      }
+    }
   }
 
   const copyCode = () => {
@@ -388,7 +408,7 @@ export default function ClassDashboard() {
 
         {/* 탭 */}
         <div className="flex flex-wrap gap-2 mb-6">
-          {(['students', 'folders', 'heatmap', 'report', 'setup'] as const).map(tab => (
+          {(['students', 'folders', 'heatmap', 'setup'] as const).map(tab => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -397,7 +417,6 @@ export default function ClassDashboard() {
               {tab === 'students' ? '👥 학생 현황'
                 : tab === 'folders' ? '📁 수업자료 관리'
                 : tab === 'heatmap' ? '🔥 퀴즈 히트맵'
-                : tab === 'report' ? '📋 보고서'
                 : '⚙️ 클래스 설정'}
             </button>
           ))}
@@ -463,18 +482,31 @@ export default function ClassDashboard() {
         {/* 수업자료 관리 탭 */}
         {activeTab === 'folders' && (
           <div className="bg-[#23211f] rounded-[28px] border border-white/10 p-6">
-            <p className="text-sm text-gray-400 mb-6">
-              폴더를 <span className="text-orange-400 font-bold">기준 폴더</span>로 지정하면 이후 참여하는 학생에게 자동으로 복제됩니다.
-              <span className="text-white"> 여러 개</span> 지정 가능합니다.
-              기존 학생에게도 즉시 배포하려면 <span className="text-blue-400">전체 배포</span> 버튼을 사용하세요.
-            </p>
+            <div className="flex items-center justify-between mb-4">
+              <p className="text-sm text-gray-400">
+                폴더를 <span className="text-orange-400 font-bold">기준 폴더</span>로 지정하면 학생에게 자동 복제됩니다.
+                기존 학생에게도 즉시 배포하려면 <span className="text-blue-400">전체 배포</span>를 사용하세요.
+              </p>
+              <button
+                onClick={async () => {
+                  const name = prompt('새 수업 폴더 이름을 입력하세요')
+                  if (!name?.trim() || !user) return
+                  const { createFolder } = await import('@/lib/db')
+                  const newFolder = await createFolder(user.uid, name.trim())
+                  setFolders(prev => [...prev, newFolder])
+                }}
+                className="shrink-0 ml-4 flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-colors"
+              >
+                ＋ 새 수업 만들기
+              </button>
+            </div>
             {masterFolderIds.length > 0 && (
               <div className="bg-orange-500/5 border border-orange-500/20 rounded-2xl px-4 py-3 mb-4 text-xs text-orange-300">
                 기준 폴더 <span className="font-bold text-orange-400">{masterFolderIds.length}개</span> 지정됨
               </div>
             )}
             {folders.length === 0 ? (
-              <p className="text-gray-500 text-sm">폴더가 없습니다. 내 페이지에서 폴더를 먼저 만들어주세요.</p>
+              <p className="text-gray-500 text-sm">폴더가 없습니다. 위의 "새 수업 만들기" 버튼으로 수업을 시작하세요.</p>
             ) : (
               <div className="space-y-3">
                 {folders.map(folder => {
@@ -495,7 +527,13 @@ export default function ClassDashboard() {
                           </div>
                           <span className="text-[10px] text-gray-500 ml-1">{isExpanded ? '▲' : '▼'}</span>
                         </button>
-                        <div className="flex gap-2">
+                        <div className="flex gap-2 flex-wrap justify-end">
+                          <button
+                            onClick={() => openFolderReport({ id: folder.id, name: folder.name })}
+                            className="px-3 py-1.5 rounded-lg text-xs font-bold bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 transition-colors"
+                          >
+                            📋 보고서
+                          </button>
                           <button
                             onClick={() => handleToggleMasterFolder(folder.id)}
                             className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
@@ -559,155 +597,25 @@ export default function ClassDashboard() {
           </div>
         )}
 
-        {/* 보고서 탭 */}
-        {activeTab === 'report' && (
-          <div className="space-y-6">
-            {/* 다운로드 버튼 */}
-            <div className="flex justify-end">
-              <button
-                onClick={handleDownloadPdf}
-                className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-xl transition-colors"
-              >
-                📥 PDF 다운로드
-              </button>
-            </div>
-
-            {/* PDF 캡처 영역 */}
-            <div
-              ref={el => setPdfRef(el)}
-              className="bg-white text-gray-900 rounded-[28px] p-8 space-y-8"
-              style={{ fontFamily: 'sans-serif' }}
-            >
-              {/* 보고서 헤더 */}
-              <div style={{ borderBottom: '2px solid #e5e7eb', paddingBottom: '20px' }}>
-                <h1 style={{ fontSize: '22px', fontWeight: 900, marginBottom: '4px' }}>
-                  수업 활동 보고서
-                </h1>
-                <p style={{ fontSize: '14px', color: '#6b7280', margin: 0 }}>
-                  {classroom?.schoolName} · {classroom?.grade}학년 {classroom?.classNum}반 · 클래스 코드: {classCode}
-                </p>
-                <p style={{ fontSize: '12px', color: '#9ca3af', marginTop: '4px' }}>
-                  생성일: {new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' })}
-                </p>
-              </div>
-
-              {/* 요약 통계 */}
-              <div>
-                <h2 style={{ fontSize: '16px', fontWeight: 700, marginBottom: '12px', color: '#111827' }}>📊 수업 참여 요약</h2>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
-                  {[
-                    { label: '등록 학생', value: students.length, unit: '명', color: '#111827' },
-                    { label: '완전이해 응답', value: students.reduce((a, s) => a + s.metaComplete, 0), unit: '건', color: '#059669' },
-                    { label: '퀴즈 응시', value: students.reduce((a, s) => a + s.quizAttempts, 0), unit: '회', color: '#2563eb' },
-                    { label: '도움 필요', value: students.reduce((a, s) => a + s.metaUnknown, 0), unit: '건', color: '#dc2626' },
-                  ].map(stat => (
-                    <div key={stat.label} style={{ background: '#f9fafb', borderRadius: '12px', padding: '12px', textAlign: 'center', border: '1px solid #e5e7eb' }}>
-                      <p style={{ fontSize: '10px', color: '#6b7280', marginBottom: '4px' }}>{stat.label}</p>
-                      <p style={{ fontSize: '24px', fontWeight: 900, color: stat.color, margin: 0 }}>{stat.value}<span style={{ fontSize: '11px', fontWeight: 400, color: '#9ca3af', marginLeft: '2px' }}>{stat.unit}</span></p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* 학생별 현황 테이블 */}
-              <div>
-                <h2 style={{ fontSize: '16px', fontWeight: 700, marginBottom: '12px', color: '#111827' }}>👥 학생별 참여 현황</h2>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
-                  <thead>
-                    <tr style={{ background: '#f3f4f6' }}>
-                      {['이름', '접속', '완전이해', '알쏭달쏭', '전혀모름', '퀴즈 정답률', '마지막 활동'].map(h => (
-                        <th key={h} style={{ padding: '8px 10px', textAlign: 'left', fontWeight: 600, color: '#374151', borderBottom: '1px solid #e5e7eb' }}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {students.map((s, i) => (
-                      <tr key={s.uid} style={{ background: i % 2 === 0 ? '#ffffff' : '#f9fafb' }}>
-                        <td style={{ padding: '8px 10px', fontWeight: 600, borderBottom: '1px solid #f3f4f6' }}>{s.studentName}</td>
-                        <td style={{ padding: '8px 10px', borderBottom: '1px solid #f3f4f6', textAlign: 'center' }}>{s.loginCount}</td>
-                        <td style={{ padding: '8px 10px', borderBottom: '1px solid #f3f4f6', textAlign: 'center', color: '#059669', fontWeight: 700 }}>{s.metaComplete}</td>
-                        <td style={{ padding: '8px 10px', borderBottom: '1px solid #f3f4f6', textAlign: 'center', color: '#d97706', fontWeight: 700 }}>{s.metaConfused}</td>
-                        <td style={{ padding: '8px 10px', borderBottom: '1px solid #f3f4f6', textAlign: 'center', color: '#dc2626', fontWeight: 700 }}>{s.metaUnknown}</td>
-                        <td style={{ padding: '8px 10px', borderBottom: '1px solid #f3f4f6', textAlign: 'center', color: '#2563eb', fontWeight: 700 }}>
-                          {s.quizAttempts > 0 ? `${Math.round(s.quizCorrect / s.quizAttempts * 100)}%` : '-'}
-                        </td>
-                        <td style={{ padding: '8px 10px', borderBottom: '1px solid #f3f4f6', color: '#6b7280', fontSize: '11px' }}>
-                          {s.lastActive ? formatRelativeDate(s.lastActive?.toDate?.() || s.lastActive) : '없음'}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* 퀴즈 오답 히트맵 요약 */}
-              {heatmaps.length > 0 && (
-                <div>
-                  <h2 style={{ fontSize: '16px', fontWeight: 700, marginBottom: '12px', color: '#111827' }}>🔥 퀴즈 오답 현황</h2>
-                  {heatmaps.map(hm => (
-                    <div key={hm.videoId} style={{ marginBottom: '12px' }}>
-                      <p style={{ fontSize: '13px', fontWeight: 600, color: '#374151', marginBottom: '6px' }}>{hm.videoTitle}</p>
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                        {hm.questions.map(q => (
-                          <div key={q.questionIdx} style={{
-                            padding: '6px 10px', borderRadius: '8px', fontSize: '11px', fontWeight: 600,
-                            background: q.wrongRate >= 0.6 ? '#fef2f2' : q.wrongRate >= 0.3 ? '#fff7ed' : '#f0fdf4',
-                            color: q.wrongRate >= 0.6 ? '#dc2626' : q.wrongRate >= 0.3 ? '#d97706' : '#059669',
-                            border: `1px solid ${q.wrongRate >= 0.6 ? '#fecaca' : q.wrongRate >= 0.3 ? '#fed7aa' : '#bbf7d0'}`,
-                          }}>
-                            Q{q.questionIdx + 1} 오답률 {Math.round(q.wrongRate * 100)}%
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* 선생님 코멘트 */}
-              <div>
-                <h2 style={{ fontSize: '16px', fontWeight: 700, marginBottom: '12px', color: '#111827' }}>📝 선생님 종합 분석 및 코멘트</h2>
-                <div style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: '12px', padding: '16px', minHeight: '80px' }}>
-                  <p style={{ fontSize: '13px', color: teacherNote ? '#111827' : '#9ca3af', lineHeight: '1.6', whiteSpace: 'pre-wrap', margin: 0 }}>
-                    {teacherNote || '(선생님 코멘트 없음)'}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* 선생님 코멘트 입력 (PDF 외부) */}
-            <div className="bg-[#23211f] rounded-[28px] border border-white/10 p-6 space-y-4">
-              <h3 className="font-black text-base">📝 선생님 종합 분석 / 코멘트</h3>
-              <p className="text-xs text-gray-400">이 내용은 보고서에 포함됩니다. 수업 관찰, 학생 피드백 요약, 다음 수업 계획 등을 자유롭게 작성하세요.</p>
-              <textarea
-                value={teacherNote}
-                onChange={e => setTeacherNote(e.target.value)}
-                placeholder="예: 이번 수업에서 대부분의 학생들이 핵심 개념을 이해했으나, 3번 퀴즈 문항에서 오답률이 높았습니다. 다음 수업에서 해당 개념을 보충 설명할 예정입니다."
-                rows={6}
-                className="w-full px-4 py-3 rounded-2xl bg-[#1a1918] border border-white/10 text-sm text-white placeholder:text-gray-600 focus:outline-none focus:border-orange-500/50 resize-none"
-              />
-              <div className="flex justify-end">
-                <button
-                  onClick={handleSaveNote}
-                  disabled={savingNote}
-                  className="px-5 py-2.5 bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white text-sm font-bold rounded-xl transition-colors"
-                >
-                  {savingNote ? '저장 중...' : '💾 저장'}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* 설정 탭 */}
         {activeTab === 'setup' && (
           <div className="bg-[#23211f] rounded-[28px] border border-white/10 p-6 space-y-4">
             <InfoRow label="학교명" value={classroom.schoolName} />
             <InfoRow label="학년/반" value={`${classroom.grade}학년 ${classroom.classNum}반`} />
             <InfoRow label="클래스 코드" value={classCode} highlight />
-            <InfoRow label="학생 참여 링크" value={`ssoktube.com/classroom/join`} />
-            <div className="pt-4">
-              <p className="text-xs text-gray-500">학생들에게 클래스 코드 <span className="font-mono text-orange-400">{classCode}</span>를 알려주고 <strong>ssoktube.com/classroom/join</strong>에서 가입하도록 안내하세요.</p>
+            <InfoRow label="학생 참여 링크" value={`ssoktube.com/classroom/join?code=${classCode}`} />
+            <div className="pt-4 space-y-2">
+              <p className="text-xs text-gray-500">아래 링크를 학생들에게 공유하면 클래스 코드가 자동으로 입력됩니다.</p>
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(`https://ssoktube.com/classroom/join?code=${classCode}`)
+                  setCopied(true)
+                  setTimeout(() => setCopied(false), 2000)
+                }}
+                className="px-4 py-2 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 text-emerald-400 text-xs font-bold rounded-xl transition-colors"
+              >
+                {copied ? '복사됨 ✓' : '🔗 참여 링크 복사'}
+              </button>
             </div>
           </div>
         )}
@@ -767,6 +675,175 @@ export default function ClassDashboard() {
           </div>
         </div>
       )}
+
+      {/* 폴더별 보고서 모달 */}
+      {reportFolder && (() => {
+        const folderVideoIds = new Set((folderVideos[reportFolder.id] || []).map((v: any) => v.videoId))
+        const folderLogs = classLogs.filter(l => l.videoId && folderVideoIds.has(l.videoId))
+        const folderHeatmaps = buildQuizHeatmap(folderLogs)
+
+        const studentRows = students.map(s => {
+          const sLogs = folderLogs.filter(l => l.studentId === s.uid)
+          const summary = summarizeStudentLogs(sLogs)
+          return { ...s, ...summary }
+        })
+
+        const totalStudents = students.length
+        const totalComplete = studentRows.reduce((a, s) => a + s.metaComplete, 0)
+        const totalQuizAttempts = studentRows.reduce((a, s) => a + s.quizAttempts, 0)
+        const totalUnknown = studentRows.reduce((a, s) => a + s.metaUnknown, 0)
+
+        return (
+          <div className="fixed inset-0 bg-black/80 z-50 flex items-start justify-center p-4 overflow-y-auto" onClick={() => setReportFolder(null)}>
+            <div className="bg-[#1a1918] rounded-[28px] border border-white/10 w-full max-w-4xl my-8" onClick={e => e.stopPropagation()}>
+              {/* 모달 헤더 */}
+              <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-white/5">
+                <div>
+                  <h2 className="text-lg font-black">📋 수업 보고서</h2>
+                  <p className="text-xs text-gray-400 mt-0.5">{reportFolder.name} · {classroom?.schoolName} {classroom?.grade}학년 {classroom?.classNum}반</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleDownloadPdf}
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition-colors"
+                  >
+                    📥 PDF
+                  </button>
+                  <button onClick={() => setReportFolder(null)} className="text-gray-400 hover:text-white text-xl leading-none px-2">✕</button>
+                </div>
+              </div>
+
+              {/* PDF 캡처 영역 */}
+              <div ref={el => setPdfRef(el)} className="p-6 space-y-6" style={{ background: '#ffffff', color: '#111827', fontFamily: 'sans-serif' }}>
+                {/* 보고서 헤더 */}
+                <div style={{ borderBottom: '2px solid #e5e7eb', paddingBottom: '16px' }}>
+                  <h1 style={{ fontSize: '20px', fontWeight: 900, marginBottom: '4px' }}>수업 활동 보고서 — {reportFolder.name}</h1>
+                  <p style={{ fontSize: '13px', color: '#6b7280', margin: 0 }}>{classroom?.schoolName} {classroom?.grade}학년 {classroom?.classNum}반 · {new Date().toLocaleDateString('ko-KR')}</p>
+                </div>
+
+                {/* 요약 통계 */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: '12px' }}>
+                  {[
+                    { label: '등록 학생', value: totalStudents, unit: '명', color: '#111827' },
+                    { label: '완전이해', value: totalComplete, unit: '건', color: '#059669' },
+                    { label: '퀴즈 응시', value: totalQuizAttempts, unit: '회', color: '#2563eb' },
+                    { label: '도움 필요', value: totalUnknown, unit: '건', color: '#dc2626' },
+                  ].map(stat => (
+                    <div key={stat.label} style={{ background: '#f9fafb', borderRadius: '10px', padding: '12px', textAlign: 'center', border: '1px solid #e5e7eb' }}>
+                      <p style={{ fontSize: '10px', color: '#6b7280', marginBottom: '4px' }}>{stat.label}</p>
+                      <p style={{ fontSize: '22px', fontWeight: 900, color: stat.color, margin: 0 }}>{stat.value}<span style={{ fontSize: '11px', fontWeight: 400, color: '#9ca3af', marginLeft: '2px' }}>{stat.unit}</span></p>
+                    </div>
+                  ))}
+                </div>
+
+                {/* 이 수업 영상 목록 */}
+                {(folderVideos[reportFolder.id] || []).length > 0 && (
+                  <div>
+                    <h2 style={{ fontSize: '15px', fontWeight: 700, marginBottom: '8px', color: '#111827' }}>📹 수업 영상</h2>
+                    {(folderVideos[reportFolder.id] || []).map((v: any) => {
+                      const vLogs = folderLogs.filter(l => l.videoId === v.videoId)
+                      const viewers = new Set(vLogs.filter(l => l.type === 'play').map(l => l.studentId)).size
+                      const plays = vLogs.filter(l => l.type === 'play')
+                      const avgPct = plays.length ? Math.round(plays.reduce((a, l) => a + (l.value.percentWatched || 0), 0) / plays.length) : 0
+                      return (
+                        <div key={v.videoId} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px', background: '#f9fafb', borderRadius: '10px', marginBottom: '6px', border: '1px solid #e5e7eb' }}>
+                          {v.thumbnail && <img src={v.thumbnail} alt="" style={{ width: '72px', height: '42px', borderRadius: '6px', objectFit: 'cover', flexShrink: 0 }} />}
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <p style={{ fontSize: '12px', fontWeight: 600, marginBottom: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{v.title}</p>
+                            <p style={{ fontSize: '11px', color: '#6b7280', margin: 0 }}>시청 학생: {viewers}명 · 평균 시청률: {avgPct}%</p>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+
+                {/* 학생별 현황 */}
+                <div>
+                  <h2 style={{ fontSize: '15px', fontWeight: 700, marginBottom: '8px', color: '#111827' }}>👥 학생별 참여 현황</h2>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
+                    <thead>
+                      <tr style={{ background: '#f3f4f6' }}>
+                        {['이름', '완전이해', '알쏭달쏭', '전혀모름', '퀴즈 정답률'].map(h => (
+                          <th key={h} style={{ padding: '7px 10px', textAlign: 'left', fontWeight: 600, color: '#374151', borderBottom: '1px solid #e5e7eb' }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {studentRows.map((s, i) => (
+                        <tr key={s.uid} style={{ background: i % 2 === 0 ? '#fff' : '#f9fafb' }}>
+                          <td style={{ padding: '7px 10px', fontWeight: 600, borderBottom: '1px solid #f3f4f6' }}>{s.studentName}</td>
+                          <td style={{ padding: '7px 10px', color: '#059669', fontWeight: 700, borderBottom: '1px solid #f3f4f6' }}>{s.metaComplete}</td>
+                          <td style={{ padding: '7px 10px', color: '#d97706', fontWeight: 700, borderBottom: '1px solid #f3f4f6' }}>{s.metaConfused}</td>
+                          <td style={{ padding: '7px 10px', color: '#dc2626', fontWeight: 700, borderBottom: '1px solid #f3f4f6' }}>{s.metaUnknown}</td>
+                          <td style={{ padding: '7px 10px', color: '#2563eb', fontWeight: 700, borderBottom: '1px solid #f3f4f6' }}>
+                            {s.quizAttempts > 0 ? `${Math.round(s.quizCorrect / s.quizAttempts * 100)}%` : '-'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* 퀴즈 오답 히트맵 */}
+                {folderHeatmaps.length > 0 && (
+                  <div>
+                    <h2 style={{ fontSize: '15px', fontWeight: 700, marginBottom: '8px', color: '#111827' }}>🔥 퀴즈 오답 현황</h2>
+                    {folderHeatmaps.map(hm => (
+                      <div key={hm.videoId} style={{ marginBottom: '10px' }}>
+                        <p style={{ fontSize: '12px', fontWeight: 600, color: '#374151', marginBottom: '6px' }}>{hm.videoTitle}</p>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                          {hm.questions.map(q => (
+                            <span key={q.questionIdx} style={{
+                              padding: '4px 10px', borderRadius: '8px', fontSize: '11px', fontWeight: 600,
+                              background: q.wrongRate >= 0.6 ? '#fef2f2' : q.wrongRate >= 0.3 ? '#fff7ed' : '#f0fdf4',
+                              color: q.wrongRate >= 0.6 ? '#dc2626' : q.wrongRate >= 0.3 ? '#d97706' : '#059669',
+                              border: `1px solid ${q.wrongRate >= 0.6 ? '#fecaca' : q.wrongRate >= 0.3 ? '#fed7aa' : '#bbf7d0'}`,
+                            }}>
+                              Q{q.questionIdx + 1} 오답률 {Math.round(q.wrongRate * 100)}%
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* 선생님 코멘트 */}
+                <div>
+                  <h2 style={{ fontSize: '15px', fontWeight: 700, marginBottom: '8px', color: '#111827' }}>📝 선생님 종합 코멘트</h2>
+                  <div style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: '10px', padding: '14px', minHeight: '60px' }}>
+                    <p style={{ fontSize: '12px', color: reportNote ? '#111827' : '#9ca3af', lineHeight: 1.6, whiteSpace: 'pre-wrap', margin: 0 }}>
+                      {reportNote || '(작성된 코멘트 없음)'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* 코멘트 입력 (PDF 외부) */}
+              <div className="px-6 pb-6 pt-4 border-t border-white/5 space-y-3">
+                <p className="text-xs text-gray-400">📝 선생님 코멘트를 입력하면 보고서에 포함됩니다.</p>
+                <textarea
+                  value={reportNote}
+                  onChange={e => setReportNote(e.target.value)}
+                  placeholder="수업 관찰, 학생 피드백 요약, 다음 수업 계획 등을 자유롭게 작성하세요."
+                  rows={4}
+                  className="w-full px-4 py-3 rounded-2xl bg-[#23211f] border border-white/10 text-sm text-white placeholder:text-gray-600 focus:outline-none focus:border-purple-500/50 resize-none"
+                />
+                <div className="flex justify-end">
+                  <button
+                    onClick={handleSaveReportNote}
+                    disabled={savingReportNote}
+                    className="px-5 py-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white text-sm font-bold rounded-xl transition-colors"
+                  >
+                    {savingReportNote ? '저장 중...' : '💾 저장'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
 
       {/* 학생 상세 모달 */}
       {selectedStudent && (

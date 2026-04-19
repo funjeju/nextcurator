@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useAuth } from '@/providers/AuthProvider'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { buildStudentEmail } from '@/lib/classroom'
 import { inheritMasterFolder } from '@/lib/classroom'
 import Header from '@/components/common/Header'
@@ -13,7 +13,8 @@ type Step = 'form' | 'loading' | 'done'
 export default function ClassroomJoinPage() {
   const { signInStudent } = useAuth()
   const router = useRouter()
-  const [classCode, setClassCode] = useState('')
+  const searchParams = useSearchParams()
+  const [classCode, setClassCode] = useState((searchParams.get('code') ?? '').toUpperCase())
   const [studentName, setStudentName] = useState('')
   const [password, setPassword] = useState('')
   const [step, setStep] = useState<Step>('form')

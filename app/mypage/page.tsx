@@ -12,7 +12,6 @@ import {
   updateFolderVisibility, cloneFolder, createFolder, updateUserAvatar,
   Folder, SavedSummary, FriendRequest,
 } from '@/lib/db'
-import { getTeacherClasses, getClassStudents, getMasterFolderIds, ClassRoom } from '@/lib/classroom'
 import { useAuth } from '@/providers/AuthProvider'
 import { PROFILE_COMPLETE_TOKENS } from '@/lib/db'
 import { AVATARS, getAvatarBg } from '@/lib/avatar'
@@ -268,9 +267,7 @@ function FriendsTab({ myUid }: { myUid: string }) {
 
 export default function MyPage() {
   const { user, userProfile, needsProfile, refreshProfile } = useAuth()
-  const [activeTab, setActiveTab] = useState<'library' | 'friends' | 'travel' | 'blog' | 'shorts' | 'bookmarks' | 'classroom'>('library')
-  const [myClasses, setMyClasses] = useState<(ClassRoom & { studentCount: number; folderNames: string[] })[]>([])
-  const [loadingClasses, setLoadingClasses] = useState(false)
+  const [activeTab, setActiveTab] = useState<'library' | 'friends' | 'travel' | 'blog' | 'shorts' | 'bookmarks'>('library')
   const [folders, setFolders] = useState<Folder[]>([])
   const [summaries, setSummaries] = useState<SavedSummary[]>([])
   const [allSummaries, setAllSummaries] = useState<SavedSummary[]>([])
@@ -850,32 +847,6 @@ export default function MyPage() {
             >
               🔖 북마크
             </button>
-            {userProfile?.role === 'teacher' && (
-              <button
-                onClick={async () => {
-                  setActiveTab('classroom')
-                  if (!user || myClasses.length > 0) return
-                  setLoadingClasses(true)
-                  try {
-                    const classes = await getTeacherClasses(user.uid)
-                    const enriched = await Promise.all(classes.map(async cls => {
-                      const folderIds = getMasterFolderIds(cls)
-                      const folderNames = folders.filter(f => folderIds.includes(f.id)).map(f => f.name)
-                      const students = await getClassStudents(cls.classCode).catch(() => [])
-                      return { ...cls, studentCount: students.length, folderNames }
-                    }))
-                    setMyClasses(enriched)
-                  } finally {
-                    setLoadingClasses(false)
-                  }
-                }}
-                className={`px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all whitespace-nowrap ${
-                  activeTab === 'classroom' ? 'bg-[#3d3a38] text-white shadow' : 'text-[#75716e] hover:text-white'
-                }`}
-              >
-                🏫 내 클래스
-              </button>
-            )}
           </div>
         </div>
       </div>
@@ -923,64 +894,6 @@ export default function MyPage() {
             <p className="text-[#75716e] text-sm mt-0.5">영상 시청 중 저장한 구간과 메모를 한눈에 확인하세요.</p>
           </div>
           <SavedBookmarks userId={user?.uid ?? getLocalUserId()} />
-        </div>
-      )}
-
-      {activeTab === 'classroom' && (
-        <div className="max-w-7xl mx-auto px-6 pb-12">
-          <div className="mb-6">
-            <h2 className="text-white font-bold text-lg">🏫 내 클래스 관리</h2>
-            <p className="text-[#75716e] text-sm mt-0.5">수업별 학생 참여 현황을 대시보드에서 확인하고 PDF 보고서를 생성하세요.</p>
-          </div>
-          {loadingClasses ? (
-            <div className="flex justify-center py-20">
-              <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-orange-500" />
-            </div>
-          ) : myClasses.length === 0 ? (
-            <div className="bg-[#23211f] rounded-[28px] border border-white/5 p-10 text-center">
-              <p className="text-4xl mb-3">🏫</p>
-              <p className="text-white font-bold mb-1">등록된 클래스가 없습니다.</p>
-              <p className="text-[#75716e] text-sm">프로필 영역의 "선생님으로 전환" 버튼으로 첫 클래스를 만들어보세요.</p>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {myClasses.map(cls => (
-                <div key={cls.classCode} className="bg-[#23211f] rounded-[28px] border border-white/5 p-6">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap mb-1">
-                        <h3 className="text-white font-black text-base">
-                          {cls.schoolName} {cls.grade}학년 {cls.classNum}반
-                        </h3>
-                        <span className="text-[10px] font-mono font-bold text-orange-400 bg-orange-500/10 px-2 py-0.5 rounded-full border border-orange-500/20">
-                          {cls.classCode}
-                        </span>
-                      </div>
-                      <div className="flex flex-wrap gap-2 mt-2">
-                        <span className="flex items-center gap-1 text-xs text-gray-400">
-                          <span className="text-emerald-400 font-bold">{cls.studentCount}명</span> 참여 중
-                        </span>
-                        {cls.folderNames.length > 0 && (
-                          <span className="text-xs text-gray-500">
-                            📁 {cls.folderNames.join(', ')}
-                          </span>
-                        )}
-                        {cls.folderNames.length === 0 && (
-                          <span className="text-xs text-gray-600">연결된 수업 폴더 없음</span>
-                        )}
-                      </div>
-                    </div>
-                    <Link
-                      href={`/classroom/${cls.classCode}`}
-                      className="shrink-0 flex items-center gap-2 px-4 py-2.5 bg-orange-500 hover:bg-orange-600 text-white text-sm font-bold rounded-xl transition-colors"
-                    >
-                      📊 대시보드 →
-                    </Link>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
         </div>
       )}
 
