@@ -522,6 +522,7 @@ export async function incrementPostView(id: string) {
 
 const SCHEDULE_INTERVALS: Record<CurationSchedule, number> = {
   '3x_daily':  8  * 60 * 60 * 1000,
+  '2x_daily':  12 * 60 * 60 * 1000,
   '1x_daily':  24 * 60 * 60 * 1000,
   '3x_weekly': Math.round((7 / 3) * 24 * 60 * 60 * 1000),
   '1x_weekly': 7  * 24 * 60 * 60 * 1000,
