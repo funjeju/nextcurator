@@ -16,6 +16,7 @@ const DEFAULTS: CurationSettings = {
   lastGeneratedAt: '',
   autoPublish: false,
   categoryFilter: [],
+  autoCollectEnabled: false,
 }
 
 // ─── Firestore 타입 변환 ─────────────────────────────────────────────────────
