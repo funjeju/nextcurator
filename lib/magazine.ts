@@ -449,7 +449,7 @@ JSON 형식:
     heroThumbnail,
     category: item.category,
     tags: allTags,
-    summaryIds: [item.id],
+    summaryIds: [item.sessionId || item.id],
     videoTitles: [item.title],
     body: parsed.body,
     seoDescription: (parsed.seoDescription ?? '').slice(0, 155),

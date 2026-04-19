@@ -231,6 +231,18 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
           }
         }
 
+        // 5. saved_summaries doc ID로 직접 조회 (매거진 링크 등 doc ID가 sessionId로 사용된 경우 대응)
+        const docByIdSnap = await getDoc(doc(db, 'saved_summaries', sessionId as string))
+        if (docByIdSnap.exists()) {
+          const saved = docByIdSnap.data()
+          if (saved.summary) {
+            const fetched = saved as unknown as SummarizeResponse
+            sessionStorage.setItem(`summary_${sessionId}`, JSON.stringify(fetched))
+            setData(fetched)
+            return
+          }
+        }
+
         console.warn('[Result] 요약 데이터를 찾을 수 없음:', sessionId)
         setLoadError(true)
       } catch (e) {
