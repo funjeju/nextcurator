@@ -359,6 +359,26 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
     }
   }, [])
 
+  const handleSeekAndScroll = useCallback((ts: string) => {
+    // 1. 영상 seek
+    if (playerRef.current) {
+      playerRef.current.seekTo(timestampToSeconds(ts), true)
+      playerRef.current.playVideo()
+    }
+    // 2. summary 탭 전환
+    setActiveTab('summary')
+    // 3. 해당 타임스탬프 단락으로 스크롤
+    setTimeout(() => {
+      const badge = document.querySelector(`[data-ts="${ts}"]`) as HTMLElement | null
+      if (badge) {
+        badge.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        // 잠깐 하이라이트
+        badge.classList.add('ring-2', 'ring-orange-500', 'ring-offset-1')
+        setTimeout(() => badge.classList.remove('ring-2', 'ring-orange-500', 'ring-offset-1'), 1500)
+      }
+    }, 150)
+  }, [])
+
   // 인라인 댓글 버블 클릭 → 댓글 섹션으로 스크롤 + 포커스
   const handleComment = useCallback((segmentId: string, segmentLabel: string) => {
     setFocusSegment({ id: segmentId, label: segmentLabel })
@@ -887,7 +907,7 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
             summary={data.summary}
             category={data.category}
             totalSec={(data as any).transcriptDuration}
-            videoId={data.videoId}
+            onSeekAndScroll={handleSeekAndScroll}
           />
         )}
 
@@ -1564,11 +1584,11 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
 }
 
 // ─── 영상 타임라인 바 ───────────────────────────
-function VideoTimeline({ summary, category, totalSec, videoId }: {
+function VideoTimeline({ summary, category, totalSec, onSeekAndScroll }: {
   summary: any
   category: string
   totalSec: number
-  videoId?: string
+  onSeekAndScroll: (ts: string) => void
 }) {
   if (!totalSec || totalSec < 60) return null
 
@@ -1630,21 +1650,16 @@ function VideoTimeline({ summary, category, totalSec, videoId }: {
         {/* 마커들 */}
         {valid.map((p, i) => {
           const pct = Math.min(99, (tsToSec(p.ts) / totalSec) * 100)
-          const sec = tsToSec(p.ts)
-          const ytUrl = videoId ? `https://www.youtube.com/watch?v=${videoId}&t=${sec}s` : undefined
           return (
             <div
               key={i}
               className="absolute top-1/2 -translate-y-1/2 group"
               style={{ left: `${pct}%` }}
             >
-              {ytUrl ? (
-                <a href={ytUrl} target="_blank" rel="noopener">
-                  <div className="w-2.5 h-2.5 rounded-full bg-orange-500 border-2 border-zinc-900 -translate-x-1/2 cursor-pointer hover:scale-125 hover:bg-orange-400 transition-transform" />
-                </a>
-              ) : (
-                <div className="w-2.5 h-2.5 rounded-full bg-orange-500 border-2 border-zinc-900 -translate-x-1/2" />
-              )}
+              <button
+                onClick={() => onSeekAndScroll(p.ts)}
+                className="w-2.5 h-2.5 rounded-full bg-orange-500 border-2 border-zinc-900 -translate-x-1/2 cursor-pointer hover:scale-125 hover:bg-orange-400 transition-transform block"
+              />
               <div className="absolute bottom-5 left-1/2 -translate-x-1/2 hidden group-hover:flex flex-col items-center pointer-events-none z-10">
                 <div className="bg-zinc-900 border border-white/15 rounded-lg px-2.5 py-1.5 shadow-xl min-w-max max-w-[180px]">
                   <p className="text-orange-400 font-mono text-[10px] font-bold">{p.ts} ▶</p>
