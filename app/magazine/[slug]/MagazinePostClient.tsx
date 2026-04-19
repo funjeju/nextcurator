@@ -220,16 +220,55 @@ export default function MagazinePostClient({ post }: { post: CuratedPost }) {
         </header>
 
         {/* 본문 — 마크다운 렌더링 */}
-        <div className="prose prose-invert prose-sm md:prose-base max-w-none
-          prose-headings:text-white prose-headings:font-black
-          prose-h2:text-xl prose-h2:mt-10 prose-h2:mb-4 prose-h2:border-b prose-h2:border-white/10 prose-h2:pb-2
-          prose-h3:text-base prose-h3:mt-6 prose-h3:mb-2 prose-h3:text-orange-400
-          prose-p:text-[#c4c0bc] prose-p:leading-relaxed prose-p:my-3
-          prose-strong:text-white prose-strong:font-bold
-          prose-li:text-[#c4c0bc] prose-ul:my-3 prose-ol:my-3
-          prose-blockquote:border-l-orange-500 prose-blockquote:bg-[#2a2826] prose-blockquote:rounded-r-lg prose-blockquote:py-1
-          prose-blockquote:text-[#a4a09c]">
-          <ReactMarkdown>{post.body}</ReactMarkdown>
+        <div className="space-y-1">
+          <ReactMarkdown
+            components={{
+              h2: ({ children }) => (
+                <h2 className="text-xl font-black text-white mt-10 mb-4 pb-2 border-b border-white/10">{children}</h2>
+              ),
+              h3: ({ children }) => (
+                <h3 className="text-base font-black text-orange-400 mt-6 mb-2">{children}</h3>
+              ),
+              h4: ({ children }) => (
+                <h4 className="text-sm font-bold text-[#c4c0bc] mt-4 mb-1">{children}</h4>
+              ),
+              p: ({ children }) => (
+                <p className="text-[#c4c0bc] leading-relaxed my-3 text-sm md:text-base">{children}</p>
+              ),
+              strong: ({ children }) => (
+                <strong className="text-white font-bold">{children}</strong>
+              ),
+              em: ({ children }) => (
+                <em className="text-[#a4a09c] italic">{children}</em>
+              ),
+              ul: ({ children }) => (
+                <ul className="my-3 pl-5 space-y-1 list-disc marker:text-orange-500">{children}</ul>
+              ),
+              ol: ({ children }) => (
+                <ol className="my-3 pl-5 space-y-1 list-decimal marker:text-orange-500">{children}</ol>
+              ),
+              li: ({ children }) => (
+                <li className="text-[#c4c0bc] text-sm md:text-base leading-relaxed">{children}</li>
+              ),
+              blockquote: ({ children }) => (
+                <blockquote className="my-4 pl-4 border-l-4 border-orange-500 bg-[#2a2826] rounded-r-lg py-3 pr-3 text-[#a4a09c] italic">
+                  {children}
+                </blockquote>
+              ),
+              code: ({ children, className }) => {
+                const isBlock = className?.includes('language-')
+                return isBlock
+                  ? <code className="block bg-[#1c1a18] text-orange-300 text-xs p-3 rounded-lg my-3 overflow-x-auto">{children}</code>
+                  : <code className="bg-[#1c1a18] text-orange-300 text-xs px-1.5 py-0.5 rounded">{children}</code>
+              },
+              hr: () => <hr className="my-8 border-white/10" />,
+              a: ({ href, children }) => (
+                <a href={href} className="text-orange-400 hover:text-orange-300 underline underline-offset-2" target="_blank" rel="noopener noreferrer">{children}</a>
+              ),
+            }}
+          >
+            {post.body}
+          </ReactMarkdown>
         </div>
 
         {/* 포함된 영상 목록 */}

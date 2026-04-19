@@ -486,12 +486,15 @@ export async function deleteCuratedPost(id: string) {
 }
 
 export async function getPublishedPosts(limit = 20): Promise<CuratedPost[]> {
+  // orderBy 없이 조회 후 JS 정렬 (복합 인덱스 불필요)
   const docs = await fsQuery('curated_posts', {
     where: { fieldFilter: { field: { fieldPath: 'status' }, op: 'EQUAL', value: { stringValue: 'published' } } },
-    orderBy: [{ field: { fieldPath: 'publishedAt' }, direction: 'DESCENDING' }],
-    limit,
+    limit: limit * 2,
   })
-  return docs.map(({ id, data }) => ({ ...data, id } as CuratedPost))
+  return docs
+    .map(({ id, data }) => ({ ...data, id } as CuratedPost))
+    .sort((a, b) => (b.publishedAt ?? '').localeCompare(a.publishedAt ?? ''))
+    .slice(0, limit)
 }
 
 export async function getAllPostsForAdmin(limit = 50): Promise<CuratedPost[]> {
