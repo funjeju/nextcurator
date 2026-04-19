@@ -41,6 +41,12 @@ export const metadata: Metadata = {
     follow: true,
     googleBot: { index: true, follow: true, 'max-snippet': -1, 'max-image-preview': 'large' },
   },
+  verification: {
+    google: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION ?? '',
+    other: {
+      'naver-site-verification': [process.env.NEXT_PUBLIC_NAVER_SITE_VERIFICATION ?? ''],
+    },
+  },
 }
 
 export default function RootLayout({
