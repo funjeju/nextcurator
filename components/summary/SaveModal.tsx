@@ -16,7 +16,13 @@ function withTimeout<T>(promise: Promise<T>, ms = 8000): Promise<T> {
   ])
 }
 
-export default function SaveModal({ data, onClose }: { data: any, onClose: () => void }) {
+export interface SavedResult {
+  id: string
+  folderId: string
+  isPublic: boolean
+}
+
+export default function SaveModal({ data, onClose }: { data: any, onClose: (saved?: SavedResult) => void }) {
   const { user, openAuthModal } = useAuth()
   const [folders, setFolders] = useState<Folder[]>([])
   const [loading, setLoading] = useState(true)
@@ -60,6 +66,7 @@ export default function SaveModal({ data, onClose }: { data: any, onClose: () =>
       if (user) await upsertUserProfile({ uid: user.uid, displayName: user.displayName || '', photoURL: user.photoURL || '' })
 
       // 같은 영상이 이미 저장된 경우 → 업데이트
+      let savedId = ''
       if (duplicateInfo) {
         await withTimeout(updateSavedSummary(duplicateInfo.id, {
           sessionId: data.sessionId,
@@ -75,6 +82,7 @@ export default function SaveModal({ data, onClose }: { data: any, onClose: () =>
           isPublic,
         }))
         doEmbed(duplicateInfo.id)
+        savedId = duplicateInfo.id
       } else {
         const docId = await withTimeout(saveSummary({
           userId: uid,
@@ -94,9 +102,10 @@ export default function SaveModal({ data, onClose }: { data: any, onClose: () =>
           isPublic,
         }))
         doEmbed(docId)
+        savedId = docId
       }
       alert(duplicateInfo ? '기존 항목이 업데이트되었습니다!' : '저장되었습니다!')
-      onClose()
+      onClose({ id: savedId, folderId, isPublic })
     } catch (e) {
       console.error('Save error:', e)
       alert((e as Error).message || '저장에 실패했습니다. DB 연결을 확인해주세요.')
@@ -113,6 +122,7 @@ export default function SaveModal({ data, onClose }: { data: any, onClose: () =>
       const newFolder = await withTimeout(createFolder(uid, newFolderName.trim()))
       if (user) await upsertUserProfile({ uid: user.uid, displayName: user.displayName || '', photoURL: user.photoURL || '' })
 
+      let savedId2 = ''
       if (duplicateInfo) {
         await withTimeout(updateSavedSummary(duplicateInfo.id, {
           sessionId: data.sessionId,
@@ -128,6 +138,7 @@ export default function SaveModal({ data, onClose }: { data: any, onClose: () =>
           isPublic,
         }))
         doEmbed(duplicateInfo.id)
+        savedId2 = duplicateInfo.id
       } else {
         const docId2 = await withTimeout(saveSummary({
           userId: uid,
@@ -147,9 +158,10 @@ export default function SaveModal({ data, onClose }: { data: any, onClose: () =>
           isPublic,
         }))
         doEmbed(docId2)
+        savedId2 = docId2
       }
       alert(duplicateInfo ? '기존 항목이 업데이트되었습니다!' : '저장되었습니다!')
-      onClose()
+      onClose({ id: savedId2, folderId: newFolder.id, isPublic })
     } catch (e) {
       console.error('Create and save error:', e)
       alert((e as Error).message || '저장에 실패했습니다. DB 연결을 확인해주세요.')
@@ -190,6 +202,7 @@ export default function SaveModal({ data, onClose }: { data: any, onClose: () =>
         const uid = getLocalUserId()
         if (user) await upsertUserProfile({ uid: user.uid, displayName: user.displayName || '', photoURL: user.photoURL || '' })
 
+        let savedId3 = ''
         if (duplicateInfo) {
           await withTimeout(updateSavedSummary(duplicateInfo.id, {
             sessionId: data.sessionId,
@@ -203,6 +216,7 @@ export default function SaveModal({ data, onClose }: { data: any, onClose: () =>
             isPublic,
           }))
           doEmbed(duplicateInfo.id)
+          savedId3 = duplicateInfo.id
         } else {
           const docId3 = await withTimeout(saveSummary({
             userId: uid,
@@ -220,9 +234,10 @@ export default function SaveModal({ data, onClose }: { data: any, onClose: () =>
             isPublic,
           }))
           doEmbed(docId3)
+          savedId3 = docId3
         }
         alert(duplicateInfo ? '기존 항목이 업데이트되었습니다!' : '저장되었습니다!')
-        onClose()
+        onClose({ id: savedId3, folderId: targetFolderId, isPublic })
       }
     } catch (e) {
       console.error('Auto classify error:', e)

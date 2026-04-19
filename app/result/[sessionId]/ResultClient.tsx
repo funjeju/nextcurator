@@ -1476,10 +1476,27 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
       {showSaveModal && (
         <SaveModal
           data={data}
-          onClose={() => {
+          onClose={(saved) => {
             setShowSaveModal(false)
-            const uid = user?.uid || getLocalUserId()
-            getSavedSummaryBySessionId(uid, data.sessionId).then(setSavedItem).catch(() => {})
+            if (saved) {
+              // 저장 성공: Firestore 재조회 없이 직접 상태 업데이트 (모바일 재조회 실패 대응)
+              setSavedItem({
+                id: saved.id,
+                userId: user?.uid || getLocalUserId(),
+                folderId: saved.folderId,
+                sessionId: data.sessionId,
+                videoId: data.videoId ?? '',
+                title: data.title,
+                thumbnail: data.thumbnail ?? '',
+                category: data.category,
+                isPublic: saved.isPublic,
+                createdAt: new Date(),
+              } as any)
+            } else {
+              // 모달만 닫은 경우: 재조회
+              const uid = user?.uid || getLocalUserId()
+              getSavedSummaryBySessionId(uid, data.sessionId).then(setSavedItem).catch(() => {})
+            }
           }}
         />
       )}
