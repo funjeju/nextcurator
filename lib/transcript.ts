@@ -189,13 +189,45 @@ export interface TranscriptResult {
   lang: 'ko' | 'en' | 'other'
 }
 
+async function getTranscriptViaGemini(videoId: string): Promise<string> {
+  const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY
+  if (!apiKey) throw new Error('GEMINI_NOT_CONFIGURED')
+
+  const { GoogleGenerativeAI } = await import('@google/generative-ai')
+  const genAI = new GoogleGenerativeAI(apiKey)
+  const model = genAI.getGenerativeModel({
+    model: 'gemini-2.5-flash',
+    generationConfig: { temperature: 0, maxOutputTokens: 8192 },
+  })
+
+  const result = await model.generateContent([
+    {
+      fileData: {
+        mimeType: 'video/*',
+        fileUri: `https://www.youtube.com/watch?v=${videoId}`,
+      },
+    },
+    {
+      text: `이 영상의 음성 내용을 타임스탬프와 함께 전사해줘.
+형식: [MM:SS] 내용
+- 대화나 해설이 없는 무음 구간은 건너뜀
+- 원본 언어 그대로 전사 (번역 금지)
+- 최대한 상세하게`,
+    },
+  ])
+
+  const text = result.response.text().trim()
+  if (!text || text.length < 30) throw new Error('GEMINI_EMPTY_RESPONSE')
+  return text
+}
+
 export async function getTranscript(videoId: string): Promise<TranscriptResult> {
   const errors: string[] = []
 
-  // ── 1단계: SocialKit (자막 추출 + STT 모두 처리) ──
+  // ── 1단계: SocialKit (자막 추출 우선) ──
   if (process.env.SOCIALKIT_API_KEY) {
     try {
-      console.log(`[Transcript] Trying: SocialKit STT for ${videoId}`)
+      console.log(`[Transcript] Trying: SocialKit for ${videoId}`)
       const text = await getTranscriptViaSocialKit(videoId)
       console.log('[Transcript] ✅ SocialKit 성공')
       return { text, source: 'SocialKit', lang: detectTranscriptLang(text) }
@@ -206,7 +238,21 @@ export async function getTranscript(videoId: string): Promise<TranscriptResult> 
     }
   }
 
-  // ── 3단계: 로컬 개발 폴백 (프로덕션에서는 IP 차단으로 실패 예상) ──
+  // ── 2단계: Gemini STT 폴백 (자막 없는 영상 대응) ──
+  if (process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
+    try {
+      console.log(`[Transcript] Trying: Gemini STT for ${videoId}`)
+      const text = await getTranscriptViaGemini(videoId)
+      console.log(`[Transcript] ✅ Gemini STT 성공 (${text.length}자)`)
+      return { text, source: 'Gemini STT', lang: detectTranscriptLang(text) }
+    } catch (e) {
+      const msg = (e as Error).message
+      console.error(`[Transcript] ❌ Gemini STT 실패: ${msg}`)
+      errors.push(`Gemini: ${msg}`)
+    }
+  }
+
+  // ── 3단계: 로컬 개발 폴백 ──
   try {
     console.log(`[Transcript] Trying: youtube-transcript (local) for ${videoId}`)
     const text = await getTranscriptLocal(videoId)
