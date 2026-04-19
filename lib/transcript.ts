@@ -229,48 +229,31 @@ export interface VideoMeta {
 }
 
 export async function getVideoMeta(videoId: string): Promise<VideoMeta> {
-  const youtubeApiKey = process.env.YOUTUBE_API_KEY
   const socialkitKey = process.env.SOCIALKIT_API_KEY
+  if (!socialkitKey) return { description: '', pinnedComment: '' }
 
-  // 영상 설명: YouTube Data API (description은 googleapis.com에서만 가져올 수 있음)
-  let description = ''
-  if (youtubeApiKey) {
-    try {
-      const videoRes = await fetch(
-        `https://www.googleapis.com/youtube/v3/videos?id=${videoId}&part=snippet&key=${youtubeApiKey}`,
-        { signal: AbortSignal.timeout(5000) }
-      )
-      if (videoRes.ok) {
-        const videoData = await videoRes.json() as { items?: Array<{ snippet: { description: string } }> }
-        description = videoData.items?.[0]?.snippet?.description ?? ''
-      }
-    } catch { /* ignore */ }
-  }
-
-  // 상위 댓글: SocialKit 경유 (Vercel에서 googleapis.com 댓글 API 차단 우회)
+  // SocialKit comments — 상위 댓글 (고정댓글 포함)
   let pinnedComment = ''
-  if (socialkitKey) {
-    try {
-      const videoUrl = `https://www.youtube.com/watch?v=${videoId}`
-      const commentRes = await fetch(
-        `https://api.socialkit.dev/youtube/comments?url=${encodeURIComponent(videoUrl)}&limit=5`,
-        { headers: { 'x-access-key': socialkitKey }, signal: AbortSignal.timeout(10000) }
-      )
-      if (commentRes.ok) {
-        const commentData = await commentRes.json() as {
-          data?: { comments?: Array<{ text: string; likes: number }> }
-        }
-        const comments = (commentData.data?.comments ?? [])
-          .map(c => c.text?.replace(/<[^>]+>/g, '').trim() ?? '')
-          .filter(t => t.length > 0)
-          .slice(0, 3)
-        pinnedComment = comments.join('\n---\n')
+  try {
+    const videoUrl = `https://www.youtube.com/watch?v=${videoId}`
+    const commentRes = await fetch(
+      `https://api.socialkit.dev/youtube/comments?url=${encodeURIComponent(videoUrl)}&limit=5`,
+      { headers: { 'x-access-key': socialkitKey }, signal: AbortSignal.timeout(10000) }
+    )
+    if (commentRes.ok) {
+      const commentData = await commentRes.json() as {
+        data?: { comments?: Array<{ text: string; likes: number }> }
       }
-    } catch { /* ignore */ }
-  }
+      const comments = (commentData.data?.comments ?? [])
+        .map(c => c.text?.replace(/<[^>]+>/g, '').trim() ?? '')
+        .filter(t => t.length > 0)
+        .slice(0, 3)
+      pinnedComment = comments.join('\n---\n')
+    }
+  } catch { /* ignore */ }
 
   return {
-    description: description.slice(0, 2000),
+    description: '',  // description은 getVideoInfo(youtube/stats)에서 가져옴
     pinnedComment: pinnedComment.slice(0, 1000),
   }
 }

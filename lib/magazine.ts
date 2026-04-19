@@ -41,16 +41,29 @@ export interface CuratedPost {
   topicCluster: string
 }
 
-export type CurationSchedule = '3x_daily' | '1x_daily' | '3x_weekly' | '1x_weekly' | 'manual'
+export type CurationSchedule = '3x_daily' | '2x_daily' | '1x_daily' | '3x_weekly' | '1x_weekly' | 'manual'
 
 export interface CurationSettings {
   enabled: boolean
   schedule: CurationSchedule
-  minVideoCount: number    // min videos needed per post
-  maxVideoCount: number    // max videos to include per post
-  lookbackDays: number     // how many recent days to scan
+  dailyLimit: 1 | 2 | 3    // 하루 최대 발행 수
+  lookbackDays: number      // 최근 N일 영상 기준
   lastGeneratedAt: string
-  autoPublish: boolean     // false = save as draft
+  autoPublish: boolean      // false = 초안으로 저장
+  categoryFilter: string[]  // 빈 배열 = 전체 카테고리
+}
+
+export interface MagazineLog {
+  id: string
+  postId?: string
+  postTitle?: string
+  videoTitle?: string
+  videoId?: string
+  status: 'success' | 'error' | 'skipped'
+  triggerType: 'cron' | 'manual'
+  reason?: string
+  error?: string
+  createdAt: string
 }
 
 export interface SummaryForCuration {
@@ -163,12 +176,12 @@ async function fsQuery(collectionId: string, body: unknown): Promise<{ id: strin
 
 const SETTINGS_DEFAULTS: CurationSettings = {
   enabled: false,
-  schedule: '3x_weekly',
-  minVideoCount: 5,
-  maxVideoCount: 8,
+  schedule: '1x_daily',
+  dailyLimit: 1,
   lookbackDays: 5,
   lastGeneratedAt: '',
   autoPublish: false,
+  categoryFilter: [],
 }
 
 export async function getCurationSettings(): Promise<CurationSettings> {

@@ -11,6 +11,14 @@ import {
 import { fetchVideoComments, formatCommentsForPrompt } from '@/lib/youtube-comments'
 import { initAdminApp } from '@/lib/firebase-admin'
 
+async function writeLog(log: Omit<import('@/lib/magazine').MagazineLog, 'id'>) {
+  try {
+    initAdminApp()
+    const { getFirestore } = await import('firebase-admin/firestore')
+    await getFirestore().collection('magazine_logs').add(log)
+  } catch { /* non-critical */ }
+}
+
 export const maxDuration = 120
 
 // Vercel Cron은 Authorization: Bearer 헤더로 CRON_SECRET을 전달
@@ -91,8 +99,10 @@ export async function POST(req: NextRequest) {
     const item = pickBestSingle(summaries)
 
     if (!item) {
+      const reason = `최근 ${settings.lookbackDays}일 이내 미발행 요약 없음`
+      await writeLog({ status: 'skipped', triggerType: 'manual', reason, createdAt: new Date().toISOString() })
       return NextResponse.json({
-        error: `발행할 영상이 없습니다. 최근 ${settings.lookbackDays}일 이내 공개된 미발행 요약: ${summaries.filter(s => !s.postedToMagazine).length}개`,
+        error: `발행할 영상이 없습니다. ${reason}`,
         availableCount: summaries.length,
       }, { status: 422 })
     }
@@ -110,7 +120,6 @@ export async function POST(req: NextRequest) {
     const shouldPublish = autoPublish ?? settings.autoPublish
     if (shouldPublish) await publishCuratedPostAdmin(id)
 
-    // 발행된 summary에 postedToMagazine 마킹
     try {
       initAdminApp()
       const { getFirestore } = await import('firebase-admin/firestore')
@@ -118,6 +127,16 @@ export async function POST(req: NextRequest) {
     } catch { /* non-critical */ }
 
     await saveCurationSettingsAdmin({ lastGeneratedAt: new Date().toISOString() })
+
+    await writeLog({
+      postId: id,
+      postTitle: post.title,
+      videoTitle: item.title,
+      videoId: item.videoId,
+      status: 'success',
+      triggerType: 'manual',
+      createdAt: new Date().toISOString(),
+    })
 
     return NextResponse.json({
       success: true,
@@ -130,6 +149,7 @@ export async function POST(req: NextRequest) {
     })
   } catch (e) {
     console.error('[Manual trigger] Magazine post generation failed:', e)
+    await writeLog({ status: 'error', triggerType: 'manual', error: String(e), createdAt: new Date().toISOString() })
     return NextResponse.json({ error: String(e) }, { status: 500 })
   }
 }

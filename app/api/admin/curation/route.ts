@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
   if (!isAdmin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await req.json().catch(() => ({})) as {
-    action: 'getSettings' | 'saveSettings' | 'listPosts' | 'publish' | 'delete'
+    action: 'getSettings' | 'saveSettings' | 'listPosts' | 'publish' | 'delete' | 'getLogs'
     settings?: Partial<CurationSettings>
     id?: string
   }
@@ -54,6 +54,15 @@ export async function POST(req: NextRequest) {
         const { getFirestore } = await import('firebase-admin/firestore')
         await getFirestore().collection('curated_posts').doc(body.id).delete()
         return NextResponse.json({ ok: true })
+      }
+
+      case 'getLogs': {
+        initAdminApp()
+        const { getFirestore: getFS2 } = await import('firebase-admin/firestore')
+        const snap = await getFS2().collection('magazine_logs')
+          .orderBy('createdAt', 'desc').limit(50).get()
+        const logs = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+        return NextResponse.json(logs)
       }
 
       default:

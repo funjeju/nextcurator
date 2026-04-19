@@ -100,35 +100,32 @@ function fromFirestoreValue(v: Record<string, unknown>): unknown {
 }
 
 async function getVideoInfo(videoId: string) {
-  const apiKey = process.env.YOUTUBE_API_KEY
-  let title = '', channel = '', publishedAt = '', ytViewCount = 0
+  const socialkitKey = process.env.SOCIALKIT_API_KEY
+  let title = '', channel = '', publishedAt = '', ytViewCount = 0, description = ''
 
-  // YouTube Data API v3 — title, channel, publishedAt 모두 가져옴
-  if (apiKey) {
+  // SocialKit Stats API — title, channel, views, description 한 번에
+  if (socialkitKey) {
     try {
-      const apiRes = await fetch(`https://www.googleapis.com/youtube/v3/videos?id=${videoId}&part=snippet,statistics&key=${apiKey}`, { signal: AbortSignal.timeout(5000) })
-      if (apiRes.ok) {
-        const data = await apiRes.json()
-        if (data.items && data.items.length > 0) {
-          title = data.items[0].snippet.title
-          channel = data.items[0].snippet.channelTitle
-          publishedAt = data.items[0].snippet.publishedAt ?? ''
-          ytViewCount = Number(data.items[0].statistics?.viewCount ?? 0)
-        } else {
-          console.warn(`[getVideoInfo] YouTube API returned no items for ${videoId}:`, JSON.stringify(data).slice(0, 200))
+      const videoUrl = `https://www.youtube.com/watch?v=${videoId}`
+      const res = await fetch(
+        `https://api.socialkit.dev/youtube/stats?url=${encodeURIComponent(videoUrl)}`,
+        { headers: { 'x-access-key': socialkitKey }, signal: AbortSignal.timeout(10000) }
+      )
+      if (res.ok) {
+        const data = await res.json() as {
+          data?: { title?: string; channelName?: string; views?: number; description?: string; thumbnailUrl?: string }
         }
-      } else {
-        const errBody = await apiRes.text().catch(() => '')
-        console.error(`[getVideoInfo] YouTube API HTTP ${apiRes.status} for ${videoId}:`, errBody.slice(0, 200))
+        title = data.data?.title ?? ''
+        channel = data.data?.channelName ?? ''
+        ytViewCount = data.data?.views ?? 0
+        description = data.data?.description ?? ''
       }
     } catch (e) {
-      console.error(`[getVideoInfo] YouTube API fetch error for ${videoId}:`, e)
+      console.warn('[getVideoInfo] SocialKit stats error:', e)
     }
-  } else {
-    console.warn('[getVideoInfo] YOUTUBE_API_KEY not set — publishedAt will be empty')
   }
 
-  // title/channel 없으면 oEmbed로 보완
+  // title/channel 없으면 oEmbed 폴백
   if (!title || !channel) {
     try {
       const res = await fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`, { signal: AbortSignal.timeout(5000) })
@@ -140,28 +137,24 @@ async function getVideoInfo(videoId: string) {
     } catch { /* ignore */ }
   }
 
-  // publishedAt 없으면 YouTube 페이지 HTML에서 파싱 (googleapis.com 차단 환경 fallback)
-  if (!publishedAt) {
-    try {
-      const pageRes = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
-        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1)' },
-        signal: AbortSignal.timeout(7000),
-      })
-      if (pageRes.ok) {
-        const html = await pageRes.text()
-        // ytInitialData 내 dateText 또는 meta 태그에서 날짜 추출
-        const metaMatch = html.match(/"datePublished"\s*:\s*"([^"]+)"/)
-        if (metaMatch) {
-          publishedAt = new Date(metaMatch[1]).toISOString()
-        } else {
-          // publishDate 형식 (YYYY-MM-DD)
-          const publishMatch = html.match(/"publishDate"\s*:\s*"([^"]+)"/)
-          if (publishMatch) publishedAt = new Date(publishMatch[1]).toISOString()
-        }
+  // publishedAt — YouTube 페이지 HTML 파싱 (youtube.com은 Vercel에서 접근 가능)
+  try {
+    const pageRes = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1)' },
+      signal: AbortSignal.timeout(7000),
+    })
+    if (pageRes.ok) {
+      const html = await pageRes.text()
+      const metaMatch = html.match(/"datePublished"\s*:\s*"([^"]+)"/)
+      if (metaMatch) {
+        publishedAt = new Date(metaMatch[1]).toISOString()
+      } else {
+        const publishMatch = html.match(/"publishDate"\s*:\s*"([^"]+)"/)
+        if (publishMatch) publishedAt = new Date(publishMatch[1]).toISOString()
       }
-    } catch (e) {
-      console.warn(`[getVideoInfo] HTML fallback for publishedAt failed:`, e)
     }
+  } catch (e) {
+    console.warn('[getVideoInfo] HTML publishedAt parse failed:', e)
   }
 
   if (!title) throw new Error('VIDEO_NOT_FOUND')
@@ -172,6 +165,7 @@ async function getVideoInfo(videoId: string) {
     thumbnail: `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`,
     publishedAt,
     ytViewCount,
+    description,
   }
 }
 
@@ -349,9 +343,9 @@ export async function POST(req: NextRequest) {
 
     const outputLang: 'ko' | 'original' = summaryLang === 'original' ? 'original' : 'ko'
 
-    const [{ description, pinnedComment }] = await Promise.all([
-      getVideoMeta(videoId),
-    ])
+    // description은 getVideoInfo에서 이미 가져옴, pinnedComment만 별도 수집
+    const description = (videoInfo as any).description ?? ''
+    const { pinnedComment } = await getVideoMeta(videoId)
 
     const contextParts = []
 
@@ -359,7 +353,6 @@ export async function POST(req: NextRequest) {
     contextParts.push(`[영상 제목]\n${videoInfo.title}\n[채널]\n${videoInfo.channel}`)
 
     if (transcript) {
-      // 한국어 번역 선택 시 번역 힌트 삽입, 원문 선택 시 그대로
       const transNote = outputLang === 'ko' && transcriptLang !== 'ko'
         ? `[언어 안내: 아래 자막은 ${transcriptLang === 'en' ? '영어(English)' : '외국어'}입니다. 내용을 이해하고 한국어로 번역하여 요약해주세요.]\n\n`
         : ''
