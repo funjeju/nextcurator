@@ -22,6 +22,17 @@ function formatDate(iso: string) {
   return new Intl.DateTimeFormat('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }).format(new Date(iso))
 }
 
+// 간단한 마크다운 → HTML 변환 (react-markdown 없이)
+function mdToHtml(md: string): string {
+  return md
+    .replace(/^### (.+)$/gm, '<h3 style="font-size:1em;font-weight:700;margin:20px 0 6px;color:#e4e4e7;">$1</h3>')
+    .replace(/^## (.+)$/gm, '<h2 style="font-size:1.15em;font-weight:800;margin:24px 0 8px;color:#fff;border-bottom:1px solid rgba(255,255,255,0.08);padding-bottom:6px;">$1</h2>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    .replace(/\n\n/g, '</p><p style="margin:0 0 12px;line-height:1.75;color:#a1a1aa;">')
+    .replace(/^(?!<h[23])(.+)$/gm, (m) => m.startsWith('<') ? m : `<p style="margin:0 0 12px;line-height:1.75;color:#a1a1aa;">${m}</p>`)
+}
+
 export default function CurationTab({ getAuthHeader }: {
   getAuthHeader: () => Promise<Record<string, string>>
 }) {
@@ -33,6 +44,7 @@ export default function CurationTab({ getAuthHeader }: {
   const [triggering, setTriggering]           = useState(false)
   const [triggerResult, setTriggerResult]     = useState<string>('')
   const [actionId, setActionId]               = useState<string | null>(null)
+  const [previewPost, setPreviewPost]         = useState<CuratedPost | null>(null)
 
   const callAdmin = async (action: string, extra?: object) => {
     const headers = await getAuthHeader()
@@ -89,6 +101,7 @@ export default function CurationTab({ getAuthHeader }: {
     setActionId(id)
     await callAdmin('publish', { id })
     setPosts(prev => prev.map(p => p.id === id ? { ...p, status: 'published', publishedAt: new Date().toISOString() } : p))
+    setPreviewPost(prev => prev?.id === id ? { ...prev, status: 'published', publishedAt: new Date().toISOString() } : prev)
     setActionId(null)
   }
 
@@ -97,6 +110,7 @@ export default function CurationTab({ getAuthHeader }: {
     setActionId(id)
     await callAdmin('delete', { id })
     setPosts(prev => prev.filter(p => p.id !== id))
+    setPreviewPost(prev => prev?.id === id ? null : prev)
     setActionId(null)
   }
 
@@ -237,6 +251,123 @@ export default function CurationTab({ getAuthHeader }: {
         )}
       </div>
 
+      {/* 미리보기 모달 */}
+      {previewPost && (
+        <div
+          className="fixed inset-0 z-50 flex items-start justify-center bg-black/70 backdrop-blur-sm overflow-y-auto py-8 px-4"
+          onClick={() => setPreviewPost(null)}
+        >
+          <div
+            className="w-full max-w-2xl bg-[#1c1a18] rounded-2xl border border-white/10 overflow-hidden shadow-2xl"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* 모달 헤더 */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-white/8">
+              <div className="flex items-center gap-2">
+                <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${STATUS_BADGE[previewPost.status] ?? STATUS_BADGE.draft}`}>
+                  {previewPost.status === 'published' ? '발행됨' : '초안'}
+                </span>
+                <span className="text-xs text-[#75716e]">{formatDate(previewPost.createdAt)}</span>
+              </div>
+              <button onClick={() => setPreviewPost(null)} className="text-[#75716e] hover:text-white transition-colors text-lg leading-none">✕</button>
+            </div>
+
+            {/* 썸네일 */}
+            {previewPost.heroThumbnail && !previewPost.heroThumbnail.startsWith('data:') && (
+              <img src={previewPost.heroThumbnail} alt="" className="w-full h-48 object-cover" />
+            )}
+
+            {/* 본문 */}
+            <div className="px-6 py-5">
+              <h2 className="text-white font-black text-xl mb-1">{previewPost.title}</h2>
+              {previewPost.subtitle && (
+                <p className="text-[#a4a09c] text-sm mb-4">{previewPost.subtitle}</p>
+              )}
+              <div className="flex items-center gap-3 text-[10px] text-[#75716e] mb-5">
+                <span>영상 {previewPost.videoTitles?.length ?? 0}개</span>
+                <span>{previewPost.readTime}분 읽기</span>
+                {previewPost.tags?.slice(0, 3).map(t => (
+                  <span key={t} className="px-1.5 py-0.5 bg-[#2a2826] rounded border border-white/8">{t}</span>
+                ))}
+              </div>
+
+              <div
+                className="text-sm"
+                dangerouslySetInnerHTML={{ __html: mdToHtml(previewPost.body ?? '') }}
+              />
+
+              {/* FAQ */}
+              {previewPost.faq && previewPost.faq.length > 0 && (
+                <div className="mt-6">
+                  <h3 className="text-white font-bold text-sm mb-3">자주 묻는 질문</h3>
+                  <div className="space-y-2">
+                    {previewPost.faq.map((f, i) => (
+                      <details key={i} className="bg-[#2a2826] rounded-xl border border-white/8 px-4 py-3 group">
+                        <summary className="text-[#a4a09c] text-sm cursor-pointer list-none flex items-center justify-between gap-2">
+                          <span>{f.question}</span>
+                          <span className="text-xs opacity-50 group-open:rotate-180 transition-transform">▼</span>
+                        </summary>
+                        <p className="text-[#75716e] text-sm mt-2 leading-relaxed">{f.answer}</p>
+                      </details>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* 체크리스트 */}
+              {previewPost.checklist && previewPost.checklist.length > 0 && (
+                <div className="mt-5">
+                  <h3 className="text-white font-bold text-sm mb-3">핵심 체크리스트</h3>
+                  <ul className="space-y-1.5">
+                    {previewPost.checklist.map((item, i) => (
+                      <li key={i} className="flex items-start gap-2 text-sm text-[#a4a09c]">
+                        <span className="text-emerald-400 mt-0.5 shrink-0">✓</span>
+                        <span>{item}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+
+            {/* 액션 버튼 */}
+            <div className="flex items-center gap-2 px-6 py-4 border-t border-white/8 bg-[#161412]">
+              {previewPost.status === 'published' && (
+                <Link
+                  href={`/magazine/${previewPost.slug}`}
+                  target="_blank"
+                  className="px-4 py-2 rounded-xl bg-[#32302e] text-[#a4a09c] hover:text-white text-sm font-bold border border-white/8 transition-colors"
+                >
+                  발행 글 보기 →
+                </Link>
+              )}
+              {previewPost.status === 'draft' && (
+                <button
+                  onClick={() => handlePublish(previewPost.id)}
+                  disabled={actionId === previewPost.id}
+                  className="px-4 py-2 rounded-xl bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 text-sm font-bold border border-emerald-500/30 transition-colors disabled:opacity-50"
+                >
+                  {actionId === previewPost.id ? '발행 중...' : '발행하기'}
+                </button>
+              )}
+              <button
+                onClick={() => handleDelete(previewPost.id, previewPost.title)}
+                disabled={actionId === previewPost.id}
+                className="px-4 py-2 rounded-xl bg-red-500/10 text-red-400 hover:bg-red-500/20 text-sm font-bold border border-red-500/20 transition-colors disabled:opacity-50"
+              >
+                삭제
+              </button>
+              <button
+                onClick={() => setPreviewPost(null)}
+                className="ml-auto px-4 py-2 rounded-xl bg-[#2a2826] text-[#a4a09c] hover:text-white text-sm font-bold border border-white/8 transition-colors"
+              >
+                닫기
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 포스트 목록 */}
       <div className="bg-[#2a2826] rounded-2xl border border-white/8 p-6">
         <h2 className="text-white font-black text-base mb-4">
@@ -252,12 +383,16 @@ export default function CurationTab({ getAuthHeader }: {
         ) : (
           <div className="space-y-2">
             {posts.map(post => (
-              <div key={post.id} className="flex items-start gap-3 p-3 rounded-xl bg-[#1c1a18] border border-white/6">
+              <div
+                key={post.id}
+                onClick={() => setPreviewPost(post)}
+                className="flex items-start gap-3 p-3 rounded-xl bg-[#1c1a18] border border-white/6 hover:border-orange-500/30 hover:bg-[#221f1d] transition-all cursor-pointer group"
+              >
                 {post.heroThumbnail && !post.heroThumbnail.startsWith('data:') && (
                   <img src={post.heroThumbnail} alt="" className="w-16 h-10 object-cover rounded-lg shrink-0 bg-[#252423]" />
                 )}
                 <div className="flex-1 min-w-0">
-                  <p className="text-white text-sm font-bold line-clamp-1">{post.title}</p>
+                  <p className="text-white text-sm font-bold line-clamp-1 group-hover:text-orange-400 transition-colors">{post.title}</p>
                   <div className="flex items-center gap-2 mt-1 flex-wrap">
                     <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold border ${STATUS_BADGE[post.status] ?? STATUS_BADGE.draft}`}>
                       {post.status === 'published' ? '발행됨' : '초안'}
@@ -267,7 +402,7 @@ export default function CurationTab({ getAuthHeader }: {
                     <span className="text-[10px] text-[#75716e]">{formatDate(post.createdAt)}</span>
                   </div>
                 </div>
-                <div className="flex items-center gap-1.5 shrink-0">
+                <div className="flex items-center gap-1.5 shrink-0" onClick={e => e.stopPropagation()}>
                   {post.status === 'published' && (
                     <Link
                       href={`/magazine/${post.slug}`}
