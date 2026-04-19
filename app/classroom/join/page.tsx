@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, Suspense } from 'react'
 import { useAuth } from '@/providers/AuthProvider'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { buildStudentEmail } from '@/lib/classroom'
@@ -10,7 +10,7 @@ import Link from 'next/link'
 
 type Step = 'form' | 'loading' | 'done'
 
-export default function ClassroomJoinPage() {
+function ClassroomJoinForm() {
   const { signInStudent } = useAuth()
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -161,5 +161,17 @@ export default function ClassroomJoinPage() {
         </div>
       </main>
     </div>
+  )
+}
+
+export default function ClassroomJoinPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-[#1a1918] flex items-center justify-center">
+        <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-orange-500" />
+      </div>
+    }>
+      <ClassroomJoinForm />
+    </Suspense>
   )
 }
