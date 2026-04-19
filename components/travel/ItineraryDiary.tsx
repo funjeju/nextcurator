@@ -47,14 +47,15 @@ function formatDateShort(dateStr: string) {
   return `${d.getMonth() + 1}/${d.getDate()} (${days[d.getDay()]})`
 }
 
-const DAY_COLORS = [
-  { bg: 'bg-rose-500',    light: 'bg-rose-500/10',    border: 'border-rose-500/30',    text: 'text-rose-400'    },
-  { bg: 'bg-orange-500',  light: 'bg-orange-500/10',  border: 'border-orange-500/30',  text: 'text-orange-400'  },
-  { bg: 'bg-amber-500',   light: 'bg-amber-500/10',   border: 'border-amber-500/30',   text: 'text-amber-400'   },
-  { bg: 'bg-emerald-500', light: 'bg-emerald-500/10', border: 'border-emerald-500/30', text: 'text-emerald-400' },
-  { bg: 'bg-cyan-500',    light: 'bg-cyan-500/10',    border: 'border-cyan-500/30',    text: 'text-cyan-400'    },
-  { bg: 'bg-violet-500',  light: 'bg-violet-500/10',  border: 'border-violet-500/30',  text: 'text-violet-400'  },
-  { bg: 'bg-pink-500',    light: 'bg-pink-500/10',    border: 'border-pink-500/30',    text: 'text-pink-400'    },
+// hex colors — html2canvas doesn't support oklch/lab (Tailwind v4)
+const DAY_HEX = [
+  { hex: '#f43f5e', light: 'rgba(244,63,94,0.10)', border: 'rgba(244,63,94,0.30)', text: '#fb7185' },
+  { hex: '#f97316', light: 'rgba(249,115,22,0.10)', border: 'rgba(249,115,22,0.30)', text: '#fb923c' },
+  { hex: '#f59e0b', light: 'rgba(245,158,11,0.10)', border: 'rgba(245,158,11,0.30)', text: '#fbbf24' },
+  { hex: '#10b981', light: 'rgba(16,185,129,0.10)', border: 'rgba(16,185,129,0.30)', text: '#34d399' },
+  { hex: '#06b6d4', light: 'rgba(6,182,212,0.10)',  border: 'rgba(6,182,212,0.30)',  text: '#22d3ee' },
+  { hex: '#8b5cf6', light: 'rgba(139,92,246,0.10)', border: 'rgba(139,92,246,0.30)', text: '#a78bfa' },
+  { hex: '#ec4899', light: 'rgba(236,72,153,0.10)', border: 'rgba(236,72,153,0.30)', text: '#f472b6' },
 ]
 
 export default function ItineraryDiary({ result, regionName, regionEmoji, startDate, endDate, nights, days, mode }: Props) {
@@ -112,31 +113,24 @@ export default function ItineraryDiary({ result, regionName, regionEmoji, startD
         </button>
       </div>
 
-      {/* ── 다이어리 본문 (PDF 캡처 대상) ── */}
-      <div ref={diaryRef} className="bg-[#1a1614] rounded-3xl overflow-hidden" style={{ fontFamily: 'sans-serif' }}>
+      {/* ── 다이어리 본문 (PDF 캡처 대상) — 인라인 hex 스타일로 작성 (html2canvas oklch 미지원) ── */}
+      <div ref={diaryRef} style={{ background: '#1a1614', borderRadius: 24, overflow: 'hidden', fontFamily: 'sans-serif' }}>
 
         {/* 커버 헤더 */}
-        <div className="relative bg-gradient-to-br from-orange-600 via-pink-600 to-violet-700 px-6 py-8 text-white overflow-hidden">
-          {/* 배경 패턴 */}
-          <div className="absolute inset-0 opacity-10">
+        <div style={{ position: 'relative', background: 'linear-gradient(135deg, #c2410c, #db2777, #6d28d9)', padding: '32px 24px', color: '#fff', overflow: 'hidden' }}>
+          <div style={{ position: 'absolute', inset: 0, opacity: 0.10 }}>
             {['✈️','🌴','🗺️','📍','🌊','🏔️','☀️'].map((e, i) => (
-              <span key={i} className="absolute text-4xl select-none"
-                style={{ left: `${10 + i * 13}%`, top: `${20 + (i % 3) * 25}%`, transform: `rotate(${i * 15 - 30}deg)` }}
-              >{e}</span>
+              <span key={i} style={{ position: 'absolute', fontSize: 36, userSelect: 'none', left: `${10 + i * 13}%`, top: `${20 + (i % 3) * 25}%`, transform: `rotate(${i * 15 - 30}deg)` }}>{e}</span>
             ))}
           </div>
-          <div className="relative">
-            <p className="text-white/60 text-xs font-semibold tracking-[0.2em] uppercase mb-1">Travel Diary</p>
-            <h1 className="text-2xl font-black mb-1">{regionEmoji} {regionName}</h1>
-            <p className="text-white/80 text-sm">{formatDate(startDate)} — {formatDate(endDate)}</p>
-            <div className="flex items-center gap-3 mt-4">
-              <span className="px-3 py-1 bg-white/20 backdrop-blur rounded-full text-xs font-bold">
-                {nights}박 {days}일
-              </span>
+          <div style={{ position: 'relative' }}>
+            <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: 10, fontWeight: 600, letterSpacing: '0.2em', textTransform: 'uppercase', marginBottom: 4 }}>Travel Diary</p>
+            <h1 style={{ fontSize: 22, fontWeight: 900, marginBottom: 4 }}>{regionEmoji} {regionName}</h1>
+            <p style={{ color: 'rgba(255,255,255,0.8)', fontSize: 13 }}>{formatDate(startDate)} — {formatDate(endDate)}</p>
+            <div style={{ display: 'flex', gap: 12, marginTop: 16 }}>
+              <span style={{ padding: '4px 12px', background: 'rgba(255,255,255,0.2)', borderRadius: 999, fontSize: 11, fontWeight: 700 }}>{nights}박 {days}일</span>
               {mode === 'with_recommendations' && (
-                <span className="px-3 py-1 bg-white/20 backdrop-blur rounded-full text-xs font-bold">
-                  ✨ AI 큐레이션
-                </span>
+                <span style={{ padding: '4px 12px', background: 'rgba(255,255,255,0.2)', borderRadius: 999, fontSize: 11, fontWeight: 700 }}>✨ AI 큐레이션</span>
               )}
             </div>
           </div>
@@ -144,71 +138,70 @@ export default function ItineraryDiary({ result, regionName, regionEmoji, startD
 
         {/* 숙소 추천 */}
         {result.accommodation_suggestion && (
-          <div className="mx-5 mt-5 bg-amber-500/10 border border-amber-500/20 rounded-2xl px-4 py-3 flex gap-3">
-            <span className="text-xl shrink-0">🏨</span>
+          <div style={{ margin: '20px 20px 0', background: 'rgba(245,158,11,0.10)', border: '1px solid rgba(245,158,11,0.20)', borderRadius: 16, padding: '12px 16px', display: 'flex', gap: 12 }}>
+            <span style={{ fontSize: 20, flexShrink: 0 }}>🏨</span>
             <div>
-              <p className="text-amber-400 text-xs font-bold mb-0.5">숙소 추천</p>
-              <p className="text-zinc-300 text-xs leading-relaxed">{result.accommodation_suggestion}</p>
+              <p style={{ color: '#fbbf24', fontSize: 11, fontWeight: 700, marginBottom: 2 }}>숙소 추천</p>
+              <p style={{ color: '#d4d4d8', fontSize: 11, lineHeight: 1.6 }}>{result.accommodation_suggestion}</p>
             </div>
           </div>
         )}
 
         {/* 날짜별 일정 */}
-        <div className="px-5 pt-5 pb-2 space-y-6">
+        <div style={{ padding: '20px 20px 8px', display: 'flex', flexDirection: 'column', gap: 24 }}>
           {result.days.map((day, di) => {
-            const color = DAY_COLORS[di % DAY_COLORS.length]
+            const c = DAY_HEX[di % DAY_HEX.length]
             return (
               <div key={day.day}>
                 {/* 날짜 헤더 */}
-                <div className="flex items-center gap-3 mb-4">
-                  <div className={`w-10 h-10 rounded-2xl ${color.bg} flex flex-col items-center justify-center shrink-0 shadow-lg`}>
-                    <span className="text-white text-[9px] font-bold leading-none opacity-80">DAY</span>
-                    <span className="text-white text-base font-black leading-none">{day.day}</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+                  <div style={{ width: 40, height: 40, borderRadius: 12, background: c.hex, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <span style={{ color: '#fff', fontSize: 9, fontWeight: 700, opacity: 0.8, lineHeight: 1 }}>DAY</span>
+                    <span style={{ color: '#fff', fontSize: 16, fontWeight: 900, lineHeight: 1 }}>{day.day}</span>
                   </div>
                   <div>
-                    <p className="text-white font-bold text-sm leading-tight">{day.summary}</p>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      {day.date && <p className="text-zinc-500 text-xs">{formatDateShort(day.date)}</p>}
-                      {day.region && <span className={`text-[10px] px-2 py-0.5 rounded-full ${color.light} ${color.text} ${color.border} border font-semibold`}>{day.region}</span>}
+                    <p style={{ color: '#fff', fontWeight: 700, fontSize: 13, lineHeight: 1.3 }}>{day.summary}</p>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 2 }}>
+                      {day.date && <p style={{ color: '#71717a', fontSize: 11 }}>{formatDateShort(day.date)}</p>}
+                      {day.region && (
+                        <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 999, background: c.light, color: c.text, border: `1px solid ${c.border}`, fontWeight: 600 }}>
+                          {day.region}
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
 
                 {/* 타임라인 */}
-                <div className="relative pl-5">
-                  {/* 세로선 */}
-                  <div className={`absolute left-[7px] top-2 bottom-2 w-0.5 ${color.bg} opacity-20 rounded-full`} />
-
-                  <div className="space-y-3">
+                <div style={{ position: 'relative', paddingLeft: 20 }}>
+                  <div style={{ position: 'absolute', left: 7, top: 8, bottom: 8, width: 2, background: c.hex, opacity: 0.2, borderRadius: 2 }} />
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                     {day.slots.map((slot, si) => (
-                      <div key={si} className="relative flex gap-3">
-                        {/* 타임라인 도트 */}
-                        <div className={`absolute -left-5 top-3 w-3.5 h-3.5 rounded-full border-2 ${
-                          slot.isRecommended ? 'bg-[#1a1614] border-cyan-500' : `bg-[#1a1614] ${color.border.replace('border-', 'border-')} border-2`
-                        } shrink-0 z-10`}
-                          style={{ borderColor: slot.isRecommended ? 'rgb(6 182 212)' : undefined }}
-                        />
-
-                        {/* 슬롯 카드 */}
-                        <div className={`flex-1 rounded-2xl p-3.5 border ${
-                          slot.isRecommended
-                            ? 'bg-cyan-500/5 border-cyan-500/15'
-                            : `${color.light} ${color.border}`
-                        }`}>
-                          <div className="flex items-start justify-between gap-2 mb-1.5">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className={`text-xs font-bold ${color.text}`}>{slot.time}</span>
-                              <p className="text-white font-semibold text-sm">{slot.spotName}</p>
-                              {slot.isRecommended && (
-                                <span className="text-[9px] px-1.5 py-0.5 rounded bg-cyan-500/15 text-cyan-400 font-bold border border-cyan-500/20">AI추천</span>
-                              )}
-                            </div>
+                      <div key={si} style={{ position: 'relative', display: 'flex', gap: 12 }}>
+                        <div style={{
+                          position: 'absolute', left: -20, top: 12,
+                          width: 14, height: 14, borderRadius: '50%',
+                          background: '#1a1614',
+                          border: `2px solid ${slot.isRecommended ? '#06b6d4' : c.hex}`,
+                          flexShrink: 0, zIndex: 1,
+                        }} />
+                        <div style={{
+                          flex: 1, borderRadius: 16, padding: '12px 14px',
+                          background: slot.isRecommended ? 'rgba(6,182,212,0.05)' : c.light,
+                          border: `1px solid ${slot.isRecommended ? 'rgba(6,182,212,0.15)' : c.border}`,
+                        }}>
+                          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
+                            <span style={{ fontSize: 11, fontWeight: 700, color: c.text }}>{slot.time}</span>
+                            <p style={{ color: '#fff', fontWeight: 600, fontSize: 13 }}>{slot.spotName}</p>
+                            {slot.isRecommended && (
+                              <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 4, background: 'rgba(6,182,212,0.15)', color: '#22d3ee', fontWeight: 700, border: '1px solid rgba(6,182,212,0.20)' }}>AI추천</span>
+                            )}
                           </div>
-                          <p className="text-zinc-400 text-xs leading-relaxed">{slot.activity}</p>
+                          <p style={{ color: '#a1a1aa', fontSize: 11, lineHeight: 1.6 }}>{slot.activity}</p>
                           {slot.tip && (
-                            <div className="mt-2 flex gap-1.5">
-                              <span className="text-amber-400 text-xs">💡</span>
-                              <p className="text-amber-300/80 text-xs leading-relaxed">{slot.tip}</p>
+                            <div style={{ marginTop: 8, display: 'flex', gap: 6 }}>
+                              <span style={{ fontSize: 11 }}>💡</span>
+                              <p style={{ color: 'rgba(253,230,138,0.80)', fontSize: 11, lineHeight: 1.6 }}>{slot.tip}</p>
                             </div>
                           )}
                         </div>
@@ -217,12 +210,11 @@ export default function ItineraryDiary({ result, regionName, regionEmoji, startD
                   </div>
                 </div>
 
-                {/* 날짜 구분선 */}
                 {di < result.days.length - 1 && (
-                  <div className="flex items-center gap-3 mt-5">
-                    <div className="flex-1 h-px bg-white/5" />
-                    <span className="text-zinc-700 text-xs">✦</span>
-                    <div className="flex-1 h-px bg-white/5" />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 20 }}>
+                    <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.05)' }} />
+                    <span style={{ color: '#3f3f46', fontSize: 11 }}>✦</span>
+                    <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.05)' }} />
                   </div>
                 )}
               </div>
@@ -231,27 +223,26 @@ export default function ItineraryDiary({ result, regionName, regionEmoji, startD
         </div>
 
         {/* 하단 팁 영역 */}
-        <div className="px-5 pb-6 space-y-3">
+        <div style={{ padding: '0 20px 24px', display: 'flex', flexDirection: 'column', gap: 12 }}>
           {result.transport_tips && (
-            <div className="bg-white/4 border border-white/8 rounded-2xl p-4 flex gap-3">
-              <span className="text-xl shrink-0">🚗</span>
+            <div style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 16, padding: 16, display: 'flex', gap: 12 }}>
+              <span style={{ fontSize: 20, flexShrink: 0 }}>🚗</span>
               <div>
-                <p className="text-zinc-400 text-[10px] font-bold uppercase tracking-wider mb-1">이동 & 렌트카</p>
-                <p className="text-zinc-300 text-xs leading-relaxed">{result.transport_tips}</p>
+                <p style={{ color: '#a1a1aa', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 4 }}>이동 & 렌트카</p>
+                <p style={{ color: '#d4d4d8', fontSize: 11, lineHeight: 1.6 }}>{result.transport_tips}</p>
               </div>
             </div>
           )}
           {result.overall_tip && (
-            <div className="bg-gradient-to-r from-orange-500/10 to-pink-500/10 border border-orange-500/20 rounded-2xl p-4 flex gap-3">
-              <span className="text-xl shrink-0">✨</span>
+            <div style={{ background: 'linear-gradient(90deg, rgba(249,115,22,0.10), rgba(236,72,153,0.10))', border: '1px solid rgba(249,115,22,0.20)', borderRadius: 16, padding: 16, display: 'flex', gap: 12 }}>
+              <span style={{ fontSize: 20, flexShrink: 0 }}>✨</span>
               <div>
-                <p className="text-orange-400 text-[10px] font-bold uppercase tracking-wider mb-1">여행 꿀팁</p>
-                <p className="text-zinc-300 text-xs leading-relaxed">{result.overall_tip}</p>
+                <p style={{ color: '#fb923c', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 4 }}>여행 꿀팁</p>
+                <p style={{ color: '#d4d4d8', fontSize: 11, lineHeight: 1.6 }}>{result.overall_tip}</p>
               </div>
             </div>
           )}
-          {/* 푸터 */}
-          <p className="text-center text-zinc-700 text-[10px] pt-2">Generated by SSOKTUBE · {new Date().getFullYear()}</p>
+          <p style={{ textAlign: 'center', color: '#3f3f46', fontSize: 10, paddingTop: 8 }}>Generated by SSOKTUBE · {new Date().getFullYear()}</p>
         </div>
       </div>
     </div>

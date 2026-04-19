@@ -881,6 +881,15 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
           </div>
         </div>
 
+        {/* 타임라인 바 */}
+        {data.videoId && (data as any).transcriptDuration > 0 && (
+          <VideoTimeline
+            summary={data.summary}
+            category={data.category}
+            totalSec={(data as any).transcriptDuration}
+          />
+        )}
+
         {/* 탭 */}
         <div className="flex bg-[#32302e] rounded-xl p-1 border border-white/5 w-full mt-2">
           {(['summary', 'transcript', ...(isLongVideo ? ['segments'] : []), 'reanalyze'] as const).map(tab => {
@@ -1549,6 +1558,98 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+// ─── 영상 타임라인 바 ───────────────────────────
+function VideoTimeline({ summary, category, totalSec }: {
+  summary: any
+  category: string
+  totalSec: number
+}) {
+  if (!totalSec || totalSec < 60) return null
+
+  // 카테고리별 타임스탬프 추출
+  const points: { ts: string; label: string }[] = []
+  const tsToSec = (ts: string) => {
+    const parts = ts.split(':').map(Number)
+    return parts.length === 2 ? parts[0] * 60 + parts[1] : parts[0] * 3600 + parts[1] * 60 + (parts[2] ?? 0)
+  }
+  const addPts = (arr: any[], key: string, labelKey: string) => {
+    if (!Array.isArray(arr)) return
+    arr.forEach(item => {
+      if (item?.[key]) points.push({ ts: item[key], label: item[labelKey] || item[key] })
+    })
+  }
+
+  if (category === 'learning') {
+    addPts(summary.key_points, 'timestamp', 'point')
+    addPts(summary.concepts, 'timestamp', 'name')
+  } else if (category === 'news') {
+    addPts(summary.implications, 'timestamp', 'point')
+  } else if (category === 'selfdev') {
+    addPts(summary.insights, 'timestamp', 'point')
+    addPts(summary.quotes, 'timestamp', 'text')
+  } else if (category === 'travel') {
+    addPts(summary.places, 'timestamp', 'name')
+  } else if (category === 'story') {
+    addPts(summary.timeline, 'timestamp', 'event')
+  } else if (category === 'tips') {
+    addPts(summary.tips, 'timestamp', 'title')
+  } else if (category === 'recipe') {
+    addPts(summary.steps, 'timestamp', 'desc')
+  } else if (category === 'english') {
+    addPts(summary.expressions, 'timestamp', 'text')
+  }
+
+  const valid = points.filter(p => p.ts && /^\d{1,2}:\d{2}/.test(p.ts))
+  if (!valid.length) return null
+
+  const fmtSec = (s: number) => {
+    const m = Math.floor(s / 60)
+    const sec = s % 60
+    return `${m}:${String(sec).padStart(2, '0')}`
+  }
+
+  return (
+    <div className="bg-[#2a2826] rounded-2xl border border-white/8 px-4 py-3 space-y-2">
+      <p className="text-xs text-zinc-500 font-semibold">
+        📊 전체 <span className="text-zinc-300 font-bold">{fmtSec(totalSec)}</span> 분석 완료 — 핵심 {valid.length}개 지점
+      </p>
+      <div className="relative h-6">
+        {/* 베이스 바 */}
+        <div className="absolute top-1/2 -translate-y-1/2 left-0 right-0 h-1.5 rounded-full bg-white/8" />
+        {/* 채워진 부분 (가장 마지막 키포인트까지) */}
+        <div
+          className="absolute top-1/2 -translate-y-1/2 left-0 h-1.5 rounded-full bg-gradient-to-r from-orange-500/60 to-orange-400/30"
+          style={{ width: `${Math.min(100, (tsToSec(valid[valid.length - 1].ts) / totalSec) * 100)}%` }}
+        />
+        {/* 마커들 */}
+        {valid.map((p, i) => {
+          const pct = Math.min(99, (tsToSec(p.ts) / totalSec) * 100)
+          return (
+            <div
+              key={i}
+              className="absolute top-1/2 -translate-y-1/2 group"
+              style={{ left: `${pct}%` }}
+            >
+              <div className="w-2.5 h-2.5 rounded-full bg-orange-500 border-2 border-zinc-900 -translate-x-1/2 cursor-default" />
+              <div className="absolute bottom-5 left-1/2 -translate-x-1/2 hidden group-hover:flex flex-col items-center pointer-events-none z-10">
+                <div className="bg-zinc-900 border border-white/15 rounded-lg px-2.5 py-1.5 shadow-xl min-w-max max-w-[180px]">
+                  <p className="text-orange-400 font-mono text-[10px] font-bold">{p.ts}</p>
+                  <p className="text-zinc-200 text-[10px] leading-snug line-clamp-2">{p.label}</p>
+                </div>
+                <div className="w-1.5 h-1.5 bg-zinc-900 border-b border-r border-white/15 rotate-45 -mt-[3px]" />
+              </div>
+            </div>
+          )
+        })}
+        {/* 시작/끝 레이블 */}
+        <span className="absolute -bottom-4 left-0 text-[9px] text-zinc-700">0:00</span>
+        <span className="absolute -bottom-4 right-0 text-[9px] text-zinc-700">{fmtSec(totalSec)}</span>
+      </div>
+      <div className="h-3" />
     </div>
   )
 }

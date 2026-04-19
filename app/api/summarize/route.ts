@@ -191,6 +191,13 @@ async function fetchUrlContent(url: string): Promise<string> {
     .slice(0, 10000)
 }
 
+function extractTranscriptDuration(transcript: string): number {
+  const matches = [...transcript.matchAll(/\[(\d{1,2}):(\d{2})\]/g)]
+  if (!matches.length) return 0
+  const last = matches[matches.length - 1]
+  return parseInt(last[1]) * 60 + parseInt(last[2])
+}
+
 export async function POST(req: NextRequest) {
   try {
     const {
@@ -390,6 +397,7 @@ export async function POST(req: NextRequest) {
       channel: videoInfo.channel,
       thumbnail: videoInfo.thumbnail,
       duration: 0,
+      transcriptDuration: extractTranscriptDuration(transcript),
       category,
       summary,
       contextSummary,

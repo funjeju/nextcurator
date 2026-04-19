@@ -157,6 +157,7 @@ export interface SummarizeResponse {
   channel: string
   thumbnail: string
   duration: number
+  transcriptDuration?: number
   category: Category
   summary: SummaryData
   transcript?: string

@@ -343,11 +343,20 @@ export async function generateQuiz(
 ): Promise<import('@/types/summary').QuizData> {
   const hint = category === 'english'
     ? `영어 학습 요약에서 단어/표현 플래시카드와 사용법 객관식 문제를 만드세요.
-flashcard: 앞면=영어 단어/표현, 뒷면=한국어 의미+예문
-multiple_choice: "이 표현의 올바른 사용은?" 형태, 4개 보기`
-    : `학습 요약에서 개념 확인 플래시카드와 객관식 문제를 만드세요.
-flashcard: 앞면=개념명, 뒷면=설명
-multiple_choice: 개념 이해 확인 문제, 4개 보기`
+flashcard: 앞면=영어 단어/표현, 뒷면=한국어 의미+실전 예문
+multiple_choice: 실제 문장에서 올바르게 쓰인 용례 찾기, 혼동하기 쉬운 다른 표현과 구별, 4개 보기`
+    : `학습 영상의 핵심 개념을 진짜 이해했는지 확인하는 문제를 만드세요.
+
+[flashcard 원칙]
+- 앞면: 개념/원리의 이름 또는 "~하면 어떻게 되는가?" 형태의 질문
+- 뒷면: 그 이유·원리·작동 방식 설명 (단순 정의 나열 금지)
+
+[multiple_choice 원칙 — 아래 규칙 반드시 준수]
+1. "영상에서 뭐라고 했는가"를 묻는 문제 절대 금지
+2. 개념을 새로운 상황·사례에 적용하는 문제 필수 포함
+3. "왜", "어떻게", "이 상황에서 무슨 일이 일어나는가" 형태 권장
+4. 오답 보기는 흔한 오개념·혼동 개념 기반으로 설계 (단순 엉터리 금지)
+5. 정답을 알려면 개념의 원리를 이해해야만 풀 수 있어야 함`
 
   const result = await classifyModel.generateContent(`${hint}
 
