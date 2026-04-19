@@ -1044,8 +1044,8 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
             </div>
           )}
 
-          {/* 상품 & 장소 추출 — summary 탭 */}
-          {activeTab === 'summary' && (
+          {/* 상품 & 장소 추출 — 여행/요리/뉴스만 */}
+          {activeTab === 'summary' && (['travel', 'recipe', 'news'] as const).includes(data.category as any) && (
             <div className="mt-2">
               {!extractedItems ? (
                 <button

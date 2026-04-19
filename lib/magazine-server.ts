@@ -1,7 +1,8 @@
 // 서버 전용 — API 라우트에서만 import
 // firebase-admin 없이 Firestore REST API + 어드민 ID 토큰으로 직접 처리
 
-import type { CurationSettings } from '@/lib/magazine'
+import type { CurationSettings, CuratedPost } from '@/lib/magazine'
+import { initAdminApp } from '@/lib/firebase-admin'
 
 const PROJECT_ID = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID!
 const API_KEY    = process.env.NEXT_PUBLIC_FIREBASE_API_KEY!
@@ -101,4 +102,34 @@ export async function saveCurationSettings(settings: Partial<CurationSettings>, 
     console.error('[saveCurationSettings]', lastError)
   }
   throw new Error(lastError)
+}
+
+// ─── Admin SDK 기반 curated_posts 쓰기 (Security Rules 우회) ─────────────────
+
+export async function saveCuratedPostAdmin(
+  post: Omit<CuratedPost, 'id' | 'viewCount' | 'likeCount'>
+): Promise<string> {
+  initAdminApp()
+  const { getFirestore } = await import('firebase-admin/firestore')
+  const db = getFirestore()
+  const id = `mag-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
+  await db.collection('curated_posts').doc(id).set({ ...post, id, viewCount: 0, likeCount: 0 })
+  return id
+}
+
+export async function publishCuratedPostAdmin(id: string) {
+  initAdminApp()
+  const { getFirestore } = await import('firebase-admin/firestore')
+  const db = getFirestore()
+  await db.collection('curated_posts').doc(id).update({
+    status: 'published',
+    publishedAt: new Date().toISOString(),
+  })
+}
+
+export async function saveCurationSettingsAdmin(settings: Partial<CurationSettings>) {
+  initAdminApp()
+  const { getFirestore } = await import('firebase-admin/firestore')
+  const db = getFirestore()
+  await db.collection('settings').doc('curation').set(settings, { merge: true })
 }

@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import {
   getRecentPublicSummaries, findBestCluster,
-  generateMagazinePost, saveCuratedPost, publishCuratedPost,
+  generateMagazinePost,
   shouldGenerate,
 } from '@/lib/magazine'
-import { getCurationSettings, saveCurationSettings } from '@/lib/magazine-server'
+import {
+  getCurationSettings,
+  saveCuratedPostAdmin, publishCuratedPostAdmin, saveCurationSettingsAdmin,
+} from '@/lib/magazine-server'
 
 export const maxDuration = 120
 
@@ -44,13 +47,13 @@ export async function GET(req: NextRequest) {
     }
 
     const post = await generateMagazinePost(cluster.cluster, cluster.items)
-    const id = await saveCuratedPost(post)
+    const id = await saveCuratedPostAdmin(post)
 
     if (settings.autoPublish) {
-      await publishCuratedPost(id)
+      await publishCuratedPostAdmin(id)
     }
 
-    await saveCurationSettings({ lastGeneratedAt: new Date().toISOString() })
+    await saveCurationSettingsAdmin({ lastGeneratedAt: new Date().toISOString() })
 
     return NextResponse.json({
       success: true,
@@ -89,12 +92,12 @@ export async function POST(req: NextRequest) {
     }
 
     const post = await generateMagazinePost(cluster.cluster, cluster.items)
-    const id = await saveCuratedPost(post)
+    const id = await saveCuratedPostAdmin(post)
 
     const shouldPublish = autoPublish ?? settings.autoPublish
-    if (shouldPublish) await publishCuratedPost(id)
+    if (shouldPublish) await publishCuratedPostAdmin(id)
 
-    await saveCurationSettings({ lastGeneratedAt: new Date().toISOString() })
+    await saveCurationSettingsAdmin({ lastGeneratedAt: new Date().toISOString() })
 
     return NextResponse.json({
       success: true,
