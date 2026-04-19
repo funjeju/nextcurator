@@ -25,10 +25,11 @@ export async function GET(req: NextRequest) {
     const db = await getDb()
     const snap = await db.collection('magazine_comments')
       .where('postId', '==', postId)
-      .orderBy('createdAt', 'desc')
       .limit(100)
       .get()
-    const comments = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+    const comments = snap.docs
+      .map(d => ({ id: d.id, ...d.data() } as MagazineComment))
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
     return NextResponse.json(comments)
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 })

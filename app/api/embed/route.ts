@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GENERATIVE_AI_API_KEY!)
-const embeddingModel = genAI.getGenerativeModel({ model: 'text-embedding-004' })
+const embeddingModel = genAI.getGenerativeModel({ model: 'text-embedding-005' })
 
 const PROJECT_ID = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID!
 const API_KEY = process.env.NEXT_PUBLIC_FIREBASE_API_KEY!

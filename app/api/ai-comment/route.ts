@@ -108,11 +108,6 @@ ${summaryContext ? `---영상 요약 (참고용)---\n${summaryContext.slice(0, 1
     const chat = model.startChat({ history })
     const result = await chat.sendMessage(commentText)
 
-    const finishReason = result.response.candidates?.[0]?.finishReason
-    if (finishReason === 'MAX_TOKENS') {
-      throw new Error('AI 응답이 너무 길어 잘렸습니다. 다시 시도해 주세요.')
-    }
-
     let text = result.response.text().trim()
 
     // 내부 검증 루프: 350자 초과 시 AI에게 직접 줄이도록 요청 (최대 2회)
