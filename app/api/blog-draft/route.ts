@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { GoogleGenerativeAI } from '@google/generative-ai'
+import { fetchVideoComments, formatCommentsForPrompt } from '@/lib/youtube-comments'
 
 export const maxDuration = 60
 
@@ -29,6 +30,15 @@ export async function POST(req: NextRequest) {
     const { title, channel, category, summary, videoId, sessionId, thumbnail } = await req.json()
     if (!summary) return NextResponse.json({ error: '요약 데이터가 없습니다.' }, { status: 400 })
 
+    // YouTube 댓글 병렬 수집 (실패해도 계속 진행)
+    const { popular: popularComments, recent: recentComments } = videoId
+      ? await fetchVideoComments(videoId).catch(() => ({ popular: [], recent: [], combined: [] }))
+      : { popular: [], recent: [], combined: [] }
+    const hasComments = popularComments.length > 0 || recentComments.length > 0
+    const commentsContext = hasComments
+      ? formatCommentsForPrompt(popularComments, recentComments)
+      : ''
+
     const today = new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' })
 
     const prompt = `다음 유튜브 영상 요약 데이터를 구글 SEO에 최적화된 블로그 글로 변환하세요.
@@ -40,6 +50,7 @@ export async function POST(req: NextRequest) {
 
 요약 데이터:
 ${JSON.stringify(summary, null, 2)}
+${hasComments ? `\n유튜브 댓글 데이터:\n${commentsContext}` : ''}
 
 [SEO 최적화 규칙]
 - seo_title: 핵심 키워드를 앞에 배치, 50-60자, 연도(${new Date().getFullYear()}) 포함 권장, 클릭 유도 (숫자/How-to/질문형)
@@ -68,6 +79,13 @@ ${JSON.stringify(summary, null, 2)}
 
 [tags]
 검색량 높을 법한 키워드 6-10개 (한국어)
+${hasComments ? `
+[댓글 분석 섹션 — 반드시 포함]
+위 유튜브 댓글 데이터를 분석하여 아래 형식으로 작성하세요.
+- popular_summary: 인기 댓글 전체 경향을 2-3문장으로 요약 (시청자가 주로 어떤 반응을 보였는지)
+- popular_highlights: 인기 댓글 중 가장 인상적이거나 통찰력 있는 댓글 3-5개를 원문 그대로 인용 (likes 수 포함)
+- recent_summary: 최신 댓글 전체 경향을 2-3문장으로 요약 (최근 시청자 반응 트렌드)
+- recent_highlights: 최신 댓글 중 흥미로운 댓글 3-5개를 원문 그대로 인용` : ''}
 
 JSON 형식:
 {
@@ -89,7 +107,13 @@ JSON 형식:
     {"question": "질문4?", "answer": "답변4"},
     {"question": "질문5?", "answer": "답변5"}
   ],
-  "checklist": ["실천 항목 1", "실천 항목 2", "실천 항목 3"]
+  "checklist": ["실천 항목 1", "실천 항목 2", "실천 항목 3"]${hasComments ? `,
+  "comments": {
+    "popular_summary": "인기 댓글 경향 요약",
+    "popular_highlights": [{"text": "댓글 원문", "likes": 123}, {"text": "댓글2", "likes": 45}],
+    "recent_summary": "최신 댓글 경향 요약",
+    "recent_highlights": [{"text": "최신 댓글 원문", "likes": 0}]
+  }` : ''}
 }`
 
     const result = await model.generateContent(prompt)

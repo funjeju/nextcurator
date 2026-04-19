@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { CurationSettings } from '@/lib/magazine'
 import {
-  getAllPostsForAdmin, publishCuratedPost, deleteCuratedPost,
-  CurationSettings,
-} from '@/lib/magazine'
-import { getCurationSettings, saveCurationSettings } from '@/lib/magazine-server'
+  getCurationSettings, saveCurationSettings,
+  listCuratedPostsAdmin, publishCuratedPostAdmin,
+} from '@/lib/magazine-server'
+import { initAdminApp } from '@/lib/firebase-admin'
 import { checkIsAdminByToken } from '@/lib/admin'
 
 async function verifyAdmin(req: NextRequest): Promise<boolean> {
@@ -37,19 +38,21 @@ export async function POST(req: NextRequest) {
       }
 
       case 'listPosts': {
-        const posts = await getAllPostsForAdmin()
+        const posts = await listCuratedPostsAdmin()
         return NextResponse.json(posts)
       }
 
       case 'publish': {
         if (!body.id) return NextResponse.json({ error: 'id required' }, { status: 400 })
-        await publishCuratedPost(body.id)
+        await publishCuratedPostAdmin(body.id)
         return NextResponse.json({ ok: true })
       }
 
       case 'delete': {
         if (!body.id) return NextResponse.json({ error: 'id required' }, { status: 400 })
-        await deleteCuratedPost(body.id)
+        initAdminApp()
+        const { getFirestore } = await import('firebase-admin/firestore')
+        await getFirestore().collection('curated_posts').doc(body.id).delete()
         return NextResponse.json({ ok: true })
       }
 

@@ -133,3 +133,27 @@ export async function saveCurationSettingsAdmin(settings: Partial<CurationSettin
   const db = getFirestore()
   await db.collection('settings').doc('curation').set(settings, { merge: true })
 }
+
+export async function getPostBySlugAdmin(slug: string): Promise<CuratedPost | null> {
+  initAdminApp()
+  const { getFirestore } = await import('firebase-admin/firestore')
+  const db = getFirestore()
+  const snap = await db.collection('curated_posts').where('slug', '==', slug).limit(1).get()
+  if (snap.empty) return null
+  return snap.docs[0].data() as CuratedPost
+}
+
+export async function incrementPostViewAdmin(id: string) {
+  initAdminApp()
+  const { getFirestore, FieldValue } = await import('firebase-admin/firestore')
+  const db = getFirestore()
+  await db.collection('curated_posts').doc(id).update({ viewCount: FieldValue.increment(1) })
+}
+
+export async function listCuratedPostsAdmin(): Promise<CuratedPost[]> {
+  initAdminApp()
+  const { getFirestore } = await import('firebase-admin/firestore')
+  const db = getFirestore()
+  const snap = await db.collection('curated_posts').orderBy('createdAt', 'desc').limit(50).get()
+  return snap.docs.map(d => d.data() as CuratedPost)
+}

@@ -1,13 +1,13 @@
 import { Metadata } from 'next'
 import { notFound } from 'next/navigation'
-import { getPostBySlug, incrementPostView } from '@/lib/magazine'
+import { getPostBySlugAdmin, incrementPostViewAdmin } from '@/lib/magazine-server'
 import MagazinePostClient from './MagazinePostClient'
 
 export async function generateMetadata(
   { params }: { params: Promise<{ slug: string }> }
 ): Promise<Metadata> {
   const { slug } = await params
-  const post = await getPostBySlug(slug)
+  const post = await getPostBySlugAdmin(slug)
   if (!post) return { title: 'SSOKTUBE 매거진' }
 
   return {
@@ -38,7 +38,7 @@ export default async function MagazinePage(
   { params }: { params: Promise<{ slug: string }> }
 ) {
   const { slug } = await params
-  const post = await getPostBySlug(slug)
+  const post = await getPostBySlugAdmin(slug)
   if (!post || post.status !== 'published') notFound()
 
   // JSON-LD: Article + ItemList for included videos
@@ -75,7 +75,7 @@ export default async function MagazinePage(
   }
 
   // Async view increment (fire-and-forget, don't block render)
-  incrementPostView(post.id).catch(() => {})
+  incrementPostViewAdmin(post.id).catch(() => {})
 
   return (
     <>

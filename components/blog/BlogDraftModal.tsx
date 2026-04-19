@@ -19,6 +19,18 @@ interface FaqItem {
   answer: string
 }
 
+interface CommentHighlight {
+  text: string
+  likes: number
+}
+
+interface CommentsData {
+  popular_summary: string
+  popular_highlights: CommentHighlight[]
+  recent_summary: string
+  recent_highlights: CommentHighlight[]
+}
+
 interface BlogDraft {
   seo_title: string
   meta_description: string
@@ -29,6 +41,7 @@ interface BlogDraft {
   sections: BlogSection[]
   faq: FaqItem[]
   checklist: string[]
+  comments?: CommentsData
   videoId: string
   sessionId: string
   thumbnail: string
@@ -140,6 +153,32 @@ ${checklistHtml}
 
 ${faqHtml}
 
+${draft.comments ? `<div style="margin:40px 0 0;">
+  <h2 style="margin:0 0 16px;font-weight:700;font-size:1.1em;">💬 시청자 반응</h2>
+
+  <div style="margin:0 0 24px;padding:16px;background:#fafafa;border-radius:10px;border:1px solid #e5e7eb;">
+    <p style="margin:0 0 10px;font-size:0.8em;font-weight:700;color:#f97316;">🔥 인기 댓글 경향</p>
+    <p style="margin:0 0 14px;line-height:1.75;color:#374151;font-size:0.9em;">${draft.comments.popular_summary}</p>
+    ${draft.comments.popular_highlights.map(h =>
+      `<blockquote style="margin:8px 0;padding:10px 14px;background:#fff;border-left:3px solid #f97316;border-radius:0 6px 6px 0;font-size:0.85em;color:#4b5563;">
+      "${h.text}"
+      <span style="display:block;margin-top:4px;font-size:0.75em;color:#9ca3af;">👍 ${h.likes.toLocaleString()}</span>
+    </blockquote>`
+    ).join('\n')}
+  </div>
+
+  <div style="padding:16px;background:#fafafa;border-radius:10px;border:1px solid #e5e7eb;">
+    <p style="margin:0 0 10px;font-size:0.8em;font-weight:700;color:#6366f1;">🕐 최신 댓글 경향</p>
+    <p style="margin:0 0 14px;line-height:1.75;color:#374151;font-size:0.9em;">${draft.comments.recent_summary}</p>
+    ${draft.comments.recent_highlights.map(h =>
+      `<blockquote style="margin:8px 0;padding:10px 14px;background:#fff;border-left:3px solid #6366f1;border-radius:0 6px 6px 0;font-size:0.85em;color:#4b5563;">
+      "${h.text}"
+      <span style="display:block;margin-top:4px;font-size:0.75em;color:#9ca3af;">👍 ${h.likes.toLocaleString()}</span>
+    </blockquote>`
+    ).join('\n')}
+  </div>
+</div>` : ''}
+
 <div style="margin:32px 0 16px;padding:16px;background:#fff7ed;border-left:4px solid #f97316;border-radius:4px;">
   <p style="margin:0;font-size:0.9em;color:#92400e;">이 글은 <a href="${appUrl}" target="_blank" rel="noopener" style="color:#f97316;font-weight:600;">SSOKTUBE AI</a>로 분석된 콘텐츠입니다. 원본 영상 전체 요약·타임스탬프 이동은 링크에서 확인하세요.</p>
 </div>
@@ -184,6 +223,13 @@ function buildPlainText(draft: BlogDraft): string {
     draft.faq.forEach(f => {
       lines.push(`Q. ${f.question}`, `A. ${f.answer}`, '')
     })
+  }
+  if (draft.comments) {
+    lines.push('─'.repeat(40), '', '💬 시청자 반응', '')
+    lines.push('🔥 인기 댓글 경향', draft.comments.popular_summary, '')
+    draft.comments.popular_highlights.forEach(h => lines.push(`  "  ${h.text}"  [👍${h.likes}]`, ''))
+    lines.push('🕐 최신 댓글 경향', draft.comments.recent_summary, '')
+    draft.comments.recent_highlights.forEach(h => lines.push(`  "  ${h.text}"  [👍${h.likes}]`, ''))
   }
   return lines.join('\n')
 }
@@ -390,6 +436,41 @@ export default function BlogDraftModal({ data, onClose }: Props) {
                           <p className="mt-2 text-zinc-500 leading-relaxed">{f.answer}</p>
                         </details>
                       ))}
+                    </div>
+                  )}
+
+                  {/* 댓글 분석 */}
+                  {draft.comments && (
+                    <div className="mt-4 space-y-3">
+                      <p className="text-xs font-bold text-zinc-500">💬 시청자 반응</p>
+
+                      {/* 인기 댓글 */}
+                      <div className="bg-orange-50 rounded-xl p-3 border border-orange-100">
+                        <p className="text-[10px] font-bold text-orange-600 mb-1.5">🔥 인기 댓글 경향</p>
+                        <p className="text-xs text-zinc-600 leading-relaxed mb-2">{draft.comments.popular_summary}</p>
+                        <div className="space-y-1.5">
+                          {draft.comments.popular_highlights.map((h, i) => (
+                            <div key={i} className="bg-white rounded-lg px-3 py-2 border-l-2 border-orange-400">
+                              <p className="text-xs text-zinc-700 leading-relaxed">"{h.text}"</p>
+                              <p className="text-[9px] text-zinc-400 mt-0.5">👍 {h.likes.toLocaleString()}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* 최신 댓글 */}
+                      <div className="bg-indigo-50 rounded-xl p-3 border border-indigo-100">
+                        <p className="text-[10px] font-bold text-indigo-600 mb-1.5">🕐 최신 댓글 경향</p>
+                        <p className="text-xs text-zinc-600 leading-relaxed mb-2">{draft.comments.recent_summary}</p>
+                        <div className="space-y-1.5">
+                          {draft.comments.recent_highlights.map((h, i) => (
+                            <div key={i} className="bg-white rounded-lg px-3 py-2 border-l-2 border-indigo-400">
+                              <p className="text-xs text-zinc-700 leading-relaxed">"{h.text}"</p>
+                              <p className="text-[9px] text-zinc-400 mt-0.5">👍 {h.likes.toLocaleString()}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
                     </div>
                   )}
 
