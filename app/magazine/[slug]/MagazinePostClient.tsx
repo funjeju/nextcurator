@@ -2,8 +2,10 @@
 
 import Link from 'next/link'
 import ReactMarkdown from 'react-markdown'
+import { useState, useEffect, useRef } from 'react'
 import Header from '@/components/common/Header'
 import { CuratedPost } from '@/lib/magazine'
+import type { MagazineComment } from '@/app/api/magazine/comments/route'
 
 const CATEGORY_LABEL: Record<string, string> = {
   recipe: '🍳 요리', english: '🔤 영어', learning: '📐 학습', news: '🗞️ 뉴스',
@@ -13,6 +15,124 @@ const CATEGORY_LABEL: Record<string, string> = {
 function formatDate(iso: string) {
   if (!iso) return ''
   return new Intl.DateTimeFormat('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' }).format(new Date(iso))
+}
+
+function CommentsSection({ postId }: { postId: string }) {
+  const [comments, setComments] = useState<MagazineComment[]>([])
+  const [author, setAuthor] = useState('')
+  const [text, setText] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const [liked, setLiked] = useState<Set<string>>(new Set())
+  const mounted = useRef(false)
+
+  useEffect(() => {
+    if (mounted.current) return
+    mounted.current = true
+    fetch(`/api/magazine/comments?postId=${postId}`)
+      .then(r => r.json())
+      .then(data => Array.isArray(data) && setComments(data))
+      .catch(() => {})
+  }, [postId])
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!text.trim() || submitting) return
+    setSubmitting(true)
+    try {
+      const res = await fetch('/api/magazine/comments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ postId, author: author.trim() || '익명', text: text.trim() }),
+      })
+      if (res.ok) {
+        const { id } = await res.json()
+        setComments(prev => [{
+          id, postId, author: author.trim() || '익명', text: text.trim(),
+          createdAt: new Date().toISOString(), likeCount: 0,
+        }, ...prev])
+        setText('')
+      }
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  async function like(id: string) {
+    if (liked.has(id)) return
+    setLiked(prev => new Set([...prev, id]))
+    setComments(prev => prev.map(c => c.id === id ? { ...c, likeCount: c.likeCount + 1 } : c))
+    await fetch('/api/magazine/comments', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id }),
+    }).catch(() => {})
+  }
+
+  function formatDate(iso: string) {
+    return new Intl.DateTimeFormat('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }).format(new Date(iso))
+  }
+
+  return (
+    <section className="mt-14">
+      <h2 className="text-base font-black text-white mb-5 flex items-center gap-2">
+        <span className="w-1 h-4 rounded-full bg-orange-500" />
+        댓글 {comments.length > 0 && <span className="text-orange-400">{comments.length}</span>}
+      </h2>
+
+      {/* 작성 폼 */}
+      <form onSubmit={submit} className="mb-6 p-4 rounded-xl bg-[#2a2826] border border-white/8">
+        <input
+          type="text"
+          placeholder="닉네임 (선택)"
+          value={author}
+          onChange={e => setAuthor(e.target.value)}
+          maxLength={30}
+          className="w-full bg-transparent text-xs text-white placeholder-[#4a4845] outline-none mb-3 border-b border-white/8 pb-2"
+        />
+        <textarea
+          placeholder="댓글을 남겨주세요..."
+          value={text}
+          onChange={e => setText(e.target.value)}
+          maxLength={500}
+          rows={3}
+          className="w-full bg-transparent text-sm text-white placeholder-[#4a4845] outline-none resize-none"
+        />
+        <div className="flex items-center justify-between mt-3 pt-3 border-t border-white/8">
+          <span className="text-[10px] text-[#4a4845]">{text.length}/500</span>
+          <button
+            type="submit"
+            disabled={!text.trim() || submitting}
+            className="px-4 py-1.5 rounded-lg text-xs font-bold bg-orange-500 hover:bg-orange-600 text-white disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          >
+            {submitting ? '등록 중...' : '등록'}
+          </button>
+        </div>
+      </form>
+
+      {/* 댓글 목록 */}
+      {comments.length === 0 ? (
+        <p className="text-center text-xs text-[#4a4845] py-8">첫 번째 댓글을 남겨보세요!</p>
+      ) : (
+        <div className="space-y-3">
+          {comments.map(c => (
+            <div key={c.id} className="p-4 rounded-xl bg-[#2a2826] border border-white/6">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-bold text-[#c4c0bc]">{c.author}</span>
+                <span className="text-[10px] text-[#4a4845]">{formatDate(c.createdAt)}</span>
+              </div>
+              <p className="text-sm text-[#a4a09c] leading-relaxed whitespace-pre-wrap">{c.text}</p>
+              <button
+                onClick={() => like(c.id)}
+                className={`mt-2 flex items-center gap-1 text-[10px] transition-colors ${liked.has(c.id) ? 'text-orange-400' : 'text-[#4a4845] hover:text-orange-400'}`}
+              >
+                ♥ {c.likeCount > 0 && c.likeCount}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  )
 }
 
 export default function MagazinePostClient({ post }: { post: CuratedPost }) {
@@ -26,7 +146,7 @@ export default function MagazinePostClient({ post }: { post: CuratedPost }) {
         <nav className="flex items-center gap-2 text-xs text-[#75716e] mb-6">
           <Link href="/square" className="hover:text-orange-400 transition-colors">SQUARE K</Link>
           <span>/</span>
-          <span className="text-[#a4a09c]">매거진</span>
+          <Link href="/magazine" className="hover:text-orange-400 transition-colors">매거진</Link>
         </nav>
 
         {/* 히어로 */}
@@ -138,6 +258,9 @@ export default function MagazinePostClient({ post }: { post: CuratedPost }) {
             ))}
           </div>
         </section>
+
+        {/* 댓글 */}
+        <CommentsSection postId={post.id} />
 
         {/* 하단 CTA */}
         <div className="mt-12 p-6 rounded-2xl bg-gradient-to-br from-orange-500/10 to-amber-500/5 border border-orange-500/20 text-center">
