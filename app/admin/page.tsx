@@ -24,7 +24,7 @@ interface UserStats {
   paid: number
 }
 
-type AdminTab = 'analytics' | 'videos' | 'users' | 'curation'
+type AdminTab = 'analytics' | 'videos' | 'users' | 'curation' | 'square'
 
 export default function AdminDashboard() {
   const { user, loading: authLoading } = useAuth()
@@ -38,6 +38,16 @@ export default function AdminDashboard() {
   const [page, setPage] = useState(1)
   const [hasMore, setHasMore] = useState(true)
   const [activeTab, setActiveTab] = useState<AdminTab>('analytics')
+
+  // 스퀘어 관리
+  const [squareItems, setSquareItems] = useState<any[]>([])
+  const [squareSearch, setSquareSearch] = useState('')
+  const [squarePage, setSquarePage] = useState(1)
+  const [squareTotal, setSquareTotal] = useState(0)
+  const [squareLoading, setSquareLoading] = useState(false)
+  const [squareManagingId, setSquareManagingId] = useState<string | null>(null)
+  const [showHidden, setShowHidden] = useState(false)
+  const SQUARE_PAGE_SIZE = 12
 
   // 회원 관리
   const [users, setUsers] = useState<any[]>([])
@@ -113,9 +123,60 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     if (isAdmin && activeTab === 'users') loadUsers(1)
+    if (isAdmin && activeTab === 'square') loadSquare(1)
   }, [isAdmin, activeTab])
 
   const goToPage = (newPage: number) => { setPage(newPage); loadData(newPage) }
+
+  const loadSquare = async (p = 1, q = squareSearch, hidden = showHidden) => {
+    setSquareLoading(true)
+    try {
+      const headers = await getAuthHeader()
+      const res = await fetch('/api/admin/square', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ search: q, page: p, showHidden: hidden }),
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setSquareItems(data.items)
+        setSquareTotal(data.total)
+        setSquarePage(p)
+      }
+    } catch (e) { console.error(e) }
+    finally { setSquareLoading(false) }
+  }
+
+  const handleSquareManage = async (id: string, action: 'hide' | 'show' | 'delete', title: string) => {
+    const labels = { hide: '숨김', show: '숨김 해제', delete: '영구 삭제' }
+    if (action === 'delete' && !confirm(`[영구 삭제] 복구 불가합니다.\n"${title}"`)) return
+    if (action === 'hide' && !confirm(`스퀘어에서 숨깁니다 (데이터는 유지).\n"${title}"`)) return
+    setSquareManagingId(id)
+    try {
+      const headers = await getAuthHeader()
+      const res = await fetch('/api/admin/square', {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify({ id, action }),
+      })
+      if (res.ok) {
+        if (action === 'delete') {
+          setSquareItems(prev => prev.filter(i => i.id !== id))
+          setSquareTotal(prev => prev - 1)
+        } else if (action === 'hide') {
+          setSquareItems(prev => showHidden
+            ? prev.map(i => i.id === id ? { ...i, adminHidden: true } : i)
+            : prev.filter(i => i.id !== id)
+          )
+        } else if (action === 'show') {
+          setSquareItems(prev => prev.map(i => i.id === id ? { ...i, adminHidden: false } : i))
+        }
+      } else {
+        alert('처리 실패')
+      }
+    } catch { alert('오류가 발생했습니다.') }
+    finally { setSquareManagingId(null) }
+  }
 
   const handleDelete = async (id: string, title: string) => {
     if (!confirm(`[영구 삭제] 정말로 이 요약을 삭제하시겠습니까?\n제목: ${title}`)) return
@@ -205,6 +266,12 @@ export default function AdminDashboard() {
           >
             ✍️ 매거진
           </button>
+          <button
+            onClick={() => setActiveTab('square')}
+            className={`px-5 py-2.5 rounded-xl text-sm font-bold transition-colors ${activeTab === 'square' ? 'bg-orange-500 text-white' : 'bg-white/5 text-gray-400 hover:bg-white/10'}`}
+          >
+            🔲 스퀘어
+          </button>
         </div>
 
         {/* ── 통계 분석 탭 ── */}
@@ -286,6 +353,99 @@ export default function AdminDashboard() {
                 <button onClick={() => goToPage(page - 1)} disabled={page === 1 || loading} className="px-4 py-2 rounded-xl text-xs bg-white/5 hover:bg-white/10 disabled:opacity-30 transition-colors">← 이전</button>
                 <span className="text-xs text-gray-500">{page} 페이지</span>
                 <button onClick={() => goToPage(page + 1)} disabled={!hasMore || loading} className="px-4 py-2 rounded-xl text-xs bg-white/5 hover:bg-white/10 disabled:opacity-30 transition-colors">다음 →</button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── 스퀘어 관리 탭 ── */}
+        {activeTab === 'square' && (
+          <div className="bg-[#23211f] rounded-[32px] border border-white/10 p-6 shadow-2xl">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+              <div>
+                <h2 className="text-xl font-bold italic tracking-tighter">SQUARE MANAGEMENT</h2>
+                <p className="text-xs text-gray-500 mt-1">전체 {squareTotal}개</p>
+              </div>
+              <div className="flex items-center gap-3 flex-wrap">
+                <label className="flex items-center gap-2 text-xs text-gray-400 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={showHidden}
+                    onChange={e => { setShowHidden(e.target.checked); loadSquare(1, squareSearch, e.target.checked) }}
+                    className="accent-orange-500"
+                  />
+                  숨김 항목 포함
+                </label>
+                <input
+                  type="text"
+                  placeholder="제목, 채널, 유저 검색..."
+                  value={squareSearch}
+                  onChange={e => setSquareSearch(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') loadSquare(1, squareSearch) }}
+                  className="bg-[#1a1918] border border-white/10 rounded-xl px-4 py-2 pl-8 text-xs focus:outline-none focus:border-orange-500 w-52"
+                />
+                <button onClick={() => loadSquare(1, squareSearch)} className="px-4 py-2 rounded-xl text-xs bg-white/5 hover:bg-white/10 transition-colors">검색</button>
+              </div>
+            </div>
+
+            {squareLoading ? (
+              <div className="py-20 text-center"><div className="animate-spin inline-block rounded-full h-8 w-8 border-t-2 border-orange-500" /></div>
+            ) : squareItems.length === 0 ? (
+              <div className="py-20 text-center text-gray-500">항목이 없습니다.</div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                {squareItems.map(item => (
+                  <div key={item.id} className={`rounded-2xl border p-4 flex flex-col gap-3 ${item.adminHidden ? 'border-red-500/20 bg-red-500/5' : 'border-white/8 bg-[#2a2826]'}`}>
+                    <div className="flex gap-3">
+                      <img src={item.thumbnail} alt={item.title} className="w-24 h-14 object-cover rounded-lg shrink-0 bg-gray-800" />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-white text-xs font-bold line-clamp-2 leading-snug">{item.title}</p>
+                        <p className="text-[10px] text-gray-500 mt-1">{item.channel} · {item.category}</p>
+                        <p className="text-[10px] text-gray-600">{item.autoCollected ? '🤖 자동수집' : `👤 ${item.userDisplayName || '익명'}`}</p>
+                      </div>
+                    </div>
+                    {item.adminHidden && (
+                      <span className="text-[10px] text-red-400 bg-red-500/10 px-2 py-0.5 rounded-full self-start">숨김 중</span>
+                    )}
+                    <div className="flex gap-2 mt-auto">
+                      <Link href={`/result/${item.sessionId}`} target="_blank" className="flex-1 py-1.5 rounded-xl text-center text-[11px] bg-white/5 hover:bg-white/10 text-gray-400 transition-colors">
+                        👁️ 보기
+                      </Link>
+                      {item.adminHidden ? (
+                        <button
+                          onClick={() => handleSquareManage(item.id, 'show', item.title)}
+                          disabled={squareManagingId === item.id}
+                          className="flex-1 py-1.5 rounded-xl text-[11px] bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 border border-emerald-500/20 transition-colors disabled:opacity-50"
+                        >
+                          ✅ 숨김 해제
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => handleSquareManage(item.id, 'hide', item.title)}
+                          disabled={squareManagingId === item.id}
+                          className="flex-1 py-1.5 rounded-xl text-[11px] bg-yellow-500/15 hover:bg-yellow-500/25 text-yellow-400 border border-yellow-500/20 transition-colors disabled:opacity-50"
+                        >
+                          🙈 숨기기
+                        </button>
+                      )}
+                      <button
+                        onClick={() => handleSquareManage(item.id, 'delete', item.title)}
+                        disabled={squareManagingId === item.id}
+                        className="flex-1 py-1.5 rounded-xl text-[11px] bg-red-500/15 hover:bg-red-500/25 text-red-400 border border-red-500/20 transition-colors disabled:opacity-50"
+                      >
+                        🗑️ 영구삭제
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {squareTotal > SQUARE_PAGE_SIZE && (
+              <div className="flex items-center justify-center gap-3 mt-6">
+                <button onClick={() => loadSquare(squarePage - 1)} disabled={squarePage === 1 || squareLoading} className="px-4 py-2 rounded-xl text-xs bg-white/5 hover:bg-white/10 disabled:opacity-30 transition-colors">← 이전</button>
+                <span className="text-xs text-gray-500">{squarePage} / {Math.ceil(squareTotal / SQUARE_PAGE_SIZE)} 페이지</span>
+                <button onClick={() => loadSquare(squarePage + 1)} disabled={squarePage >= Math.ceil(squareTotal / SQUARE_PAGE_SIZE) || squareLoading} className="px-4 py-2 rounded-xl text-xs bg-white/5 hover:bg-white/10 disabled:opacity-30 transition-colors">다음 →</button>
               </div>
             )}
           </div>

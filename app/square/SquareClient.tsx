@@ -91,7 +91,7 @@ function getUserTopCategories(likedIds: Set<string>, summaries: SavedSummary[]):
 }
 
 // 일반 요약 카드
-function SummaryCard({ item, likedIds, likingIds, user, messagingId, commentCount, onLike, onMessage, onDelete }: {
+function SummaryCard({ item, likedIds, likingIds, user, messagingId, commentCount, onLike, onMessage, onDelete, isAdmin, onAdminManage }: {
   item: SavedSummary
   likedIds: Set<string>
   likingIds: Set<string>
@@ -101,6 +101,8 @@ function SummaryCard({ item, likedIds, likingIds, user, messagingId, commentCoun
   onLike: (e: React.MouseEvent, item: SavedSummary) => void
   onMessage: (e: React.MouseEvent, item: SavedSummary) => void
   onDelete: (e: React.MouseEvent, item: SavedSummary) => void
+  isAdmin?: boolean
+  onAdminManage?: (e: React.MouseEvent, item: SavedSummary, action: 'hide' | 'delete') => void
 }) {
   const router = useRouter()
   return (
@@ -149,23 +151,39 @@ function SummaryCard({ item, likedIds, likingIds, user, messagingId, commentCoun
       </div>
 
       <div className="absolute bottom-2 left-2.5 right-2.5 flex items-center justify-between">
-        {user && item.userId === user.uid ? (
-          <button
-            onClick={(e) => onDelete(e, item)}
-            className="flex items-center gap-0.5 text-[9px] text-[#75716e] hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
-            title="삭제"
-          >
-            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-            </svg>
-          </button>
-        ) : user && item.userId !== user.uid ? (
-          <button
-            onClick={(e) => onMessage(e, item)}
-            disabled={messagingId === item.id}
-            className="flex items-center gap-0.5 text-[9px] text-[#75716e] hover:text-blue-400 transition-colors disabled:opacity-50"
-          >✉️</button>
-        ) : <span />}
+        <div className="flex items-center gap-1">
+          {user && item.userId === user.uid ? (
+            <button
+              onClick={(e) => onDelete(e, item)}
+              className="flex items-center gap-0.5 text-[9px] text-[#75716e] hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
+              title="삭제"
+            >
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+            </button>
+          ) : user && item.userId !== user.uid && !isAdmin ? (
+            <button
+              onClick={(e) => onMessage(e, item)}
+              disabled={messagingId === item.id}
+              className="flex items-center gap-0.5 text-[9px] text-[#75716e] hover:text-blue-400 transition-colors disabled:opacity-50"
+            >✉️</button>
+          ) : null}
+          {isAdmin && onAdminManage && (
+            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              <button
+                onClick={(e) => onAdminManage(e, item, 'hide')}
+                className="text-[9px] px-1.5 py-0.5 rounded bg-yellow-500/20 text-yellow-400 hover:bg-yellow-500/30 transition-colors"
+                title="스퀘어에서 숨기기"
+              >숨김</button>
+              <button
+                onClick={(e) => onAdminManage(e, item, 'delete')}
+                className="text-[9px] px-1.5 py-0.5 rounded bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors"
+                title="영구 삭제"
+              >삭제</button>
+            </div>
+          )}
+        </div>
 
         {/* 댓글 + 좋아요 */}
         <div className="flex items-center gap-1">
@@ -299,7 +317,7 @@ function MagazineBoard({ posts }: { posts: CuratedPost[] }) {
 }
 
 // 목록형 행
-function SummaryListRow({ item, likedIds, likingIds, user, messagingId, commentCount, onLike, onMessage, onDelete }: {
+function SummaryListRow({ item, likedIds, likingIds, user, messagingId, commentCount, onLike, onMessage, onDelete, isAdmin, onAdminManage }: {
   item: SavedSummary
   likedIds: Set<string>
   likingIds: Set<string>
@@ -309,6 +327,8 @@ function SummaryListRow({ item, likedIds, likingIds, user, messagingId, commentC
   onLike: (e: React.MouseEvent, item: SavedSummary) => void
   onMessage: (e: React.MouseEvent, item: SavedSummary) => void
   onDelete: (e: React.MouseEvent, item: SavedSummary) => void
+  isAdmin?: boolean
+  onAdminManage?: (e: React.MouseEvent, item: SavedSummary, action: 'hide' | 'delete') => void
 }) {
   const router = useRouter()
   const catMeta = CATEGORY_META[item.category]
@@ -398,13 +418,25 @@ function SummaryListRow({ item, likedIds, likingIds, user, messagingId, commentC
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                 </svg>
               </button>
-            ) : user && item.userId !== user.uid ? (
+            ) : user && item.userId !== user.uid && !isAdmin ? (
               <button
                 onClick={(e) => onMessage(e, item)}
                 disabled={messagingId === item.id}
                 className="text-[9px] text-[#75716e] hover:text-blue-400 transition-colors disabled:opacity-50"
               >✉️</button>
             ) : null}
+            {isAdmin && onAdminManage && (
+              <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button
+                  onClick={(e) => onAdminManage(e, item, 'hide')}
+                  className="text-[9px] px-1.5 py-0.5 rounded bg-yellow-500/20 text-yellow-400 hover:bg-yellow-500/30"
+                >숨김</button>
+                <button
+                  onClick={(e) => onAdminManage(e, item, 'delete')}
+                  className="text-[9px] px-1.5 py-0.5 rounded bg-red-500/20 text-red-400 hover:bg-red-500/30"
+                >삭제</button>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -492,6 +524,7 @@ export default function SquareClient({ initialSummaries = [], initialMagazinePos
 }) {
   const { user } = useAuth()
   const router = useRouter()
+  const isAdmin = user?.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL
   const [summaries, setSummaries] = useState<SavedSummary[]>(initialSummaries)
   const [allSummaries, setAllSummaries] = useState<SavedSummary[]>(initialSummaries)
   const [magazinePosts, setMagazinePosts] = useState<CuratedPost[]>(initialMagazinePosts)
@@ -575,6 +608,23 @@ export default function SquareClient({ initialSummaries = [], initialMagazinePos
     } catch {
       alert('삭제에 실패했습니다.')
     }
+  }
+
+  const handleAdminManage = async (e: React.MouseEvent, item: SavedSummary, action: 'hide' | 'delete') => {
+    e.preventDefault(); e.stopPropagation()
+    if (!isAdmin) return
+    if (action === 'delete' && !confirm(`[영구 삭제] 복구 불가합니다.\n"${item.title}"`)) return
+    if (action === 'hide' && !confirm(`스퀘어에서 숨깁니다 (데이터 유지).\n"${item.title}"`)) return
+    try {
+      const token = await user!.getIdToken()
+      await fetch('/api/admin/square', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ id: item.id, action }),
+      })
+      setSummaries(prev => prev.filter(s => s.id !== item.id))
+      setAllSummaries(prev => prev.filter(s => s.id !== item.id))
+    } catch { alert('처리 실패') }
   }
 
   const handleLike = async (e: React.MouseEvent, item: SavedSummary) => {
@@ -877,6 +927,8 @@ export default function SquareClient({ initialSummaries = [], initialMagazinePos
                 onLike={handleLike}
                 onMessage={handleMessage}
                 onDelete={handleDelete}
+                isAdmin={isAdmin}
+                onAdminManage={handleAdminManage}
               />
             ))}
           </div>
@@ -900,6 +952,8 @@ export default function SquareClient({ initialSummaries = [], initialMagazinePos
                       onLike={handleLike}
                       onMessage={handleMessage}
                       onDelete={handleDelete}
+                      isAdmin={isAdmin}
+                      onAdminManage={handleAdminManage}
                     />
                   )
                 })}
