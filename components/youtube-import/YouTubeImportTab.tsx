@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth'
+import { GoogleAuthProvider, signInWithPopup, reauthenticateWithPopup } from 'firebase/auth'
 import { auth } from '@/lib/firebase'
 
 interface YTPlaylist {
@@ -38,7 +38,11 @@ export default function YouTubeImportTab() {
     setError(null)
     setLoadingConnect(true)
     try {
-      const result = await signInWithPopup(auth, provider)
+      // 이미 로그인된 상태면 reauthenticateWithPopup으로 YouTube scope 강제 추가
+      const currentUser = auth.currentUser
+      const result = currentUser
+        ? await reauthenticateWithPopup(currentUser, provider)
+        : await signInWithPopup(auth, provider)
       const credential = GoogleAuthProvider.credentialFromResult(result)
       const token = credential?.accessToken
       if (!token) throw new Error('YouTube 토큰을 받지 못했습니다.')
@@ -58,8 +62,16 @@ export default function YouTubeImportTab() {
       'https://www.googleapis.com/youtube/v3/playlists?part=snippet,contentDetails&mine=true&maxResults=50',
       { headers: { Authorization: `Bearer ${token}` } }
     )
-    if (!res.ok) throw new Error('재생목록을 불러오지 못했습니다.')
     const data = await res.json()
+    if (!res.ok) {
+      console.error('[YT Import] playlists error:', data)
+      throw new Error(data.error?.message ?? '재생목록을 불러오지 못했습니다.')
+    }
+    if (!data.items?.length) {
+      // scope 없는 토큰일 때 빈 배열로 오는 경우 처리
+      console.warn('[YT Import] empty playlists — token may be missing youtube.readonly scope')
+      throw new Error('YouTube 재생목록을 가져올 수 없습니다. 다시 연동해주세요.')
+    }
     const list: YTPlaylist[] = (data.items ?? []).map((item: any) => ({
       id: item.id,
       title: item.snippet.title,
