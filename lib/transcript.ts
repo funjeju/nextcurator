@@ -92,6 +92,7 @@ async function getTranscriptViaCFWorker(videoId: string): Promise<{ text: string
   }
 
   if (!res.ok || !data.transcript) {
+    console.warn(`[CF Worker] 실패 details:`, JSON.stringify(data.details))
     throw new Error(`CF_FAILED: ${data.error ?? res.status}`)
   }
 
