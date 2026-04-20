@@ -22,10 +22,10 @@ export async function fetchVideoComments(videoId: string): Promise<{
   try {
     const videoUrl = `https://www.youtube.com/watch?v=${videoId}`
     const res = await fetch(
-      `https://api.socialkit.dev/youtube/comments?url=${encodeURIComponent(videoUrl)}&limit=60`,
+      `https://api.socialkit.dev/youtube/comments?url=${encodeURIComponent(videoUrl)}&limit=25`,
       {
         headers: { 'x-access-key': key },
-        signal: AbortSignal.timeout(15000),
+        signal: AbortSignal.timeout(8000),
       }
     )
     if (!res.ok) return { popular: [], recent: [], combined: [] }
@@ -43,15 +43,15 @@ export async function fetchVideoComments(videoId: string): Promise<{
       publishedAt: c.date ?? '',
     })).filter(c => c.text.length > 0)
 
-    // 인기순: likes 내림차순 top 30
+    // 인기순: likes 내림차순 top 15
     const popular = [...combined]
       .sort((a, b) => b.likes - a.likes)
-      .slice(0, 30)
+      .slice(0, 15)
 
-    // 최신순: date 내림차순 top 30
+    // 최신순: date 내림차순 top 10
     const recent = [...combined]
       .sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime())
-      .slice(0, 30)
+      .slice(0, 10)
 
     return { popular, recent, combined }
   } catch {

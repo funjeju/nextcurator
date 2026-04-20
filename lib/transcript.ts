@@ -258,33 +258,11 @@ async function getTranscriptViaGemini(videoId: string): Promise<string> {
 
 export async function getTranscript(videoId: string): Promise<TranscriptResult> {
   const errors: string[] = []
-  let skipToSTT = false  // CF에서 NO_CAPTIONS 확인 → SocialKit 자막 시도 스킵
 
-  // ── 1단계: Cloudflare Worker (무료, 1-2초) ──
-  if (process.env.CLOUDFLARE_WORKER_URL) {
-    try {
-      console.log(`[Transcript] Trying: CF Worker for ${videoId}`)
-      const { text } = await getTranscriptViaCFWorker(videoId)
-      console.log(`[Transcript] ✅ CF Worker 성공 (${text.length}자)`)
-      return { text, source: 'CF Worker', lang: detectTranscriptLang(text) }
-    } catch (e) {
-      const err = e as Error & { noCaption?: boolean }
-      const msg = err.message
-      if (err.noCaption) {
-        console.log(`[Transcript] CF Worker: NO_CAPTIONS → STT 경로로`)
-        skipToSTT = true
-      } else {
-        console.warn(`[Transcript] ❌ CF Worker 실패: ${msg}`)
-      }
-      errors.push(`CF: ${msg}`)
-    }
-  }
-
-  // ── 2단계: SocialKit (CF 실패 시 폴백 + STT) ──
-  // skipToSTT=true면 자막 없음 확인됨 → SocialKit STT로 처리 (자막 추출 재시도 불필요)
+  // ── 1단계: SocialKit (자막 추출 + 자막 없는 영상 Whisper STT) ──
   if (process.env.SOCIALKIT_API_KEY) {
     try {
-      console.log(`[Transcript] Trying: SocialKit${skipToSTT ? ' (STT mode)' : ''} for ${videoId}`)
+      console.log(`[Transcript] Trying: SocialKit for ${videoId}`)
       const text = await getTranscriptViaSocialKit(videoId)
       console.log('[Transcript] ✅ SocialKit 성공')
       return { text, source: 'SocialKit', lang: detectTranscriptLang(text) }

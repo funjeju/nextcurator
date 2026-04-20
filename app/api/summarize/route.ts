@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { extractVideoId, getTranscript, getVideoMeta, detectTranscriptLang } from '@/lib/transcript'
+import { extractVideoId, getTranscript, detectTranscriptLang } from '@/lib/transcript'
 import { classifyCategory, generateSummary, generateReportSummary, generateContextSummary } from '@/lib/claude'
 import { fetchVideoComments, formatCommentsForPrompt } from '@/lib/youtube-comments'
 import { GoogleGenerativeAI } from '@google/generative-ai'
@@ -339,8 +339,8 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 영상정보 + 자막 + 메타 + 댓글 병렬 실행 (서로 의존성 없음)
-    const [videoInfo, transcriptResult, metaResult, commentResult] = await Promise.all([
+    // 영상정보 + 자막 + 댓글 병렬 실행 (getVideoMeta 제거 — fetchVideoComments로 통합)
+    const [videoInfo, transcriptResult, commentResult] = await Promise.all([
       cachedVideoInfo
         ? Promise.resolve(cachedVideoInfo as { title: string; channel: string; thumbnail: string; publishedAt: string; ytViewCount?: number; description?: string })
         : getVideoInfo(videoId),
@@ -350,7 +350,6 @@ export async function POST(req: NextRequest) {
             console.warn(`[Summarize] ⚠️ 자막 추출 실패 (${videoId}): ${e.message} — 영상 설명 및 댓글 요약으로 대체합니다.`)
             return { text: '', source: 'none', lang: 'ko' as const }
           }),
-      getVideoMeta(videoId).catch(() => ({ pinnedComment: '', description: '' })),
       fetchVideoComments(videoId).catch(() => ({ popular: [], recent: [], combined: [] })),
     ])
 
@@ -377,7 +376,8 @@ export async function POST(req: NextRequest) {
     const outputLang: 'ko' | 'original' = summaryLang === 'original' ? 'original' : 'ko'
 
     const description = (videoInfo as any).description ?? ''
-    const { pinnedComment } = metaResult
+    // pinnedComment: 인기 댓글 1위로 대체 (getVideoMeta 제거)
+    const pinnedComment = commentResult.popular[0]?.text ?? ''
 
     const contextParts = []
 
