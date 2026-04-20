@@ -128,8 +128,8 @@ async function getVideoInfo(videoId: string) {
   const socialkitKey = process.env.SOCIALKIT_API_KEY
   const videoUrl = `https://www.youtube.com/watch?v=${videoId}`
 
-  // SocialKit stats + YouTube HTML publishedAt 병렬 실행
-  const [socialkitData, htmlPublishedAt] = await Promise.all([
+  // SocialKit stats + YouTube HTML(ko) 병렬 실행
+  const [socialkitData, htmlResult] = await Promise.all([
     socialkitKey
       ? fetch(`https://api.socialkit.dev/youtube/stats?url=${encodeURIComponent(videoUrl)}`, {
           headers: { 'x-access-key': socialkitKey },
@@ -138,28 +138,39 @@ async function getVideoInfo(videoId: string) {
           .then(r => r.ok ? r.json() as Promise<{ data?: { title?: string; channelName?: string; views?: number; description?: string } }> : null)
           .catch(e => { console.warn('[getVideoInfo] SocialKit stats error:', e); return null })
       : Promise.resolve(null),
-    fetch(videoUrl, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1)' },
+    // 한국어로 페이지 요청 → 제목·publishedAt 동시 추출
+    fetch(`${videoUrl}&hl=ko&gl=KR`, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept-Language': 'ko-KR,ko;q=0.9',
+      },
       signal: AbortSignal.timeout(7000),
     })
       .then(r => r.ok ? r.text() : '')
       .then(html => {
-        const m = html.match(/"datePublished"\s*:\s*"([^"]+)"/) ?? html.match(/"publishDate"\s*:\s*"([^"]+)"/)
-        return m ? new Date(m[1]).toISOString() : ''
+        const dateM = html.match(/"datePublished"\s*:\s*"([^"]+)"/) ?? html.match(/"publishDate"\s*:\s*"([^"]+)"/)
+        // og:title에서 한국어 제목 추출
+        const titleM = html.match(/<meta\s+(?:name="title"|property="og:title")\s+content="([^"]+)"/)
+          ?? html.match(/\\"title\\":\\"([^\\"]{5,100})\\"/)
+        return {
+          publishedAt: dateM ? new Date(dateM[1]).toISOString() : '',
+          htmlTitle: titleM ? titleM[1].replace(/\s*-\s*YouTube$/, '').trim() : '',
+        }
       })
-      .catch(() => ''),
+      .catch(() => ({ publishedAt: '', htmlTitle: '' })),
   ])
 
-  let title = socialkitData?.data?.title ?? ''
+  // HTML에서 추출한 한국어 제목 우선 사용
+  let title = htmlResult.htmlTitle || (socialkitData?.data?.title ?? '')
   let channel = socialkitData?.data?.channelName ?? ''
   const ytViewCount = socialkitData?.data?.views ?? 0
   const description = socialkitData?.data?.description ?? ''
-  const publishedAt = htmlPublishedAt
+  const publishedAt = htmlResult.publishedAt
 
-  // title/channel 없으면 oEmbed 폴백
+  // title/channel 없으면 oEmbed 폴백 (hl=ko 추가)
   if (!title || !channel) {
     try {
-      const res = await fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent(videoUrl)}&format=json`, { signal: AbortSignal.timeout(5000) })
+      const res = await fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent(videoUrl)}&format=json&hl=ko`, { signal: AbortSignal.timeout(5000) })
       if (res.ok) {
         const data = await res.json()
         if (!title) title = data.title as string
