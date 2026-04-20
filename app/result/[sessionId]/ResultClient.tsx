@@ -986,6 +986,11 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
                   <span>이 영상은 자막을 가져오지 못했습니다. 제목·채널 정보·영상 설명을 기반으로 요약했으며, 내용이 부정확할 수 있습니다.</span>
                 </div>
               )}
+              {user?.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL && data.transcriptSource && data.transcriptSource !== 'none' && (
+                <div className="text-[11px] text-zinc-600 px-1">
+                  📡 자막 출처: <span className="text-zinc-400 font-medium">{data.transcriptSource}</span>
+                </div>
+              )}
               <SummaryShell
                 category={data.category}
                 summary={data.summary}
