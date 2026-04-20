@@ -95,7 +95,7 @@ ${summaryContext ? `---영상 요약 (참고용)---\n${summaryContext.slice(0, 1
     const model = genAI.getGenerativeModel({
       model: 'gemini-2.5-flash',
       systemInstruction,
-      generationConfig: { temperature: 0.85, maxOutputTokens: 1500 },
+      generationConfig: { temperature: 0.85, maxOutputTokens: 8192 },
       ...(needsSearch ? { tools: [{ googleSearch: {} }] } : {}),
     } as Parameters<typeof genAI.getGenerativeModel>[0])
 
@@ -109,6 +109,8 @@ ${summaryContext ? `---영상 요약 (참고용)---\n${summaryContext.slice(0, 1
     const result = await chat.sendMessage(commentText)
 
     let text = result.response.text().trim()
+    const finishReason = result.response.candidates?.[0]?.finishReason
+    const wasTruncated = finishReason === 'MAX_TOKENS'
 
     // 내부 검증 루프: 350자 초과 시 AI에게 직접 줄이도록 요청 (최대 2회)
     const LIMIT = 350
@@ -148,7 +150,7 @@ ${summaryContext ? `---영상 요약 (참고용)---\n${summaryContext.slice(0, 1
       createdAt: saved.createdAt,
     }
 
-    return NextResponse.json({ text, comment })
+    return NextResponse.json({ text, comment, truncated: wasTruncated })
   } catch (e) {
     const errMsg = e instanceof Error ? e.message : String(e)
     console.error('[AI Comment API]', errMsg)

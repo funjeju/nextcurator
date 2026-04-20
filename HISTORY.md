@@ -5,6 +5,45 @@
 
 ---
 
+## 2026-04-20 (세션 2)
+
+### [개선] AI 댓글 truncation 감지 + 경고 표시
+- **증상**: AI 댓글이 문장 중간에 잘려 출력됨. 유저가 왜 잘리는지 몰라 혼란
+- **원인**: `maxOutputTokens: 1500` 너무 작음. `finishReason === 'MAX_TOKENS'`일 때 감지 안 함
+- **해결**: `ai-comment/route.ts` `maxOutputTokens: 8192`로 증가. `finishReason` 체크해 `truncated` 플래그 반환. `CommentSection.tsx`에서 `_truncated: true` 저장, `⚠️ 응답이 길어 일부가 잘렸습니다.` 경고 표시
+
+### [버그] 자동수집 영상 제목 영어로 나옴
+- **증상**: 자동수집된 스퀘어 카드에 영어 제목 영상들이 포함됨
+- **원인**: `auto-collect/route.ts` 최근 리라이트에서 `searchVideoIds()`에 `regionCode=KR`, `relevanceLanguage=ko` 누락
+- **해결**: `searchVideoIds()`에 두 파라미터 추가
+
+### [개선] 로딩 UX — 경과시간·안내메시지·pulse 추가
+- **증상**: 자막 추출 등 오래 걸릴 때 유저 이탈 (30초만 넘어도 체감 길음)
+- **해결**: `LoadingSteps.tsx` 전면 개선. 단계별 경과시간 표시, 30초 초과 시 안내메시지 박스(5종 30초마다 순환), 프로그레스바 animate-pulse, 총 경과시간 표시
+
+### [버그] Firestore platformReactions: undefined write 오류
+- **증상**: 매거진 저장 시 Firestore write 실패 — undefined 필드 불허
+- **원인**: `magazine.ts`에서 `parsed.platformReactions ?? null` → null도 Firestore에 쓰여서 실제로는 문제 아니었으나, `magazine-server.ts`에서 undefined 필드 포함 채로 set()
+- **해결**: `saveCuratedPostAdmin`에서 `Object.entries(...).filter(([, v]) => v !== undefined)`로 undefined 필드 제거 후 저장
+
+### [기능] 어드민 스퀘어 관리 — 카드에서 직접 숨김/삭제
+- **증상**: 불량 콘텐츠 수동 정리 방법 없음
+- **해결**: `app/api/admin/square/route.ts` 신설(POST 목록조회, PATCH hide/show/delete). `SquareClient.tsx`에 어드민 모드 감지 + hover 시 숨김(노란)/삭제(빨간) 버튼. `admin/page.tsx`에 스퀘어 관리 탭 추가(검색·페이지네이션·숨김영상 포함 보기)
+
+### [기능] 자동수집 품질 필터 + 댓글 추출
+- **증상**: 쇼츠·반복자막 등 저품질 영상이 수집됨
+- **해결**: `MIN_DURATION_SEC=180`(3분 미만 제외), `isRepetitiveTranscript()`(고유문장 비율 <20% 폐기), `fetchQualifiedVideos()`(duration+viewCount 배치조회·인기순 정렬), `generateYtCommentSummary()`(Gemini 280자 댓글 요약) 추가
+
+### [기능] 일본 런칭 플랜 + 공유하기 확장 플랜 문서화
+- **해결**: `JAPAN.md`(5단계 런칭 로드맵), `SHARE.md`(카카오→Slack→Notion) 신설. `CLAUDE.md` 세션 시작 필독 목록에 추가
+
+### [버그] Vercel 타임아웃 — vercel.json이 route maxDuration 무시
+- **증상**: summarize route에 `export const maxDuration = 300` 설정했으나 실제 120초에 타임아웃
+- **원인**: `vercel.json`의 functions 설정이 route 레벨 설정을 override
+- **해결**: `vercel.json` `app/api/summarize/route.ts` maxDuration을 300으로 수정
+
+---
+
 ## 2026-04-20
 
 ### [개선] 유튜브 댓글 요약 시점 통합 (중복 SocialKit 호출 제거)

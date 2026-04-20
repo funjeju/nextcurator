@@ -141,8 +141,11 @@ export default function CommentSection({
       const data = await res.json()
       if (!data.comment) throw new Error(data.error ?? 'AI 응답 실패')
 
-      // 서버에서 저장 완료된 댓글 객체를 상태에 추가 (클라이언트 Firestore 쓰기 없음)
-      setComments(prev => [...prev, data.comment as Comment])
+      const aiComment = {
+        ...data.comment as Comment,
+        ...(data.truncated ? { _truncated: true } : {}),
+      }
+      setComments(prev => [...prev, aiComment])
     } catch (e) {
       console.error('[AI Reply]', e)
     } finally {
@@ -288,6 +291,9 @@ function CommentItem({ comment, replies, currentUserId, aiLoadingId, onReply, on
             )}
           </div>
           <p className="text-[#e2e2e2] text-sm leading-relaxed break-words">{comment.text}</p>
+          {(comment as any)._truncated && (
+            <p className="text-[10px] text-amber-500/70 mt-1">⚠️ 응답이 길어 일부가 잘렸습니다.</p>
+          )}
           <div className="flex items-center gap-3 mt-1.5">
             {!comment.isAI && (
               <button onClick={() => onReply(comment)} className="text-[10px] text-[#75716e] hover:text-white transition-colors">
@@ -325,6 +331,9 @@ function CommentItem({ comment, replies, currentUserId, aiLoadingId, onReply, on
                   <span className="text-[9px] text-[#75716e]">{formatRelativeDate(reply.createdAt)}</span>
                 </div>
                 <p className="text-[#d4d4d8] text-xs leading-relaxed break-words">{reply.text}</p>
+                {(reply as any)._truncated && (
+                  <p className="text-[10px] text-amber-500/70 mt-0.5">⚠️ 응답이 길어 일부가 잘렸습니다.</p>
+                )}
                 <div className="flex items-center gap-3 mt-1">
                   {reply.isAI ? (
                     /* AI 댓글 → 사람이 답글 달 수 있음 (같은 스레드에 추가) */
