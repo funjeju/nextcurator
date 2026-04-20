@@ -93,6 +93,8 @@ async function searchVideoIds(query: string, maxResults = 10): Promise<string[]>
   url.searchParams.set('type', 'video')
   url.searchParams.set('q', query)
   url.searchParams.set('maxResults', String(maxResults))
+  url.searchParams.set('regionCode', 'KR')
+  url.searchParams.set('relevanceLanguage', 'ko')
   url.searchParams.set('key', YOUTUBE_API_KEY)
 
   console.log('[AutoCollect] Search URL (key redacted):', url.toString().replace(YOUTUBE_API_KEY, 'REDACTED'))
