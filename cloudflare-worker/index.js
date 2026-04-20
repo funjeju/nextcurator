@@ -100,6 +100,8 @@ async function fetchViaWatchPage(videoId) {
       'User-Agent': BROWSER_UA,
       'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
       'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7',
+      // CONSENT 쿠키 사전 주입 — consent 게이트 우회
+      'Cookie': 'CONSENT=YES+cb; SOCS=CAISHAgCEhJnd3NfdmlkZW9fcGFnZS12aWRlbw',
       'Sec-Ch-Ua': '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
       'Sec-Ch-Ua-Mobile': '?0',
       'Sec-Ch-Ua-Platform': '"Windows"',
@@ -117,8 +119,9 @@ async function fetchViaWatchPage(videoId) {
   console.log(`[Worker] watch page status: ${res.status} for ${videoId}`)
   if (!res.ok) throw new Error(`HTTP_${res.status}`)
 
-  // 쿠키 캡처 (자막 다운로드에 재사용)
-  const cookies = res.headers.get('set-cookie') ?? ''
+  // 쿠키 캡처 — getAll()로 모든 set-cookie 헤더 수집 (get()은 첫 번째만 반환)
+  const rawCookies = res.headers.getAll ? res.headers.getAll('set-cookie') : [res.headers.get('set-cookie') ?? '']
+  const cookies = rawCookies.map(c => c.split(';')[0]).join('; ')
 
   const html = await res.text()
 
@@ -269,11 +272,8 @@ async function fetchTranscriptFromTracks(tracks, cookies) {
     'Accept': '*/*',
     'Accept-Language': 'ko-KR,ko;q=0.9,en;q=0.8',
   }
-  // watch 페이지 쿠키를 전달해서 서명 검증 통과
-  if (cookies) {
-    const cookieStr = cookies.split(',').map(c => c.trim().split(';')[0]).join('; ')
-    if (cookieStr) headers['Cookie'] = cookieStr
-  }
+  // watch 페이지 쿠키 전달 — 이미 name=value 형태로 정제됐으므로 그대로 사용
+  if (cookies) headers['Cookie'] = cookies
 
   for (const url of formats) {
     try {
