@@ -317,8 +317,8 @@ export async function POST(req: NextRequest) {
         const cached = await getCachedByVideoId(videoId)
         if (cached) {
           // 자막 없이 요약된 캐시는 재분석 (고정댓글/설명 활용 못했을 수 있음)
-          if (cached.transcriptSource === 'none') {
-            console.log('[Summarize] ⚠️ Cache has no transcript — re-analyzing for better quality:', videoId)
+          if (cached.transcriptSource === 'none' || cached.transcriptSource === '') {
+            console.log('[Summarize] ⚠️ Cache has no/empty transcript — re-analyzing:', videoId)
           } else {
             console.log('[Summarize] ✅ Cache hit for videoId:', videoId)
             // videoPublishedAt 없으면 YouTube API에서 보완 후 저장
