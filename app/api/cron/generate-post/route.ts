@@ -148,8 +148,7 @@ export async function POST(req: NextRequest) {
       await getFirestore().collection('saved_summaries').doc(item.id).update({ postedToMagazine: true })
     } catch { /* non-critical */ }
 
-    await saveCurationSettingsAdmin({ lastGeneratedAt: new Date().toISOString() })
-
+    // 수동 발행은 lastGeneratedAt 갱신 안 함 — 자동 스케줄 방해 방지
     await writeLog({
       postId: id,
       postTitle: post.title,
