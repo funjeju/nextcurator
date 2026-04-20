@@ -161,6 +161,7 @@ export async function saveSummary({
   transcript,
   transcriptSource,
 }: Partial<SavedSummary>): Promise<string> {
+  console.log('[saveSummary] transcriptSource:', JSON.stringify(transcriptSource), '| videoId:', videoId)
   const savedRef = collection(db, 'saved_summaries')
   const docRef = await addDoc(savedRef, {
     userId,
