@@ -452,6 +452,7 @@ export async function POST(req: NextRequest) {
     // Firestore 저장 (noSave=true 이면 임시 재분석이므로 저장 스킵)
     if (!noSave) {
       try {
+        console.log('[Summarize] 🔍 PRE-SAVE transcriptSource:', JSON.stringify(transcriptSource), '| transcriptResult.source:', JSON.stringify(transcriptResult.source))
         await saveToFirestore(sessionId, result)
         console.log('[Summarize] ✅ Saved to Firestore summaries:', sessionId)
       } catch (e) {
