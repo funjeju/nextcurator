@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -74,6 +74,13 @@ export default function UrlInput() {
   const [langChoiceData, setLangChoiceData] = useState<LangChoiceData | null>(null)
   const [checkingDuration, setCheckingDuration] = useState(false)
   const router = useRouter()
+
+  // YouTube 가져오기 탭에서 넘어온 URL 자동 채우기
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const urlParam = params.get('url')
+    if (urlParam) setUrl(urlParam)
+  }, [])
 
   const handleCancel = () => {
     abortControllerRef.current?.abort()

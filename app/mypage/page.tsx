@@ -23,6 +23,7 @@ import SavedItineraries from '@/components/travel/SavedItineraries'
 import SavedBlogDrafts from '@/components/blog/SavedBlogDrafts'
 import SavedShortsScripts from '@/components/shorts/SavedShortsScripts'
 import SavedBookmarks from '@/components/bookmarks/SavedBookmarks'
+import YouTubeImportTab from '@/components/youtube-import/YouTubeImportTab'
 
 
 const CATEGORY_LABEL: Record<string, string> = {
@@ -267,7 +268,7 @@ function FriendsTab({ myUid }: { myUid: string }) {
 
 export default function MyPage() {
   const { user, userProfile, needsProfile, refreshProfile } = useAuth()
-  const [activeTab, setActiveTab] = useState<'library' | 'friends' | 'travel' | 'blog' | 'shorts' | 'bookmarks'>('library')
+  const [activeTab, setActiveTab] = useState<'library' | 'friends' | 'travel' | 'blog' | 'shorts' | 'bookmarks' | 'youtube'>('library')
   const [folders, setFolders] = useState<Folder[]>([])
   const [summaries, setSummaries] = useState<SavedSummary[]>([])
   const [allSummaries, setAllSummaries] = useState<SavedSummary[]>([])
@@ -847,6 +848,17 @@ export default function MyPage() {
             >
               🔖 북마크
             </button>
+            <button
+              onClick={() => setActiveTab('youtube')}
+              className={`px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all whitespace-nowrap flex items-center gap-1.5 ${
+                activeTab === 'youtube' ? 'bg-[#3d3a38] text-white shadow' : 'text-[#75716e] hover:text-white'
+              }`}
+            >
+              <svg className="w-3.5 h-3.5 text-red-500 shrink-0" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+              </svg>
+              가져오기
+            </button>
           </div>
         </div>
       </div>
@@ -894,6 +906,25 @@ export default function MyPage() {
             <p className="text-[#75716e] text-sm mt-0.5">영상 시청 중 저장한 구간과 메모를 한눈에 확인하세요.</p>
           </div>
           <SavedBookmarks userId={user?.uid ?? getLocalUserId()} />
+        </div>
+      )}
+
+      {activeTab === 'youtube' && (
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 pb-12">
+          <div className="mb-5">
+            <h2 className="text-white font-bold text-lg flex items-center gap-2">
+              <svg className="w-5 h-5 text-red-500" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+              </svg>
+              YouTube 재생목록 가져오기
+            </h2>
+            <p className="text-[#75716e] text-sm mt-0.5">저장해둔 재생목록 영상을 선택하고 AI로 요약하세요.</p>
+          </div>
+          {user ? (
+            <YouTubeImportTab />
+          ) : (
+            <div className="text-center py-20 text-[#75716e] text-sm">로그인 후 이용할 수 있습니다.</div>
+          )}
         </div>
       )}
 
