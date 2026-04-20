@@ -1,9 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { GoogleAuthProvider, signInWithPopup, reauthenticateWithPopup } from 'firebase/auth'
-import { auth } from '@/lib/firebase'
+
+const GOOGLE_CLIENT_ID = '711357873847-gk3fc4not23gmtm2ajblm2mcls6okngu.apps.googleusercontent.com'
 
 interface YTPlaylist {
   id: string
@@ -19,8 +19,25 @@ interface YTVideo {
   channelTitle: string
 }
 
+declare global {
+  interface Window {
+    google?: {
+      accounts: {
+        oauth2: {
+          initTokenClient: (config: {
+            client_id: string
+            scope: string
+            callback: (resp: { access_token?: string; error?: string }) => void
+          }) => { requestAccessToken: () => void }
+        }
+      }
+    }
+  }
+}
+
 export default function YouTubeImportTab() {
   const router = useRouter()
+  const [gisReady, setGisReady] = useState(false)
   const [accessToken, setAccessToken] = useState<string | null>(null)
   const [playlists, setPlaylists] = useState<YTPlaylist[]>([])
   const [selectedPlaylist, setSelectedPlaylist] = useState<YTPlaylist | null>(null)
@@ -30,31 +47,41 @@ export default function YouTubeImportTab() {
   const [loadingVideos, setLoadingVideos] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const handleConnect = async () => {
-    const provider = new GoogleAuthProvider()
-    provider.addScope('https://www.googleapis.com/auth/youtube.readonly')
-    provider.setCustomParameters({ prompt: 'consent', access_type: 'online' })
+  // GIS 스크립트 로드
+  useEffect(() => {
+    if (document.getElementById('gis-script')) { setGisReady(true); return }
+    const script = document.createElement('script')
+    script.id = 'gis-script'
+    script.src = 'https://accounts.google.com/gsi/client'
+    script.onload = () => setGisReady(true)
+    document.head.appendChild(script)
+  }, [])
 
+  const handleConnect = () => {
+    if (!window.google) return
     setError(null)
     setLoadingConnect(true)
-    try {
-      // 이미 로그인된 상태면 reauthenticateWithPopup으로 YouTube scope 강제 추가
-      const currentUser = auth.currentUser
-      const result = currentUser
-        ? await reauthenticateWithPopup(currentUser, provider)
-        : await signInWithPopup(auth, provider)
-      const credential = GoogleAuthProvider.credentialFromResult(result)
-      const token = credential?.accessToken
-      if (!token) throw new Error('YouTube 토큰을 받지 못했습니다.')
-      setAccessToken(token)
-      await loadPlaylists(token)
-    } catch (err: any) {
-      if (err.code !== 'auth/popup-closed-by-user') {
-        setError(err.message || 'YouTube 연동 중 오류가 발생했습니다.')
-      }
-    } finally {
-      setLoadingConnect(false)
-    }
+
+    const client = window.google.accounts.oauth2.initTokenClient({
+      client_id: GOOGLE_CLIENT_ID,
+      scope: 'https://www.googleapis.com/auth/youtube.readonly',
+      callback: async (resp) => {
+        if (resp.error || !resp.access_token) {
+          setError('YouTube 연동에 실패했습니다.')
+          setLoadingConnect(false)
+          return
+        }
+        try {
+          await loadPlaylists(resp.access_token)
+          setAccessToken(resp.access_token)
+        } catch (e: any) {
+          setError(e.message)
+        } finally {
+          setLoadingConnect(false)
+        }
+      },
+    })
+    client.requestAccessToken()
   }
 
   const loadPlaylists = async (token: string) => {
@@ -63,22 +90,14 @@ export default function YouTubeImportTab() {
       { headers: { Authorization: `Bearer ${token}` } }
     )
     const data = await res.json()
-    if (!res.ok) {
-      console.error('[YT Import] playlists error:', data)
-      throw new Error(data.error?.message ?? '재생목록을 불러오지 못했습니다.')
-    }
-    if (!data.items?.length) {
-      // scope 없는 토큰일 때 빈 배열로 오는 경우 처리
-      console.warn('[YT Import] empty playlists — token may be missing youtube.readonly scope')
-      throw new Error('YouTube 재생목록을 가져올 수 없습니다. 다시 연동해주세요.')
-    }
-    const list: YTPlaylist[] = (data.items ?? []).map((item: any) => ({
+    if (!res.ok) throw new Error(data.error?.message ?? '재생목록을 불러오지 못했습니다.')
+    if (!data.items?.length) throw new Error('재생목록이 없거나 가져올 수 없습니다.')
+    setPlaylists(data.items.map((item: any) => ({
       id: item.id,
       title: item.snippet.title,
       itemCount: item.contentDetails.itemCount ?? 0,
-      thumbnail: item.snippet.thumbnails?.medium?.url ?? item.snippet.thumbnails?.default?.url ?? '',
-    }))
-    setPlaylists(list)
+      thumbnail: item.snippet.thumbnails?.medium?.url ?? '',
+    })))
   }
 
   const loadVideos = async (playlist: YTPlaylist, pageToken?: string) => {
@@ -86,40 +105,26 @@ export default function YouTubeImportTab() {
     setLoadingVideos(true)
     setError(null)
     try {
-      const params = new URLSearchParams({
-        part: 'snippet',
-        playlistId: playlist.id,
-        maxResults: '50',
-      })
+      const params = new URLSearchParams({ part: 'snippet', playlistId: playlist.id, maxResults: '50' })
       if (pageToken) params.set('pageToken', pageToken)
-
       const res = await fetch(
         `https://www.googleapis.com/youtube/v3/playlistItems?${params}`,
         { headers: { Authorization: `Bearer ${accessToken}` } }
       )
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}))
-        const msg = errData.error?.message ?? '영상 목록을 불러오지 못했습니다.'
-        // Watch Later 접근 불가 안내
-        if (playlist.id === 'WL' || msg.includes('playlistNotFound') || msg.includes('forbidden')) {
-          throw new Error('이 재생목록은 YouTube API 정책상 가져올 수 없습니다. (나중에 볼 영상 포함)')
-        }
-        throw new Error(msg)
-      }
       const data = await res.json()
+      if (!res.ok) throw new Error(data.error?.message ?? '영상 목록을 불러오지 못했습니다.')
       const items: YTVideo[] = (data.items ?? [])
         .filter((item: any) => item.snippet.resourceId?.videoId)
         .map((item: any) => ({
           videoId: item.snippet.resourceId.videoId,
           title: item.snippet.title,
-          thumbnail: item.snippet.thumbnails?.medium?.url ?? item.snippet.thumbnails?.default?.url ?? '',
+          thumbnail: item.snippet.thumbnails?.medium?.url ?? '',
           channelTitle: item.snippet.videoOwnerChannelTitle ?? '',
         }))
-
       setVideos(prev => pageToken ? [...prev, ...items] : items)
       setNextPageToken(data.nextPageToken ?? null)
-    } catch (err: any) {
-      setError(err.message)
+    } catch (e: any) {
+      setError(e.message)
     } finally {
       setLoadingVideos(false)
     }
@@ -132,20 +137,10 @@ export default function YouTubeImportTab() {
     await loadVideos(playlist)
   }
 
-  const handleSummarize = (videoId: string) => {
-    const url = `https://www.youtube.com/watch?v=${videoId}`
-    router.push(`/?url=${encodeURIComponent(url)}`)
-  }
-
   const handleDisconnect = () => {
-    setAccessToken(null)
-    setPlaylists([])
-    setSelectedPlaylist(null)
-    setVideos([])
-    setError(null)
+    setAccessToken(null); setPlaylists([]); setSelectedPlaylist(null); setVideos([]); setError(null)
   }
 
-  // ── 미연결 화면 ──
   if (!accessToken) {
     return (
       <div className="flex flex-col items-center justify-center py-20 gap-6">
@@ -156,14 +151,12 @@ export default function YouTubeImportTab() {
         </div>
         <div className="text-center">
           <h3 className="text-white font-bold text-lg mb-2">YouTube 재생목록 가져오기</h3>
-          <p className="text-[#75716e] text-sm max-w-xs leading-relaxed">
-            YouTube에 저장해둔 재생목록 영상을 가져와서 AI로 빠르게 요약하세요.
-          </p>
+          <p className="text-[#75716e] text-sm max-w-xs leading-relaxed">저장해둔 재생목록 영상을 가져와서 AI로 빠르게 요약하세요.</p>
         </div>
         {error && <p className="text-red-400 text-sm text-center max-w-xs">{error}</p>}
         <button
           onClick={handleConnect}
-          disabled={loadingConnect}
+          disabled={!gisReady || loadingConnect}
           className="flex items-center gap-3 px-6 py-3 bg-[#32302e] hover:bg-[#3d3a38] border border-white/10 hover:border-red-500/30 rounded-2xl transition-all group disabled:opacity-60"
         >
           {loadingConnect ? (
@@ -177,7 +170,7 @@ export default function YouTubeImportTab() {
             </svg>
           )}
           <span className="text-white font-semibold text-sm group-hover:text-red-400 transition-colors">
-            {loadingConnect ? '연결 중...' : 'YouTube 연동하기'}
+            {!gisReady ? '로딩 중...' : loadingConnect ? '연결 중...' : 'YouTube 연동하기'}
           </span>
         </button>
         <p className="text-[#4a4745] text-xs">재생목록 읽기 권한만 요청합니다</p>
@@ -185,43 +178,31 @@ export default function YouTubeImportTab() {
     )
   }
 
-  // ── 연결된 화면 ──
   return (
     <div className="flex flex-col md:flex-row gap-6">
-      {/* 재생목록 사이드바 */}
       <aside className="w-full md:w-60 shrink-0">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-white font-bold text-sm">내 재생목록</h3>
-          <button
-            onClick={handleDisconnect}
-            className="text-[10px] text-[#75716e] hover:text-white transition-colors"
-          >
-            연결 해제
-          </button>
+          <button onClick={handleDisconnect} className="text-[10px] text-[#75716e] hover:text-white transition-colors">연결 해제</button>
         </div>
-        {playlists.length === 0 ? (
-          <p className="text-[#75716e] text-xs px-3 py-4 bg-[#32302e]/50 rounded-xl">재생목록이 없습니다.</p>
-        ) : (
-          <div className="flex flex-row md:flex-col gap-2 overflow-x-auto md:overflow-visible pb-2 scrollbar-none">
-            {playlists.map(pl => (
-              <button
-                key={pl.id}
-                onClick={() => handleSelectPlaylist(pl)}
-                className={`text-left px-3 py-2.5 rounded-xl whitespace-nowrap md:whitespace-normal transition-all border ${
-                  selectedPlaylist?.id === pl.id
-                    ? 'bg-red-500/15 border-red-500/30 text-white'
-                    : 'bg-[#32302e] border-transparent text-[#a4a09c] hover:bg-[#3d3a38] hover:text-white'
-                }`}
-              >
-                <p className="text-sm font-medium truncate max-w-[180px]">{pl.title}</p>
-                <p className="text-[10px] text-[#75716e] mt-0.5">{pl.itemCount}개</p>
-              </button>
-            ))}
-          </div>
-        )}
+        <div className="flex flex-row md:flex-col gap-2 overflow-x-auto md:overflow-visible pb-2 scrollbar-none">
+          {playlists.map(pl => (
+            <button
+              key={pl.id}
+              onClick={() => handleSelectPlaylist(pl)}
+              className={`text-left px-3 py-2.5 rounded-xl whitespace-nowrap md:whitespace-normal transition-all border ${
+                selectedPlaylist?.id === pl.id
+                  ? 'bg-red-500/15 border-red-500/30 text-white'
+                  : 'bg-[#32302e] border-transparent text-[#a4a09c] hover:bg-[#3d3a38] hover:text-white'
+              }`}
+            >
+              <p className="text-sm font-medium truncate max-w-[180px]">{pl.title}</p>
+              <p className="text-[10px] text-[#75716e] mt-0.5">{pl.itemCount}개</p>
+            </button>
+          ))}
+        </div>
       </aside>
 
-      {/* 영상 목록 */}
       <main className="flex-1 min-w-0">
         {!selectedPlaylist ? (
           <div className="flex flex-col items-center justify-center py-16 text-center">
@@ -234,7 +215,7 @@ export default function YouTubeImportTab() {
           </div>
         ) : error ? (
           <div className="text-center py-12 bg-[#32302e]/30 rounded-2xl px-6">
-            <p className="text-red-400 text-sm mb-1">{error}</p>
+            <p className="text-red-400 text-sm">{error}</p>
           </div>
         ) : (
           <>
@@ -242,36 +223,23 @@ export default function YouTubeImportTab() {
               <h3 className="text-white font-semibold text-sm truncate">{selectedPlaylist.title}</h3>
               <span className="text-[#75716e] text-xs shrink-0">{videos.length}개</span>
             </div>
-
             {videos.length === 0 ? (
               <div className="text-center py-12 text-[#75716e] text-sm">영상이 없습니다.</div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {videos.map(video => (
-                  <div
-                    key={video.videoId}
-                    className="bg-[#32302e] rounded-2xl border border-white/5 overflow-hidden hover:border-white/15 transition-all group"
-                  >
+                  <div key={video.videoId} className="bg-[#32302e] rounded-2xl border border-white/5 overflow-hidden hover:border-white/15 transition-all group">
                     <div className="relative overflow-hidden aspect-video bg-[#23211f]">
-                      {video.thumbnail ? (
-                        <img
-                          src={video.thumbnail}
-                          alt={video.title}
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-3xl opacity-20">▶</div>
-                      )}
+                      {video.thumbnail
+                        ? <img src={video.thumbnail} alt={video.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                        : <div className="w-full h-full flex items-center justify-center text-3xl opacity-20">▶</div>
+                      }
                     </div>
                     <div className="p-3">
-                      <p className="text-[#e2e2e2] text-xs font-semibold leading-snug mb-1 line-clamp-2 group-hover:text-white transition-colors">
-                        {video.title}
-                      </p>
-                      {video.channelTitle && (
-                        <p className="text-[#75716e] text-[10px] mb-3 truncate">{video.channelTitle}</p>
-                      )}
+                      <p className="text-[#e2e2e2] text-xs font-semibold leading-snug mb-1 line-clamp-2 group-hover:text-white transition-colors">{video.title}</p>
+                      {video.channelTitle && <p className="text-[#75716e] text-[10px] mb-3 truncate">{video.channelTitle}</p>}
                       <button
-                        onClick={() => handleSummarize(video.videoId)}
+                        onClick={() => router.push(`/?url=${encodeURIComponent(`https://www.youtube.com/watch?v=${video.videoId}`)}`)}
                         className="w-full py-2 bg-orange-500/10 hover:bg-orange-500 text-orange-400 hover:text-white text-xs font-bold rounded-xl transition-all border border-orange-500/20 hover:border-transparent"
                       >
                         AI 요약하기
@@ -281,7 +249,6 @@ export default function YouTubeImportTab() {
                 ))}
               </div>
             )}
-
             {nextPageToken && (
               <div className="mt-6 text-center">
                 <button
