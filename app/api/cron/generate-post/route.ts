@@ -106,7 +106,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: `sessionId "${sessionId}"에 해당하는 요약을 찾을 수 없습니다.` }, { status: 404 })
       }
     } else {
-      if (!force && !shouldGenerate(settings)) {
+      if (!force && (!settings.enabled || settings.schedule === 'manual')) {
         return NextResponse.json({ skipped: true, reason: 'Use force:true to override schedule' })
       }
 
