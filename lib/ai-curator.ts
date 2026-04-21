@@ -71,7 +71,8 @@ async function skGet(path: string, params: Record<string, string>): Promise<unkn
       signal: AbortSignal.timeout(12000),
     })
     if (!res.ok) {
-      console.log(`[Scout] SK ${path} HTTP ${res.status}`)
+      const body = await res.text().catch(() => '')
+      console.log(`[Scout] SK ${path} HTTP ${res.status}: ${body.slice(0, 200)}`)
       return null
     }
     return await res.json()
@@ -83,7 +84,7 @@ async function skGet(path: string, params: Record<string, string>): Promise<unkn
 
 // SocialKit search → 영상 목록 반환
 async function skSearch(query: string, limit = 10): Promise<Record<string, unknown>[]> {
-  const raw = await skGet('youtube/search', { q: query, limit: String(limit) })
+  const raw = await skGet('youtube/search', { query, limit: String(limit) })
   if (!raw) return []
   const r = raw as Record<string, unknown>
   // 다양한 응답 형태 대응
