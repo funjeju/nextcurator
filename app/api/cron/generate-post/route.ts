@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import {
   getRecentPublicSummaries, pickBestSingle,
   generateMagazinePost,
-  shouldGenerate,
 } from '@/lib/magazine'
 import {
   getCurationSettings,
@@ -38,8 +37,9 @@ export async function GET(req: NextRequest) {
   try {
     const settings = await getCurationSettings()
 
-    if (!shouldGenerate(settings)) {
-      return NextResponse.json({ skipped: true, reason: 'Not time yet or schedule=manual' })
+    // 크론 실행 시각은 vercel.json이 고정 관리 — 경과 시간 체크 없이 enabled/manual만 확인
+    if (!settings.enabled || settings.schedule === 'manual') {
+      return NextResponse.json({ skipped: true, reason: 'Disabled or manual schedule' })
     }
 
     const summaries = await getRecentPublicSummaries(settings.lookbackDays)

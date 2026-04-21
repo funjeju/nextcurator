@@ -10,7 +10,9 @@ const CATEGORY_LABEL: Record<string, string> = {
 
 function formatDate(iso: string) {
   if (!iso) return ''
-  return new Intl.DateTimeFormat('ko-KR', { month: 'long', day: 'numeric' }).format(new Date(iso))
+  return new Intl.DateTimeFormat('ko-KR', {
+    month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false,
+  }).format(new Date(iso))
 }
 
 function PostCard({ post }: { post: CuratedPost }) {
