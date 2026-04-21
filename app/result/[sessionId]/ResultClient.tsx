@@ -326,7 +326,7 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
 
   // 미저장 이탈 방지 경고 (브라우저 새로고침/닫기)
   useEffect(() => {
-    const isUnsaved = !!data && !savedItem
+    const isUnsaved = !!data && !savedItem && !fromSquare
     
     // 헤더 연동을 위한 전역 플래그 설정
     if (typeof window !== 'undefined') {
