@@ -3,7 +3,7 @@ import Link from 'next/link'
 
 export const metadata: Metadata = {
   title: '유튜브 뉴스·경제 영상 핵심 요약 — 5W1H 자동 정리 | 쏙튜브',
-  description: '삼프로TV, 신사임당, KBS·JTBC 뉴스 유튜브를 AI가 5W1H 형식으로 자동 정리합니다. 경제 시사 영상 10개를 5분 안에 브리핑하세요.',
+  description: '삼프로TV, 신사임당, KBS·JTBC 뉴스 유튜브를 AI가 5W1H 형식으로 자동 정리합니다. 긴 뉴스 영상도 핵심만 빠르게 파악하세요.',
   keywords: ['유튜브 뉴스 요약', '경제 유튜브 요약', '시사 유튜브 정리', '삼프로TV 요약', '유튜브 경제 브리핑', '뉴스 AI 요약', '유튜브 주식 영상 요약', '재테크 유튜브 정리', '경제 뉴스 자동 요약', '유튜브 뉴스 핵심 정리'],
 }
 
@@ -16,7 +16,7 @@ export default function NewsGuidePage() {
           <span>›</span><span>영상 요약</span><span>›</span>
           <span className="text-white">뉴스 & 경제</span>
         </div>
-        <h1 className="text-2xl font-black text-white mb-3">🗞️ 경제·뉴스 유튜브 10개, 5분 안에 핵심 브리핑</h1>
+        <h1 className="text-2xl font-black text-white mb-3">🗞️ 경제·뉴스 유튜브, 핵심만 골라 5W1H로 자동 정리</h1>
         <p className="text-[#a4a09c] text-sm leading-relaxed">
           삼프로TV, 신사임당, KBS 뉴스룸, JTBC 뉴스 등 경제·시사 유튜브 채널은 많지만 다 볼 시간이 없습니다. 쏙튜브는 뉴스·경제 영상을 <strong className="text-white">누가(Who) · 언제(When) · 어디서(Where) · 무엇을(What) · 왜(Why) · 어떻게(How)</strong> 형식으로 핵심만 추려 정리합니다. 주식·부동산·경제 지표 영상도 요점만 빠르게 파악할 수 있습니다.
         </p>

@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>쏙튜브</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #1c1a18;
+    --surface: #26231f;
+    --card: #32302e;
+    --border: rgba(255,255,255,0.08);
+    --text: #e8e4df;
+    --muted: #a4a09c;
+    --dim: #75716e;
+    --violet: #7c3aed;
+    --violet-light: #8b5cf6;
+  }
+  html, body { height: 100%; background: var(--bg); color: var(--text); font-family: -apple-system, 'Pretendard', sans-serif; font-size: 13px; }
+
+  /* 스크롤바 */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #3a3835; border-radius: 2px; }
+
+  /* 레이아웃 */
+  #app { display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+
+  /* 헤더 */
+  #header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 12px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  #logo { font-size: 14px; font-weight: 900; color: var(--text); letter-spacing: -0.5px; }
+  #logo span { color: var(--violet-light); }
+  #user-area { display: flex; align-items: center; gap: 8px; }
+  #user-avatar { width: 26px; height: 26px; border-radius: 50%; object-fit: cover; }
+  #user-name { font-size: 11px; color: var(--muted); max-width: 80px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #btn-login { font-size: 11px; color: var(--violet-light); cursor: pointer; background: rgba(124,58,237,0.15); border: 1px solid rgba(124,58,237,0.3); border-radius: 6px; padding: 4px 8px; }
+  #btn-login:hover { background: rgba(124,58,237,0.25); }
+  #btn-logout { font-size: 10px; color: var(--dim); cursor: pointer; background: none; border: none; padding: 2px 4px; }
+  #btn-logout:hover { color: var(--muted); }
+
+  /* 메인 스크롤 영역 */
+  #main { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+
+  /* 영상 없음 상태 */
+  #no-video { text-align: center; padding: 40px 20px; color: var(--dim); }
+  #no-video .icon { font-size: 32px; margin-bottom: 10px; }
+  #no-video p { font-size: 12px; line-height: 1.6; }
+
+  /* 영상 카드 */
+  #video-card { background: var(--card); border-radius: 10px; overflow: hidden; }
+  #video-thumb-wrap { position: relative; }
+  #video-thumb { width: 100%; aspect-ratio: 16/9; object-fit: cover; display: block; }
+  #video-title { padding: 8px 10px; font-size: 12px; font-weight: 600; line-height: 1.4; color: var(--text); }
+
+  /* 컨트롤 패널 */
+  #controls { background: var(--card); border-radius: 10px; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+  .ctrl-label { font-size: 10px; color: var(--dim); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+
+  /* 카테고리 그리드 */
+  #category-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+  .cat-btn {
+    padding: 5px 4px; border-radius: 6px; border: 1px solid var(--border);
+    background: var(--surface); color: var(--muted); cursor: pointer;
+    font-size: 10px; text-align: center; transition: all 0.15s;
+  }
+  .cat-btn:hover { border-color: rgba(124,58,237,0.4); color: var(--text); }
+  .cat-btn.active { background: rgba(124,58,237,0.2); border-color: var(--violet-light); color: var(--violet-light); font-weight: 600; }
+  .cat-btn .cat-icon { display: block; font-size: 14px; margin-bottom: 2px; }
+
+  /* 언어 토글 */
+  #lang-toggle { display: flex; gap: 4px; }
+  .lang-btn { flex: 1; padding: 5px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); color: var(--muted); cursor: pointer; font-size: 11px; text-align: center; transition: all 0.15s; }
+  .lang-btn.active { background: rgba(124,58,237,0.2); border-color: var(--violet-light); color: var(--violet-light); font-weight: 600; }
+
+  /* 요약 버튼 */
+  #btn-summarize {
+    width: 100%; padding: 10px; border-radius: 8px; border: none;
+    background: var(--violet); color: #fff; font-size: 13px; font-weight: 700;
+    cursor: pointer; transition: background 0.15s;
+  }
+  #btn-summarize:hover:not(:disabled) { background: var(--violet-light); }
+  #btn-summarize:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  /* 로딩 */
+  #loading { text-align: center; padding: 30px; }
+  .spinner {
+    width: 28px; height: 28px; border: 3px solid rgba(124,58,237,0.3);
+    border-top-color: var(--violet-light); border-radius: 50%;
+    animation: spin 0.8s linear infinite; margin: 0 auto 10px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #loading p { color: var(--muted); font-size: 12px; }
+
+  /* 결과 */
+  #result-area { display: flex; flex-direction: column; gap: 10px; }
+  #result-actions { display: flex; gap: 6px; }
+  .action-btn {
+    flex: 1; padding: 6px 8px; border-radius: 7px; border: 1px solid var(--border);
+    background: var(--surface); color: var(--muted); cursor: pointer;
+    font-size: 11px; text-align: center; transition: all 0.15s;
+  }
+  .action-btn:hover { border-color: rgba(124,58,237,0.4); color: var(--text); }
+  .action-btn.primary { background: rgba(124,58,237,0.15); border-color: rgba(124,58,237,0.4); color: var(--violet-light); }
+
+  /* 마크다운 렌더링 */
+  #result-content {
+    background: var(--card); border-radius: 10px; padding: 12px;
+    font-size: 12px; line-height: 1.7; color: var(--text);
+  }
+  #result-content h1, #result-content h2 { font-size: 13px; font-weight: 700; color: var(--text); margin: 12px 0 6px; padding-bottom: 4px; border-bottom: 1px solid var(--border); }
+  #result-content h3 { font-size: 12px; font-weight: 600; color: var(--muted); margin: 10px 0 4px; }
+  #result-content p { margin: 4px 0; }
+  #result-content ul, #result-content ol { padding-left: 18px; margin: 4px 0; }
+  #result-content li { margin: 3px 0; }
+  #result-content strong { color: var(--text); font-weight: 600; }
+  #result-content code { background: rgba(255,255,255,0.08); border-radius: 3px; padding: 1px 4px; font-family: monospace; font-size: 11px; }
+  #result-content hr { border: none; border-top: 1px solid var(--border); margin: 10px 0; }
+
+  /* Q&A 섹션 */
+  #qa-section { background: var(--card); border-radius: 10px; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+  #qa-title { font-size: 11px; font-weight: 700; color: var(--muted); }
+  #qa-messages { display: flex; flex-direction: column; gap: 6px; max-height: 200px; overflow-y: auto; }
+  .qa-q { background: rgba(124,58,237,0.15); border-radius: 8px; padding: 7px 10px; font-size: 11px; color: var(--text); align-self: flex-end; max-width: 90%; }
+  .qa-a { background: var(--surface); border-radius: 8px; padding: 7px 10px; font-size: 11px; color: var(--muted); line-height: 1.6; max-width: 95%; }
+  #qa-input-row { display: flex; gap: 6px; }
+  #qa-input {
+    flex: 1; background: var(--surface); border: 1px solid var(--border);
+    border-radius: 7px; padding: 7px 10px; color: var(--text); font-size: 12px;
+    outline: none;
+  }
+  #qa-input:focus { border-color: rgba(124,58,237,0.5); }
+  #qa-input::placeholder { color: var(--dim); }
+  #btn-qa-send {
+    padding: 7px 12px; border-radius: 7px; border: none;
+    background: var(--violet); color: #fff; cursor: pointer; font-size: 12px; font-weight: 600;
+  }
+  #btn-qa-send:hover { background: var(--violet-light); }
+  #btn-qa-send:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* 에러 */
+  #error-box { background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3); border-radius: 8px; padding: 10px 12px; font-size: 11px; color: #fca5a5; }
+
+  /* 다시 요약 버튼 */
+  #btn-retry { background: none; border: 1px solid var(--border); color: var(--muted); border-radius: 7px; padding: 5px 10px; font-size: 11px; cursor: pointer; }
+  #btn-retry:hover { color: var(--text); border-color: var(--muted); }
+
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<div id="app">
+  <!-- 헤더 -->
+  <div id="header">
+    <div id="logo">쏙<span>튜브</span></div>
+    <div id="user-area">
+      <div id="logged-out-area">
+        <button id="btn-login">Google 로그인</button>
+      </div>
+      <div id="logged-in-area" class="hidden" style="display:flex;align-items:center;gap:6px;">
+        <img id="user-avatar" src="" alt="">
+        <span id="user-name"></span>
+        <button id="btn-logout">로그아웃</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 메인 -->
+  <div id="main">
+    <!-- 유튜브 아님 -->
+    <div id="no-video">
+      <div class="icon">▶️</div>
+      <p>유튜브 영상 페이지를 열면<br>자동으로 요약을 시작할 수 있습니다.</p>
+    </div>
+
+    <!-- 영상 카드 -->
+    <div id="video-card" class="hidden">
+      <div id="video-thumb-wrap">
+        <img id="video-thumb" src="" alt="">
+      </div>
+      <div id="video-title"></div>
+    </div>
+
+    <!-- 컨트롤 -->
+    <div id="controls" class="hidden">
+      <div class="ctrl-label">카테고리</div>
+      <div id="category-grid">
+        <button class="cat-btn active" data-cat="auto"><span class="cat-icon">✨</span>자동</button>
+        <button class="cat-btn" data-cat="recipe"><span class="cat-icon">🍳</span>요리</button>
+        <button class="cat-btn" data-cat="english"><span class="cat-icon">🔤</span>영어</button>
+        <button class="cat-btn" data-cat="news"><span class="cat-icon">🗞️</span>뉴스</button>
+        <button class="cat-btn" data-cat="travel"><span class="cat-icon">🧳</span>여행</button>
+        <button class="cat-btn" data-cat="tech"><span class="cat-icon">💻</span>IT/테크</button>
+        <button class="cat-btn" data-cat="finance"><span class="cat-icon">📈</span>재테크</button>
+        <button class="cat-btn" data-cat="education"><span class="cat-icon">📚</span>교육</button>
+        <button class="cat-btn" data-cat="entertainment"><span class="cat-icon">🎬</span>엔터</button>
+      </div>
+
+      <div class="ctrl-label" style="margin-top:4px;">요약 언어</div>
+      <div id="lang-toggle">
+        <button class="lang-btn active" data-lang="ko">🇰🇷 한국어</button>
+        <button class="lang-btn" data-lang="original">원문 그대로</button>
+      </div>
+
+      <button id="btn-summarize">✨ 요약하기</button>
+    </div>
+
+    <!-- 로딩 -->
+    <div id="loading" class="hidden">
+      <div class="spinner"></div>
+      <p id="loading-text">AI가 영상을 분석하고 있습니다...</p>
+    </div>
+
+    <!-- 에러 -->
+    <div id="error-box" class="hidden"></div>
+
+    <!-- 결과 -->
+    <div id="result-area" class="hidden">
+      <div id="result-actions">
+        <button class="action-btn" id="btn-copy">📋 복사</button>
+        <button class="action-btn primary" id="btn-save">💾 저장</button>
+        <button class="action-btn" id="btn-open-web">🔗 쏙튜브에서 보기</button>
+      </div>
+      <div id="result-content"></div>
+      <button id="btn-retry">↩ 다시 요약</button>
+
+      <!-- Q&A -->
+      <div id="qa-section">
+        <div id="qa-title">💬 영상에 대해 질문하기</div>
+        <div id="qa-messages"></div>
+        <div id="qa-input-row">
+          <input id="qa-input" type="text" placeholder="이 영상에 대해 질문하세요..." />
+          <button id="btn-qa-send">전송</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const API_BASE = 'https://ssoktube.com'
+
+// 상태
+let state = {
+  user: null,
+  currentUrl: null,
+  currentTitle: null,
+  category: 'auto',
+  lang: 'ko',
+  result: null,
+  sessionId: null,
+  loading: false,
+}
+
+// DOM
+const $ = id => document.getElementById(id)
+
+// 유틸
+function showEl(...ids) { ids.forEach(id => $(id).classList.remove('hidden')) }
+function hideEl(...ids) { ids.forEach(id => $(id).classList.add('hidden')) }
+
+// ── 인증 ──
+async function loadUser() {
+  const data = await chrome.storage.local.get(['idToken', 'uid', 'email', 'displayName', 'photoURL', 'tokenSavedAt'])
+  if (data.idToken && data.uid) {
+    // 토큰 1시간 만료 체크
+    const age = Date.now() - (data.tokenSavedAt || 0)
+    if (age > 55 * 60 * 1000) {
+      // 만료 — 로그아웃 처리
+      await chrome.storage.local.remove(['idToken', 'uid', 'email', 'displayName', 'photoURL', 'tokenSavedAt'])
+      renderLoggedOut()
+      return
+    }
+    state.user = data
+    renderLoggedIn(data)
+  } else {
+    renderLoggedOut()
+  }
+}
+
+function renderLoggedIn(user) {
+  hideEl('logged-out-area')
+  showEl('logged-in-area')
+  $('logged-in-area').classList.remove('hidden')
+  $('logged-in-area').style.display = 'flex'
+  if (user.photoURL) {
+    $('user-avatar').src = user.photoURL
+    $('user-avatar').style.display = 'block'
+  }
+  $('user-name').textContent = user.displayName || user.email || ''
+}
+
+function renderLoggedOut() {
+  state.user = null
+  $('logged-out-area').classList.remove('hidden')
+  $('logged-in-area').style.display = 'none'
+}
+
+$('btn-login').addEventListener('click', () => {
+  chrome.runtime.sendMessage({ type: 'open_auth' })
+})
+
+$('btn-logout').addEventListener('click', async () => {
+  await chrome.runtime.sendMessage({ type: 'logout' })
+  renderLoggedOut()
+})
+
+// chrome.storage 변경 감지 (로그인 콜백)
+chrome.storage.onChanged.addListener((changes) => {
+  if (changes.idToken || changes.uid) {
+    loadUser()
+  }
+})
+
+// ── 현재 영상 로드 ──
+async function loadCurrentVideo() {
+  const resp = await chrome.runtime.sendMessage({ type: 'get_current_video' })
+  if (resp?.url) {
+    setVideo(resp.url, resp.title)
+  } else {
+    showEl('no-video')
+    hideEl('video-card', 'controls', 'result-area', 'loading', 'error-box')
+  }
+}
+
+function setVideo(url, title) {
+  state.currentUrl = url
+  state.currentTitle = title
+  state.result = null
+  state.sessionId = null
+
+  const videoId = url.match(/[?&]v=([^&]+)/)?.[1]
+  if (videoId) {
+    $('video-thumb').src = `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`
+    showEl('video-card')
+  }
+  $('video-title').textContent = title?.replace(' - YouTube', '') || url
+  showEl('controls')
+  hideEl('no-video', 'result-area', 'loading', 'error-box')
+  $('btn-summarize').disabled = false
+}
+
+// content.js에서 영상 변경 수신
+chrome.runtime.onMessage.addListener((msg) => {
+  if (msg.type === 'video_changed' && msg.url) {
+    setVideo(msg.url, msg.title)
+  }
+})
+
+// ── 카테고리 / 언어 ──
+document.querySelectorAll('.cat-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.cat-btn').forEach(b => b.classList.remove('active'))
+    btn.classList.add('active')
+    state.category = btn.dataset.cat
+  })
+})
+
+document.querySelectorAll('.lang-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.lang-btn').forEach(b => b.classList.remove('active'))
+    btn.classList.add('active')
+    state.lang = btn.dataset.lang
+  })
+})
+
+// ── 요약 ──
+$('btn-summarize').addEventListener('click', doSummarize)
+$('btn-retry').addEventListener('click', () => {
+  hideEl('result-area')
+  showEl('controls')
+  state.result = null
+  state.sessionId = null
+})
+
+async function doSummarize() {
+  if (!state.currentUrl) return
+  state.loading = true
+  hideEl('controls', 'result-area', 'error-box')
+  showEl('loading')
+  $('loading-text').textContent = 'AI가 영상을 분석하고 있습니다...'
+
+  try {
+    const headers = { 'Content-Type': 'application/json' }
+    if (state.user?.idToken) {
+      headers['Authorization'] = `Bearer ${state.user.idToken}`
+    }
+
+    const body = {
+      url: state.currentUrl,
+      summaryLang: state.lang,
+    }
+    if (state.category !== 'auto') {
+      body.category = state.category
+    }
+
+    const res = await fetch(`${API_BASE}/api/summarize`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+    })
+
+    const data = await res.json()
+
+    if (!res.ok || data.error) {
+      throw new Error(data.error || '요약 중 오류가 발생했습니다.')
+    }
+
+    state.result = data
+    state.sessionId = data.sessionId
+    renderResult(data)
+  } catch (e) {
+    showError(e.message)
+  } finally {
+    state.loading = false
+    hideEl('loading')
+  }
+}
+
+// ── 결과 렌더링 ──
+function renderResult(data) {
+  const md = data.summary || ''
+  $('result-content').innerHTML = renderMarkdown(md)
+  hideEl('controls')
+  showEl('result-area')
+  // Q&A 초기화
+  $('qa-messages').innerHTML = ''
+  // 저장 버튼 상태
+  $('btn-save').textContent = state.user ? '💾 저장' : '💾 저장 (로그인 필요)'
+  $('btn-save').disabled = !state.user
+}
+
+// 간단한 마크다운 파서
+function renderMarkdown(text) {
+  if (!text) return ''
+  let html = text
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+    .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+    .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/`(.+?)`/g, '<code>$1</code>')
+    .replace(/^---$/gm, '<hr>')
+    .replace(/^\s*[-*] (.+)$/gm, '<li>$1</li>')
+    .replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>')
+    .replace(/^\d+\. (.+)$/gm, '<li>$1</li>')
+    .replace(/\n\n/g, '</p><p>')
+    .replace(/\n/g, '<br>')
+  return `<p>${html}</p>`
+}
+
+// ── 액션 버튼 ──
+$('btn-copy').addEventListener('click', () => {
+  if (!state.result?.summary) return
+  navigator.clipboard.writeText(state.result.summary)
+  $('btn-copy').textContent = '✅ 복사됨'
+  setTimeout(() => { $('btn-copy').textContent = '📋 복사' }, 2000)
+})
+
+$('btn-save').addEventListener('click', async () => {
+  if (!state.user || !state.sessionId) return
+  try {
+    const res = await fetch(`${API_BASE}/api/library/save`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${state.user.idToken}`,
+      },
+      body: JSON.stringify({ sessionId: state.sessionId }),
+    })
+    if (res.ok) {
+      $('btn-save').textContent = '✅ 저장됨'
+      setTimeout(() => { $('btn-save').textContent = '💾 저장' }, 2000)
+    }
+  } catch {}
+})
+
+$('btn-open-web').addEventListener('click', () => {
+  if (state.sessionId) {
+    chrome.tabs.create({ url: `${API_BASE}/result/${state.sessionId}` })
+  } else if (state.currentUrl) {
+    const encoded = encodeURIComponent(state.currentUrl)
+    chrome.tabs.create({ url: `${API_BASE}/?url=${encoded}` })
+  }
+})
+
+// ── Q&A ──
+$('btn-qa-send').addEventListener('click', sendQA)
+$('qa-input').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) sendQA() })
+
+async function sendQA() {
+  const q = $('qa-input').value.trim()
+  if (!q || !state.result) return
+
+  $('qa-input').value = ''
+  $('btn-qa-send').disabled = true
+
+  // 질문 버블
+  const qEl = document.createElement('div')
+  qEl.className = 'qa-q'
+  qEl.textContent = q
+  $('qa-messages').appendChild(qEl)
+
+  // 로딩 답변
+  const aEl = document.createElement('div')
+  aEl.className = 'qa-a'
+  aEl.textContent = '생각하는 중...'
+  $('qa-messages').appendChild(aEl)
+  $('qa-messages').scrollTop = $('qa-messages').scrollHeight
+
+  try {
+    const headers = { 'Content-Type': 'application/json' }
+    if (state.user?.idToken) headers['Authorization'] = `Bearer ${state.user.idToken}`
+
+    const res = await fetch(`${API_BASE}/api/chat`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        question: q,
+        context: state.result.summary || '',
+        title: state.result.title || '',
+        sessionId: state.sessionId,
+      }),
+    })
+
+    const data = await res.json()
+    aEl.innerHTML = renderMarkdown(data.answer || data.reply || '답변을 가져올 수 없습니다.')
+  } catch {
+    aEl.textContent = '오류가 발생했습니다. 다시 시도해주세요.'
+  } finally {
+    $('btn-qa-send').disabled = false
+    $('qa-messages').scrollTop = $('qa-messages').scrollHeight
+  }
+}
+
+// ── 에러 ──
+function showError(msg) {
+  $('error-box').textContent = '⚠️ ' + msg
+  showEl('error-box', 'controls')
+  hideEl('result-area')
+}
+
+// ── 초기화 ──
+async function init() {
+  await loadUser()
+  await loadCurrentVideo()
+}
+
+init()
+</script>
+</body>
+</html>

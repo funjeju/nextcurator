@@ -25,7 +25,7 @@ export async function fetchVideoComments(videoId: string): Promise<{
       `https://api.socialkit.dev/youtube/comments?url=${encodeURIComponent(videoUrl)}&limit=25`,
       {
         headers: { 'x-access-key': key },
-        signal: AbortSignal.timeout(8000),
+        signal: AbortSignal.timeout(15000),
       }
     )
     if (!res.ok) return { popular: [], recent: [], combined: [] }

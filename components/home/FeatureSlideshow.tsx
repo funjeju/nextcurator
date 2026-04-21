@@ -22,7 +22,7 @@ const FEATURES = [
   },
   {
     emoji: '✍️',
-    headline: '유튜브 본 걸 블로그 글로 10분 만에',
+    headline: '유튜브 본 걸 블로그 글로 1분 만에',
     subline: '영상 → SEO 최적화 블로그 초안 자동 생성',
     href: '/guide/blog',
     color: 'from-violet-500/20 to-purple-500/10',

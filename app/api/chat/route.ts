@@ -54,6 +54,7 @@ async function fetchEmbeddings(
           limit: 500,
         },
       }),
+      cache: 'no-store',
     })
     if (!res.ok) return map
 

@@ -105,6 +105,7 @@ export async function POST(req: NextRequest) {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ fields: objToFields(responseData as any) }),
+        cache: 'no-store',
       }).catch(() => {})
     }
 

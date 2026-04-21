@@ -133,6 +133,7 @@ export async function POST(req: NextRequest) {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ fields }),
+        cache: 'no-store',
       })
     } catch (e) {
       console.warn('[PDF] Firestore save failed:', e)

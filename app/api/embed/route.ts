@@ -63,6 +63,7 @@ export async function POST(req: NextRequest) {
     const patchRes = await fetch(url, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
+      cache: 'no-store',
       body: JSON.stringify({
         fields: {
           embedding: {

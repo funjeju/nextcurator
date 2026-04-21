@@ -42,6 +42,7 @@ async function saveToFirestore(sessionId: string, data: Record<string, unknown>)
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ fields }),
+    cache: 'no-store',
   })
   if (!res.ok) {
     const err = await res.text()
@@ -69,6 +70,7 @@ async function getCachedByVideoId(videoId: string): Promise<Record<string, unkno
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
+    cache: 'no-store',
   })
   if (!res.ok) return null
   const results = await res.json()
