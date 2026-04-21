@@ -28,9 +28,6 @@ function getSubcategoryForSlot(): AiSubcategory {
   return 'usecases'
 }
 
-const PROJECT_ID = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID!
-const API_KEY    = process.env.NEXT_PUBLIC_FIREBASE_API_KEY!
-const FS_BASE    = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents`
 
 interface ScoutQueueItem {
   videoId: string
@@ -42,29 +39,18 @@ interface ScoutQueueItem {
 
 async function readScoutQueue(subcategory: AiSubcategory): Promise<ScoutQueueItem[]> {
   try {
-    const res = await fetch(`${FS_BASE}/ai_scout_queue/${subcategory}?key=${API_KEY}`, { cache: 'no-store' })
-    if (!res.ok) {
-      console.log(`[Evaluate] readScoutQueue HTTP ${res.status} for ${subcategory}`)
+    const { initAdminApp } = await import('@/lib/firebase-admin')
+    initAdminApp()
+    const { getFirestore } = await import('firebase-admin/firestore')
+    const doc = await getFirestore().collection('ai_scout_queue').doc(subcategory).get()
+    if (!doc.exists) {
+      console.log(`[Evaluate] scout queue not found for ${subcategory}`)
       return []
     }
-    const doc = await res.json() as { fields?: Record<string, any> }
-    if (!doc.fields) return []
-
-    const status = doc.fields.status?.stringValue ?? ''
-    console.log(`[Evaluate] scout queue status: ${status} for ${subcategory}`)
-    if (status !== 'scouted') return []
-
-    const items = (doc.fields.items?.arrayValue?.values ?? []) as any[]
-    return items.map((item: any) => {
-      const f = item.mapValue?.fields ?? {}
-      return {
-        videoId: f.videoId?.stringValue ?? '',
-        title: f.title?.stringValue ?? '',
-        channelTitle: f.channelTitle?.stringValue ?? '',
-        publishedAt: f.publishedAt?.stringValue ?? '',
-        durationSec: Number(f.durationSec?.integerValue ?? f.durationSec?.doubleValue ?? 0),
-      }
-    }).filter(i => i.videoId)
+    const data = doc.data()!
+    console.log(`[Evaluate] scout queue status: ${data.status} count: ${data.items?.length ?? 0} for ${subcategory}`)
+    if (data.status !== 'scouted') return []
+    return (data.items ?? []).filter((i: any) => i.videoId)
   } catch (e) {
     console.log(`[Evaluate] readScoutQueue error: ${e}`)
     return []
@@ -72,12 +58,14 @@ async function readScoutQueue(subcategory: AiSubcategory): Promise<ScoutQueueIte
 }
 
 async function markScoutQueueProcessed(subcategory: AiSubcategory): Promise<void> {
-  await fetch(`${FS_BASE}/ai_scout_queue/${subcategory}?key=${API_KEY}&updateMask.fieldPaths=status`, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ fields: { status: { stringValue: 'processing' } } }),
-    cache: 'no-store',
-  })
+  try {
+    const { initAdminApp } = await import('@/lib/firebase-admin')
+    initAdminApp()
+    const { getFirestore } = await import('firebase-admin/firestore')
+    await getFirestore().collection('ai_scout_queue').doc(subcategory).update({ status: 'processing' })
+  } catch (e) {
+    console.log(`[Evaluate] markScoutQueueProcessed error: ${e}`)
+  }
 }
 
 async function runEvaluate(subcategory: AiSubcategory) {

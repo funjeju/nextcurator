@@ -87,24 +87,48 @@ async function skSearch(query: string, limit = 10): Promise<Record<string, unkno
   const raw = await skGet('youtube/search', { query, limit: String(limit) })
   if (!raw) return []
   const r = raw as Record<string, unknown>
-  // 다양한 응답 형태 대응
   const items = (Array.isArray(r.data) ? r.data
     : Array.isArray((r.data as Record<string,unknown>)?.videos) ? (r.data as Record<string,unknown>).videos
     : Array.isArray((r.data as Record<string,unknown>)?.results) ? (r.data as Record<string,unknown>).results
     : Array.isArray(r.videos) ? r.videos
     : Array.isArray(r.results) ? r.results
     : []) as Record<string, unknown>[]
-  console.log(`[Scout] skSearch "${query}" → ${items.length}개`)
+  if (items.length > 0) {
+    console.log(`[Scout] skSearch "${query}" → ${items.length}개, 샘플 필드: ${JSON.stringify(Object.keys(items[0]))}`)
+    console.log(`[Scout] 첫번째 아이템: ${JSON.stringify(items[0]).slice(0, 300)}`)
+  } else {
+    console.log(`[Scout] skSearch "${query}" → 0개, raw keys: ${JSON.stringify(Object.keys(r))}`)
+  }
   return items
 }
 
-// SocialKit video-details → 단일 영상 상세
-async function skVideoDetails(videoId: string): Promise<Record<string, unknown> | null> {
+// SocialKit stats → 단일 영상 상세 (youtube/stats 엔드포인트)
+// 응답: { title, channelName, channelLink, views, likes, comments, duration (MM:SS) }
+async function skStats(videoId: string): Promise<Record<string, unknown> | null> {
   const videoUrl = `https://www.youtube.com/watch?v=${videoId}`
-  const raw = await skGet('youtube/video-details', { url: videoUrl })
+  const raw = await skGet('youtube/stats', { url: videoUrl })
   if (!raw) return null
   const r = raw as Record<string, unknown>
   return (r.data as Record<string, unknown>) ?? r
+}
+
+// "2 days ago", "1 week ago", "3 months ago" 등 상대 날짜 → ISO 날짜 문자열
+function parseRelativeDate(rel: string): string {
+  if (!rel) return ''
+  // 이미 ISO 형식이면 그대로
+  if (/^\d{4}-\d{2}-\d{2}/.test(rel)) return rel
+  const now = Date.now()
+  const m = rel.match(/(\d+)\s+(second|minute|hour|day|week|month|year)s?\s+ago/i)
+  if (!m) return ''
+  const n = parseInt(m[1])
+  const unit = m[2].toLowerCase()
+  const msMap: Record<string, number> = {
+    second: 1000, minute: 60_000, hour: 3_600_000,
+    day: 86_400_000, week: 7 * 86_400_000,
+    month: 30 * 86_400_000, year: 365 * 86_400_000,
+  }
+  const ms = (msMap[unit] ?? 0) * n
+  return new Date(now - ms).toISOString()
 }
 
 // ── Scout 검색 쿼리 ───────────────────────────────────────────────────────────
@@ -179,24 +203,31 @@ export async function scoutCandidates(
       seen.add(videoId)
 
       // search 결과에 이미 메타가 있으면 바로 사용, 없으면 video-details 호출
+      // SocialKit search 응답 필드: channelName (not channelTitle), publishedTime (relative), duration (MM:SS)
       let title = (item.title ?? item.name ?? '') as string
-      let channelTitle = (item.channelTitle ?? item.channel ?? '') as string
+      let channelTitle = (item.channelName ?? item.channelTitle ?? item.channel ?? '') as string
       let channelId = (item.channelId ?? '') as string
-      let publishedAt = (item.publishedAt ?? item.published_at ?? item.date ?? '') as string
+      const rawDate = (item.publishedAt ?? item.published_at ?? item.publishedTime ?? item.date ?? '') as string
+      let publishedAt = parseRelativeDate(rawDate) || rawDate
       let durationSec = parseDurationFlex(item.duration as string | number | undefined)
       let viewCount = Number(item.viewCount ?? item.views ?? 0)
 
-      // 핵심 정보 부족 시 video-details 추가 호출
-      if (!title || !publishedAt || durationSec === 0) {
+      // 핵심 정보 부족 시 youtube/stats 추가 호출
+      // stats 응답: title, channelName, channelLink, views, likes, comments, duration
+      // ※ publishedAt은 stats에도 없으므로 search의 publishedTime(상대날짜) 사용
+      if (!title || durationSec === 0) {
         diag.detailsFetched++
-        const detail = await skVideoDetails(videoId)
+        const detail = await skStats(videoId)
         if (detail) {
           title = title || (detail.title as string) || ''
-          channelTitle = channelTitle || (detail.channelTitle as string) || (detail.channel as string) || ''
-          channelId = channelId || (detail.channelId as string) || ''
-          publishedAt = publishedAt || (detail.publishedAt as string) || (detail.published_at as string) || ''
+          channelTitle = channelTitle || (detail.channelName as string) || ''
+          // channelLink에서 channelId 추출: https://youtube.com/channel/UCxxx
+          if (!channelId && typeof detail.channelLink === 'string') {
+            const m = (detail.channelLink as string).match(/channel\/([A-Za-z0-9_-]+)/)
+            channelId = m?.[1] ?? ''
+          }
           durationSec = durationSec || parseDurationFlex(detail.duration as string | number | undefined)
-          viewCount = viewCount || Number(detail.viewCount ?? detail.views ?? 0)
+          viewCount = viewCount || Number(detail.views ?? 0)
         }
       }
 
@@ -387,24 +418,19 @@ function toFields(obj: Record<string, unknown>) {
 
 export async function saveScoutQueue(items: ScoutResult[]): Promise<void> {
   const subcategory = items[0]?.subcategory ?? 'news'
-  const res = await fetch(`${FS_BASE}/ai_scout_queue/${subcategory}?key=${API_KEY}`, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      fields: toFields({
-        subcategory,
-        items,
-        savedAt: new Date().toISOString(),
-        status: 'scouted',
-      })
-    }),
-    cache: 'no-store',
-  })
-  if (!res.ok) {
-    const err = await res.text().catch(() => '')
-    console.error(`[Scout] saveScoutQueue failed HTTP ${res.status}: ${err.slice(0, 200)}`)
-  } else {
+  try {
+    const { initAdminApp } = await import('./firebase-admin')
+    initAdminApp()
+    const { getFirestore } = await import('firebase-admin/firestore')
+    await getFirestore().collection('ai_scout_queue').doc(subcategory).set({
+      subcategory,
+      items,
+      savedAt: new Date().toISOString(),
+      status: 'scouted',
+    })
     console.log(`[Scout] saveScoutQueue OK: ${subcategory} ${items.length}개`)
+  } catch (e) {
+    console.error(`[Scout] saveScoutQueue error: ${e}`)
   }
 }
 
