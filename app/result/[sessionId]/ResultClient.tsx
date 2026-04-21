@@ -22,6 +22,7 @@ import type { QuizData, WorksheetData } from '@/types/summary'
 import Header from '@/components/common/Header'
 import { SummarizeResponse } from '@/types/summary'
 import AdBanner from '@/components/ads/AdBanner'
+import ContextualAdBanner from '@/components/ads/ContextualAdBanner'
 import SegmentedSummaryPanel from '@/components/summary/SegmentedSummaryPanel'
 import { useAuth } from '@/providers/AuthProvider'
 import { getSavedSummaryBySessionId, updateSummaryVisibility } from '@/lib/db'
@@ -1002,6 +1003,10 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
                 videoId={data.videoId}
                 thumbnail={data.thumbnail}
               />
+
+              {/* 광고 ① mid — 요약 직후, 카테고리 관련 광고 (요리→요리, 여행→여행) */}
+              <ContextualAdBanner category={data.category} position="mid" />
+
               {/* 퀴즈 버튼 — 영어/학습 카테고리만 */}
               {(data.category === 'english' || data.category === 'learning') && (
                 <button
@@ -1213,9 +1218,9 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
             </div>
           )}
 
-          {/* 광고 — summary 탭 하단 */}
+          {/* 광고 ② bottom — summary 탭 최하단, 가로 배너 */}
           {activeTab === 'summary' && (
-            <AdBanner adSlot="RESULT_BOTTOM" adFormat="horizontal" className="mt-2" />
+            <ContextualAdBanner category={data?.category ?? ''} position="bottom" className="mt-2" />
           )}
 
           {activeTab === 'transcript' && (

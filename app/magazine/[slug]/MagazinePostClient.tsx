@@ -7,9 +7,10 @@ import Header from '@/components/common/Header'
 import { CuratedPost } from '@/lib/magazine'
 import type { MagazineComment } from '@/app/api/magazine/comments/route'
 
-const CATEGORY_LABEL: Record<string, string> = {
-  recipe: '🍳 요리', english: '🔤 영어', learning: '📐 학습', news: '🗞️ 뉴스',
-  selfdev: '💪 자기계발', travel: '🧳 여행', story: '🍿 스토리', tips: '💡 팁',
+const TOPIC_META: Record<string, { label: string; emoji: string; color: string; textColor: string; borderColor: string; url: string }> = {
+  'ai-news':     { label: 'AI 소식',  emoji: '📰', color: 'bg-blue-500/15',   textColor: 'text-blue-400',   borderColor: 'border-blue-500/30',   url: '/magazine/topic/ai-news'     },
+  'ai-tools':    { label: 'AI 도구',  emoji: '🛠️', color: 'bg-purple-500/15', textColor: 'text-purple-400', borderColor: 'border-purple-500/30', url: '/magazine/topic/ai-tools'    },
+  'ai-usecases': { label: 'AI 활용',  emoji: '🚀', color: 'bg-emerald-500/15', textColor: 'text-emerald-400', borderColor: 'border-emerald-500/30', url: '/magazine/topic/ai-usecases' },
 }
 
 function formatDate(iso: string) {
@@ -161,6 +162,8 @@ function CommentsSection({ postId }: { postId: string }) {
 }
 
 export default function MagazinePostClient({ post, relatedPosts = [] }: { post: CuratedPost; relatedPosts?: CuratedPost[] }) {
+  const topic = TOPIC_META[(post as any).topicCluster] ?? null
+
   return (
     <div className="min-h-screen bg-[#252423]">
       <Header />
@@ -168,10 +171,18 @@ export default function MagazinePostClient({ post, relatedPosts = [] }: { post: 
       <article className="max-w-3xl mx-auto px-4 pb-20">
 
         {/* 브레드크럼 */}
-        <nav className="flex items-center gap-2 text-xs text-[#75716e] mb-6">
-          <Link href="/square" className="hover:text-orange-400 transition-colors">SQUARE K</Link>
+        <nav aria-label="breadcrumb" className="flex items-center gap-2 text-xs text-[#75716e] pt-4 mb-6">
+          <Link href="/" className="hover:text-orange-400 transition-colors">홈</Link>
           <span>/</span>
-          <Link href="/magazine" className="hover:text-orange-400 transition-colors">매거진</Link>
+          <Link href="/magazine" className="hover:text-orange-400 transition-colors">AI 매거진</Link>
+          {topic && (
+            <>
+              <span>/</span>
+              <Link href={topic.url} className={`hover:opacity-80 transition-opacity ${topic.textColor}`}>
+                {topic.label}
+              </Link>
+            </>
+          )}
         </nav>
 
         {/* 히어로 */}
@@ -185,11 +196,11 @@ export default function MagazinePostClient({ post, relatedPosts = [] }: { post: 
             <div className="absolute inset-0 bg-gradient-to-t from-[#252423]/80 via-transparent to-transparent" />
             <div className="absolute bottom-4 left-4 flex items-center gap-2">
               <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-orange-500 text-white">
-                ✍️ SSOKTUBE 매거진
+                🤖 AI 매거진
               </span>
-              {post.category && (
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-black/60 text-white border border-white/20">
-                  {CATEGORY_LABEL[post.category] ?? post.category}
+              {topic && (
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${topic.color} ${topic.textColor} ${topic.borderColor}`}>
+                  {topic.emoji} {topic.label}
                 </span>
               )}
             </div>
@@ -201,12 +212,15 @@ export default function MagazinePostClient({ post, relatedPosts = [] }: { post: 
           {!post.heroThumbnail && (
             <div className="flex items-center gap-2 mb-4">
               <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-orange-500 text-white">
-                ✍️ SSOKTUBE 매거진
+                🤖 AI 매거진
               </span>
-              {post.category && (
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#32302e] text-[#a4a09c] border border-white/10">
-                  {CATEGORY_LABEL[post.category] ?? post.category}
-                </span>
+              {topic && (
+                <Link
+                  href={topic.url}
+                  className={`px-2 py-0.5 rounded-full text-[10px] font-bold border transition-opacity hover:opacity-80 ${topic.color} ${topic.textColor} ${topic.borderColor}`}
+                >
+                  {topic.emoji} {topic.label}
+                </Link>
               )}
             </div>
           )}
@@ -218,8 +232,8 @@ export default function MagazinePostClient({ post, relatedPosts = [] }: { post: 
             <p className="text-lg text-[#a4a09c] font-medium mb-4">{post.subtitle}</p>
           )}
 
-          <div className="flex items-center gap-3 text-xs text-[#75716e]">
-            <span>SSOKTUBE 에디터</span>
+          <div className="flex items-center gap-3 text-xs text-[#75716e] flex-wrap">
+            <span>SSOKTUBE AI 에디터</span>
             <span>·</span>
             <span>{formatDate(post.publishedAt)}</span>
             <span>·</span>
@@ -295,6 +309,66 @@ export default function MagazinePostClient({ post, relatedPosts = [] }: { post: 
             {post.body}
           </ReactMarkdown>
         </div>
+
+        {/* 심층 분석 */}
+        {post.deepDive && (
+          <section className="mt-14">
+            <h2 className="text-base font-black text-white mb-1 flex items-center gap-2">
+              <span className="w-1 h-4 rounded-full bg-indigo-500" />
+              심층 분석
+            </h2>
+            <p className="text-[11px] text-[#75716e] mb-5 ml-3">SSOKTUBE 에디터의 전문 해설</p>
+
+            {/* 배경 맥락 */}
+            {post.deepDive.background && (
+              <div className="p-5 rounded-2xl bg-[#1e1c2a] border border-indigo-500/20 mb-4">
+                <p className="text-xs font-bold text-indigo-400 mb-3 flex items-center gap-1.5">
+                  <span>🌐</span> 배경 맥락
+                </p>
+                <p className="text-sm text-[#c4c0bc] leading-relaxed whitespace-pre-wrap">{post.deepDive.background}</p>
+              </div>
+            )}
+
+            {/* 핵심 개념 강의노트 */}
+            {post.deepDive.concepts && post.deepDive.concepts.length > 0 && (
+              <div className="mb-4">
+                <p className="text-xs font-bold text-indigo-400 mb-3 flex items-center gap-1.5">
+                  <span>📚</span> 핵심 개념 강의노트
+                </p>
+                <div className="space-y-3">
+                  {post.deepDive.concepts.map((c, i) => (
+                    <div key={i} className="p-5 rounded-2xl bg-[#1e1c1a] border border-white/8">
+                      <p className="text-sm font-black text-white mb-2 flex items-center gap-2">
+                        <span className="w-5 h-5 rounded-full bg-indigo-500/20 border border-indigo-500/40 flex items-center justify-center text-[10px] font-black text-indigo-400 shrink-0">{i + 1}</span>
+                        {c.term}
+                      </p>
+                      <p className="text-sm text-[#a4a09c] leading-relaxed">{c.explanation}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* 실전 단계별 가이드 */}
+            {post.deepDive.practicalSteps && post.deepDive.practicalSteps.length > 0 && (
+              <div className="p-5 rounded-2xl bg-gradient-to-br from-indigo-500/10 to-purple-500/5 border border-indigo-500/20">
+                <p className="text-xs font-bold text-indigo-400 mb-4 flex items-center gap-1.5">
+                  <span>🎯</span> 오늘 당장 실천하는 단계별 가이드
+                </p>
+                <div className="space-y-3">
+                  {post.deepDive.practicalSteps.map((step, i) => (
+                    <div key={i} className="flex items-start gap-3">
+                      <span className="shrink-0 w-6 h-6 rounded-full bg-indigo-500/20 border border-indigo-500/40 flex items-center justify-center text-xs font-black text-indigo-400 mt-0.5">
+                        {i + 1}
+                      </span>
+                      <p className="text-sm text-[#c4c0bc] leading-relaxed pt-0.5">{step}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </section>
+        )}
 
         {/* FAQ */}
         {post.faq && post.faq.length > 0 && (
@@ -416,36 +490,43 @@ export default function MagazinePostClient({ post, relatedPosts = [] }: { post: 
           </div>
         </section>
 
-        {/* 관련 매거진 */}
+        {/* 관련 AI 매거진 */}
         {relatedPosts.length > 0 && (
           <section className="mt-14">
             <h2 className="text-base font-black text-white mb-4 flex items-center gap-2">
               <span className="w-1 h-4 rounded-full bg-orange-500" />
-              관련 매거진
+              관련 AI 매거진
             </h2>
             <div className="grid gap-3 sm:grid-cols-3">
-              {relatedPosts.map(p => (
-                <Link
-                  key={p.id}
-                  href={`/magazine/${p.slug}`}
-                  className="group flex flex-col rounded-2xl bg-[#2a2826] border border-white/6 hover:border-orange-500/30 overflow-hidden transition-all"
-                >
-                  {p.heroThumbnail && !p.heroThumbnail.startsWith('data:') ? (
-                    <img src={p.heroThumbnail} alt={p.title} className="w-full h-28 object-cover" />
-                  ) : (
-                    <div className="w-full h-28 bg-[#1c1a18] flex items-center justify-center text-3xl">📰</div>
-                  )}
-                  <div className="p-3 flex flex-col gap-1">
-                    <span className="text-[10px] text-orange-400 font-bold">
-                      {CATEGORY_LABEL[p.category] ?? p.category}
-                    </span>
-                    <p className="text-sm text-white font-bold line-clamp-2 group-hover:text-orange-400 transition-colors leading-snug">
-                      {p.title}
-                    </p>
-                    <p className="text-[11px] text-[#75716e] mt-1">{p.readTime}분 읽기</p>
-                  </div>
-                </Link>
-              ))}
+              {relatedPosts.map(p => {
+                const relTopic = TOPIC_META[(p as any).topicCluster] ?? null
+                return (
+                  <Link
+                    key={p.id}
+                    href={`/magazine/${p.slug}`}
+                    className="group flex flex-col rounded-2xl bg-[#2a2826] border border-white/6 hover:border-orange-500/30 overflow-hidden transition-all"
+                  >
+                    {p.heroThumbnail && !p.heroThumbnail.startsWith('data:') ? (
+                      <img src={p.heroThumbnail} alt={p.title} className="w-full h-28 object-cover" />
+                    ) : (
+                      <div className="w-full h-28 bg-[#1c1a18] flex items-center justify-center text-3xl">🤖</div>
+                    )}
+                    <div className="p-3 flex flex-col gap-1">
+                      {relTopic ? (
+                        <span className={`text-[10px] font-bold ${relTopic.textColor}`}>
+                          {relTopic.emoji} {relTopic.label}
+                        </span>
+                      ) : (
+                        <span className="text-[10px] text-orange-400 font-bold">🤖 AI 매거진</span>
+                      )}
+                      <p className="text-sm text-white font-bold line-clamp-2 group-hover:text-orange-400 transition-colors leading-snug">
+                        {p.title}
+                      </p>
+                      <p className="text-[11px] text-[#75716e] mt-1">{p.readTime}분 읽기</p>
+                    </div>
+                  </Link>
+                )
+              })}
             </div>
           </section>
         )}
@@ -455,7 +536,6 @@ export default function MagazinePostClient({ post, relatedPosts = [] }: { post: 
 
         {/* 하단 CTA */}
         <div className="mt-12 grid sm:grid-cols-2 gap-4">
-          {/* 영상 직접 분석 */}
           <div className="p-6 rounded-2xl bg-gradient-to-br from-orange-500/10 to-amber-500/5 border border-orange-500/20">
             <p className="text-xs font-bold text-orange-400 mb-1">✦ AI 영상 분석</p>
             <p className="text-white font-bold mb-1">유튜브 영상을 바로 요약해보세요</p>
@@ -467,16 +547,15 @@ export default function MagazinePostClient({ post, relatedPosts = [] }: { post: 
               지금 바로 요약하기 →
             </Link>
           </div>
-          {/* 스퀘어 K */}
           <div className="p-6 rounded-2xl bg-gradient-to-br from-white/5 to-white/0 border border-white/8">
-            <p className="text-xs font-bold text-[#a4a09c] mb-1">📺 SQUARE K</p>
-            <p className="text-white font-bold mb-1">다른 사람들은 뭘 보고 있을까?</p>
-            <p className="text-[#a4a09c] text-sm mb-4">지금 트렌딩 중인 영상 요약을 피드에서 확인하세요.</p>
+            <p className="text-xs font-bold text-[#a4a09c] mb-1">🤖 AI 매거진</p>
+            <p className="text-white font-bold mb-1">더 많은 AI 기사 보기</p>
+            <p className="text-[#a4a09c] text-sm mb-4">AI 소식, 도구, 활용 사례를 매일 3회 업데이트합니다.</p>
             <Link
-              href="/square"
+              href="/magazine"
               className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-white text-sm font-bold border border-white/10 transition-colors"
             >
-              SQUARE K 둘러보기 →
+              AI 매거진 전체 보기 →
             </Link>
           </div>
         </div>

@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
   if (!isAdmin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await req.json().catch(() => ({})) as {
-    action: 'getSettings' | 'saveSettings' | 'listPosts' | 'publish' | 'delete' | 'getLogs'
+    action: 'getSettings' | 'saveSettings' | 'listPosts' | 'publish' | 'delete' | 'getLogs' | 'getPipelineSlots'
     settings?: Partial<CurationSettings>
     id?: string
   }
@@ -63,6 +63,22 @@ export async function POST(req: NextRequest) {
           .orderBy('createdAt', 'desc').limit(50).get()
         const logs = snap.docs.map(d => ({ id: d.id, ...d.data() }))
         return NextResponse.json(logs)
+      }
+
+      case 'getPipelineSlots': {
+        initAdminApp()
+        const { getFirestore: getFS3 } = await import('firebase-admin/firestore')
+        const db = getFS3()
+        const [newsSnap, toolsSnap, usecasesSnap] = await Promise.all([
+          db.collection('ai_pipeline').doc('news_slot').get(),
+          db.collection('ai_pipeline').doc('tools_slot').get(),
+          db.collection('ai_pipeline').doc('usecases_slot').get(),
+        ])
+        return NextResponse.json({
+          news:     newsSnap.exists     ? newsSnap.data()     : null,
+          tools:    toolsSnap.exists    ? toolsSnap.data()    : null,
+          usecases: usecasesSnap.exists ? usecasesSnap.data() : null,
+        })
       }
 
       default:

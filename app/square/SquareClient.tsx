@@ -497,12 +497,14 @@ function RecommendationCard({ slot }: { slot: RecSlot }) {
 }
 
 // 광고 카드 — 일반 카드 사이즈, 나중에 실제 광고 SDK로 교체
+const SQUARE_AD_SLOT = process.env.NEXT_PUBLIC_ADSENSE_SLOT_SQUARE_CARD || ''
+
 function AdCard({ slot }: { slot: AdSlotItem }) {
-  const hasAdsense = !!process.env.NEXT_PUBLIC_ADSENSE_CLIENT
+  const hasAdsense = !!process.env.NEXT_PUBLIC_ADSENSE_CLIENT && !!SQUARE_AD_SLOT
   if (hasAdsense) {
     return (
       <div key={slot.slotId} className="rounded-[18px] overflow-hidden">
-        <AdBanner adSlot="SQUARE_CARD" adFormat="rectangle" />
+        <AdBanner adSlot={SQUARE_AD_SLOT} adFormat="rectangle" />
       </div>
     )
   }

@@ -1,16 +1,31 @@
 {
   "functions": {
-    "app/api/summarize/route.ts":           { "maxDuration": 300 },
-    "app/api/summarize-pdf/route.ts":       { "maxDuration": 120 },
-    "app/api/summarize-voice/route.ts":     { "maxDuration": 120 },
-    "app/api/embed/route.ts":               { "maxDuration": 30  },
-    "app/api/cron/generate-post/route.ts":  { "maxDuration": 120 },
-    "app/api/cron/auto-collect/route.ts":   { "maxDuration": 120 }
+    "app/api/summarize/route.ts":               { "maxDuration": 300 },
+    "app/api/summarize-pdf/route.ts":           { "maxDuration": 120 },
+    "app/api/summarize-voice/route.ts":         { "maxDuration": 120 },
+    "app/api/embed/route.ts":                   { "maxDuration": 30  },
+    "app/api/cron/generate-post/route.ts":      { "maxDuration": 120 },
+    "app/api/cron/auto-collect/route.ts":       { "maxDuration": 120 },
+    "app/api/cron/ai-scout/route.ts":           { "maxDuration": 60  },
+    "app/api/cron/ai-evaluate/route.ts":        { "maxDuration": 120 },
+    "app/api/cron/ai-summarize/route.ts":       { "maxDuration": 120 }
   },
   "crons": [
-    { "path": "/api/cron/generate-post",  "schedule": "0 21 * * *" },
-    { "path": "/api/cron/generate-post",  "schedule": "0 5 * * *"  },
-    { "path": "/api/cron/generate-post",  "schedule": "0 13 * * *" },
-    { "path": "/api/cron/auto-collect",   "schedule": "0 19 * * *" }
+    { "path": "/api/cron/auto-collect",   "schedule": "0 19 * * *" },
+
+    { "path": "/api/cron/ai-scout",       "schedule": "0 21 * * *"  },
+    { "path": "/api/cron/ai-evaluate",    "schedule": "10 21 * * *" },
+    { "path": "/api/cron/ai-summarize",   "schedule": "20 21 * * *" },
+    { "path": "/api/cron/generate-post",  "schedule": "30 21 * * *" },
+
+    { "path": "/api/cron/ai-scout",       "schedule": "0 5 * * *"   },
+    { "path": "/api/cron/ai-evaluate",    "schedule": "10 5 * * *"  },
+    { "path": "/api/cron/ai-summarize",   "schedule": "20 5 * * *"  },
+    { "path": "/api/cron/generate-post",  "schedule": "30 5 * * *"  },
+
+    { "path": "/api/cron/ai-scout",       "schedule": "0 13 * * *"  },
+    { "path": "/api/cron/ai-evaluate",    "schedule": "10 13 * * *" },
+    { "path": "/api/cron/ai-summarize",   "schedule": "20 13 * * *" },
+    { "path": "/api/cron/generate-post",  "schedule": "30 13 * * *" }
   ]
 }

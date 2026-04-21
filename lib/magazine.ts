@@ -33,6 +33,11 @@ export interface CuratedPost {
   checklist?: string[]
   comments?: { popular_summary: string; popular_highlights: { text: string; likes: number }[]; recent_summary: string; recent_highlights: { text: string; likes: number }[] }
   platformReactions?: { summary: string; highlights: { text: string; context: string }[] }
+  deepDive?: {
+    concepts: { term: string; explanation: string }[]
+    background: string
+    practicalSteps: string[]
+  }
   readTime: number           // Estimated minutes
   status: 'draft' | 'published'
   publishedAt: string
@@ -431,6 +436,11 @@ ${hasPlatform ? `\n[SSOKTUBE 플랫폼 유저 반응 — 실제 학습자들의 
 
 [체크리스트 — 3-5개]
 - 이 영상 시청 후 독자가 바로 실천할 수 있는 구체적 행동 항목
+
+[심층 분석 deepDive — 글의 권위와 깊이를 높이는 핵심 섹션 ★필수★]
+- concepts: 이 영상·주제의 핵심 개념/용어 3-5개를 전문가 수준으로 설명. 단순 정의 금지. "왜 중요한가" + "어떻게 작동하는가" + "구체적 예시" 포함. 각 항목 최소 200자 이상.
+- background: 이 주제의 역사적 배경·현재 트렌드·왜 지금 중요한가를 2-3단락으로 작성. 영상 내용에 없는 맥락을 보완하여 독자가 다른 곳에선 쉽게 얻지 못하는 깊이를 제공.
+- practicalSteps: 이 정보를 오늘 당장 실행에 옮길 수 있는 구체적 단계 3-5개. "~하세요" 수준의 막연한 조언 금지. 실제 행동 가능한 구체적 내용(앱 이름, 수치, 방법 포함).
 ${hasComments ? `
 [유튜브 댓글 분석]
 - popular_summary: 인기 댓글 전체 경향 2-3문장
@@ -458,7 +468,15 @@ JSON 형식:
     {"question": "질문4?", "answer": "답변4"},
     {"question": "질문5?", "answer": "답변5"}
   ],
-  "checklist": ["항목1","항목2","항목3"]${hasComments ? `,
+  "checklist": ["항목1","항목2","항목3"],
+  "deepDive": {
+    "concepts": [
+      {"term": "핵심 용어1", "explanation": "200자 이상 심층 설명 — 왜 중요한가, 어떻게 작동하는가, 예시 포함"},
+      {"term": "핵심 용어2", "explanation": "200자 이상 심층 설명"}
+    ],
+    "background": "이 주제의 역사적 배경과 현재 트렌드 2-3단락 (영상에 없는 맥락 보완)",
+    "practicalSteps": ["구체적 실천 단계 1", "구체적 실천 단계 2", "구체적 실천 단계 3"]
+  }${hasComments ? `,
   "comments": {
     "popular_summary": "인기 댓글 경향 요약",
     "popular_highlights": [{"text": "댓글 원문", "likes": 123}],
@@ -481,6 +499,7 @@ JSON 형식:
     checklist?: string[]
     comments?: { popular_summary: string; popular_highlights: any[]; recent_summary: string; recent_highlights: any[] }
     platformReactions?: { summary: string; highlights: { text: string; context: string }[] }
+    deepDive?: { concepts: { term: string; explanation: string }[]; background: string; practicalSteps: string[] }
   }
   try {
     const match = raw.match(/\{[\s\S]*\}/)
@@ -510,6 +529,7 @@ JSON 형식:
     checklist: parsed.checklist ?? [],
     comments: parsed.comments ?? undefined,
     platformReactions: parsed.platformReactions ?? undefined,
+    deepDive: parsed.deepDive ?? undefined,
     readTime: estimateReadTime(parsed.body),
     status: 'draft',
     publishedAt: '',

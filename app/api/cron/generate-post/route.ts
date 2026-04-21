@@ -29,6 +29,50 @@ function isAuthorized(req: NextRequest): boolean {
   return auth === `Bearer ${secret}`
 }
 
+type AiSubcategory = 'news' | 'tools' | 'usecases'
+
+function getSubcategoryForSlot(): AiSubcategory {
+  const hour = new Date().getUTCHours()
+  if (hour >= 20 && hour < 24) return 'news'
+  if (hour >= 4 && hour < 8)   return 'tools'
+  return 'usecases'
+}
+
+// ai-summarize가 슬롯 문서에 저장한 sessionId로 정확히 픽업
+// 없거나 실패하면 기존 saved_summaries 폴백
+async function pickItem(lookbackDays: number) {
+  try {
+    initAdminApp()
+    const { getFirestore } = await import('firebase-admin/firestore')
+    const db = getFirestore()
+
+    const subcategory = getSubcategoryForSlot()
+    const slotDoc = await db.collection('ai_pipeline').doc(`${subcategory}_slot`).get()
+
+    if (slotDoc.exists) {
+      const slot = slotDoc.data()!
+      // status가 ready여야 하고, 1시간 이내 저장된 것만 유효
+      const savedAt = new Date(slot.savedAt as string).getTime()
+      const isRecent = Date.now() - savedAt < 90 * 60 * 1000 // 90분 이내
+      if (slot.status === 'ready' && isRecent && slot.savedSummaryId) {
+        const summaryDoc = await db.collection('saved_summaries').doc(slot.savedSummaryId as string).get()
+        if (summaryDoc.exists && !summaryDoc.data()?.postedToMagazine) {
+          console.log(`[generate-post] Picked from ai_pipeline slot: ${slot.title}`)
+          // 슬롯 상태를 'processing'으로 변경 (중복 발행 방지)
+          await slotDoc.ref.update({ status: 'processing' })
+          return { id: summaryDoc.id, ...summaryDoc.data() } as any
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('[generate-post] ai_pipeline slot read failed, falling back:', e)
+  }
+
+  // 폴백: 기존 로직
+  const summaries = await getRecentPublicSummaries(lookbackDays)
+  return pickBestSingle(summaries)
+}
+
 export async function GET(req: NextRequest) {
   if (!isAuthorized(req)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -37,13 +81,11 @@ export async function GET(req: NextRequest) {
   try {
     const settings = await getCurationSettings()
 
-    // 크론 실행 시각은 vercel.json이 고정 관리 — 경과 시간 체크 없이 enabled/manual만 확인
     if (!settings.enabled || settings.schedule === 'manual') {
       return NextResponse.json({ skipped: true, reason: 'Disabled or manual schedule' })
     }
 
-    const summaries = await getRecentPublicSummaries(settings.lookbackDays)
-    const item = pickBestSingle(summaries)
+    const item = await pickItem(settings.lookbackDays)
 
     if (!item) {
       return NextResponse.json({ skipped: true, reason: `No unposted summaries found in last ${settings.lookbackDays} days` })
@@ -67,11 +109,14 @@ export async function GET(req: NextRequest) {
 
     if (settings.autoPublish) await publishCuratedPostAdmin(id)
 
-    // 발행된 summary에 postedToMagazine 마킹
+    // 발행된 summary에 postedToMagazine 마킹 + 슬롯 문서 완료 처리
     try {
       initAdminApp()
       const { getFirestore } = await import('firebase-admin/firestore')
-      await getFirestore().collection('saved_summaries').doc(item.id).update({ postedToMagazine: true })
+      const db = getFirestore()
+      await db.collection('saved_summaries').doc(item.id).update({ postedToMagazine: true })
+      const subcategory = getSubcategoryForSlot()
+      await db.collection('ai_pipeline').doc(`${subcategory}_slot`).update({ status: 'published', publishedPostId: id }).catch(() => {})
     } catch { /* non-critical */ }
 
     await saveCurationSettingsAdmin({ lastGeneratedAt: new Date().toISOString() })
