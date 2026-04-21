@@ -393,29 +393,6 @@ export async function evaluateVideos(
 
 // ── Firestore 큐 관리 ─────────────────────────────────────────────────────────
 
-const PROJECT_ID = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID!
-const API_KEY    = process.env.NEXT_PUBLIC_FIREBASE_API_KEY!
-const FS_BASE    = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents`
-
-function toFV(v: unknown): unknown {
-  if (v === null || v === undefined) return { nullValue: null }
-  if (typeof v === 'string')  return { stringValue: v }
-  if (typeof v === 'number')  return { integerValue: String(v) }
-  if (typeof v === 'boolean') return { booleanValue: v }
-  if (Array.isArray(v))       return { arrayValue: { values: v.map(toFV) } }
-  if (typeof v === 'object') {
-    const fields: Record<string, unknown> = {}
-    for (const [k, val] of Object.entries(v as Record<string, unknown>)) fields[k] = toFV(val)
-    return { mapValue: { fields } }
-  }
-  return { stringValue: String(v) }
-}
-function toFields(obj: Record<string, unknown>) {
-  const f: Record<string, unknown> = {}
-  for (const [k, v] of Object.entries(obj)) f[k] = toFV(v)
-  return f
-}
-
 export async function saveScoutQueue(items: ScoutResult[]): Promise<void> {
   const subcategory = items[0]?.subcategory ?? 'news'
   try {
@@ -439,29 +416,30 @@ export async function saveEvaluateQueue(
   evaluated: EvaluatedVideo[],
 ): Promise<void> {
   const docId = `${subcategory}_${new Date().toISOString().slice(0, 13)}`
-  await fetch(`${FS_BASE}/ai_evaluate_queue/${docId}?key=${API_KEY}`, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      fields: toFields({
-        subcategory,
-        evaluated: evaluated.map(e => ({
-          videoId: e.videoId,
-          title: e.title,
-          channelTitle: e.channelTitle,
-          publishedAt: e.publishedAt,
-          transcript: e.transcript.slice(0, 8000),
-          compositeScore: e.compositeScore,
-          decision: e.decision,
-          geminiReason: e.geminiScore.reason,
-          claudeReason: e.claudeScore.reason,
-        })),
-        savedAt: new Date().toISOString(),
-        status: 'evaluated',
-      })
-    }),
-    cache: 'no-store',
-  })
+  try {
+    const { initAdminApp } = await import('./firebase-admin')
+    initAdminApp()
+    const { getFirestore } = await import('firebase-admin/firestore')
+    await getFirestore().collection('ai_evaluate_queue').doc(docId).set({
+      subcategory,
+      evaluated: evaluated.map(e => ({
+        videoId: e.videoId,
+        title: e.title,
+        channelTitle: e.channelTitle,
+        publishedAt: e.publishedAt,
+        transcript: e.transcript.slice(0, 8000),
+        compositeScore: e.compositeScore,
+        decision: e.decision,
+        geminiReason: e.geminiScore.reason,
+        claudeReason: e.claudeScore.reason,
+      })),
+      savedAt: new Date().toISOString(),
+      status: 'evaluated',
+    })
+    console.log(`[Evaluate] saveEvaluateQueue OK: ${docId} ${evaluated.length}개`)
+  } catch (e) {
+    console.error(`[Evaluate] saveEvaluateQueue error: ${e}`)
+  }
 }
 
 export async function getTopPickForPublish(subcategory: AiSubcategory): Promise<{
@@ -469,26 +447,22 @@ export async function getTopPickForPublish(subcategory: AiSubcategory): Promise<
 } | null> {
   const docId = `${subcategory}_${new Date().toISOString().slice(0, 13)}`
   try {
-    const res = await fetch(`${FS_BASE}/ai_evaluate_queue/${docId}?key=${API_KEY}`, { cache: 'no-store' })
-    if (!res.ok) return null
-    const doc = await res.json() as { fields?: Record<string, any> }
-    if (!doc.fields) return null
-
-    const evaluated = (doc.fields.evaluated?.arrayValue?.values ?? []) as any[]
+    const { initAdminApp } = await import('./firebase-admin')
+    initAdminApp()
+    const { getFirestore } = await import('firebase-admin/firestore')
+    const doc = await getFirestore().collection('ai_evaluate_queue').doc(docId).get()
+    if (!doc.exists) {
+      console.log(`[Summarize] evaluate queue not found: ${docId}`)
+      return null
+    }
+    const data = doc.data()!
+    const evaluated = (data.evaluated ?? []) as any[]
     const passes = evaluated
-      .map(e => ({
-        videoId: e.mapValue?.fields?.videoId?.stringValue ?? '',
-        title: e.mapValue?.fields?.title?.stringValue ?? '',
-        channelTitle: e.mapValue?.fields?.channelTitle?.stringValue ?? '',
-        transcript: e.mapValue?.fields?.transcript?.stringValue ?? '',
-        compositeScore: Number(e.mapValue?.fields?.compositeScore?.integerValue ?? 0),
-        decision: e.mapValue?.fields?.decision?.stringValue ?? 'FAIL',
-      }))
       .filter(e => e.decision === 'PASS')
       .sort((a, b) => b.compositeScore - a.compositeScore)
-
     return passes[0] ?? null
-  } catch {
+  } catch (e) {
+    console.error(`[Summarize] getTopPickForPublish error: ${e}`)
     return null
   }
 }
