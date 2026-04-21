@@ -2,8 +2,8 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 
 export const metadata: Metadata = {
-  title: '유튜브 영상을 블로그 글로 자동 변환 — SEO 초안 10분 완성 | 쏙튜브',
-  description: '유튜브 영상 URL 하나로 네이버 블로그·티스토리·워드프레스 SEO 최적화 글 초안을 자동 생성합니다. 유튜브 본 걸 블로그 글로 10분 만에.',
+  title: '유튜브 영상을 블로그 글로 자동 변환 — SEO 초안 1분 완성 | 쏙튜브',
+  description: '유튜브 영상 URL 하나로 네이버 블로그·티스토리·워드프레스 SEO 최적화 글 초안을 자동 생성합니다. 유튜브 본 걸 블로그 글로 1분 만에.',
   keywords: ['유튜브 블로그 변환', '유튜브 블로그 글 자동 생성', '영상 블로그 초안', '유튜브 티스토리 자동화', '유튜브 네이버 블로그', '영상 요약 블로그', '유튜브 SEO 블로그', '콘텐츠 자동 생성', '유튜브 글쓰기 도구', '블로그 포스팅 자동화'],
 }
 
@@ -16,9 +16,9 @@ export default function BlogGuidePage() {
           <span>›</span>
           <span className="text-white">블로그 초안 생성</span>
         </div>
-        <h1 className="text-2xl font-black text-white mb-3">✍️ 유튜브 본 걸 SEO 블로그 글로 10분 만에</h1>
+        <h1 className="text-2xl font-black text-white mb-3">✍️ 유튜브 본 걸 SEO 블로그 글로 1분 만에</h1>
         <p className="text-[#a4a09c] text-sm leading-relaxed">
-          유튜브를 보고 배운 내용을 블로그에 정리하려면 보통 1~2시간이 걸립니다. 쏙튜브는 영상 요약 결과를 <strong className="text-white">SEO 최적화 블로그 초안</strong>으로 자동 변환합니다. 제목·소제목 구조·본문·결론·메타 디스크립션까지 완성된 초안이 생성되어 네이버 블로그, 티스토리, 워드프레스에 바로 붙여넣기 할 수 있습니다.
+          유튜브를 보고 배운 내용을 블로그에 정리하려면 보통 1~2시간이 걸립니다. 쏙튜브는 영상 요약 결과를 <strong className="text-white">SEO 최적화 블로그 초안</strong>으로 자동 변환합니다. 영상 URL 입력 후 1분 안에 완성됩니다. 제목·소제목 구조·본문·결론·메타 디스크립션까지 완성된 초안이 생성되어 네이버 블로그, 티스토리, 워드프레스에 바로 붙여넣기 할 수 있습니다.
         </p>
       </div>
 

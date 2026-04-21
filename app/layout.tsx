@@ -65,6 +65,21 @@ export default function RootLayout({
             document.documentElement.classList.toggle('light', t === 'light');
           })()
         `}} />
+        {/* Naver Analytics */}
+        <Script
+          id="naver-analytics"
+          src="//wcs.pstatic.net/wcslog.js"
+          strategy="afterInteractive"
+        />
+        <Script
+          id="naver-analytics-init"
+          strategy="afterInteractive"
+          dangerouslySetInnerHTML={{ __html: `
+            if(!wcs_add) var wcs_add = {};
+            wcs_add["wa"] = "194425f5b7da7a0";
+            if(window.wcs) { wcs_do(); }
+          `}}
+        />
         {/* Google Tag Manager */}
         <Script
           id="gtm-head"
