@@ -86,7 +86,17 @@ const FEATURES = [
   },
 ]
 
+function shuffled<T>(arr: T[]): T[] {
+  const a = [...arr]
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]]
+  }
+  return a
+}
+
 export default function FeatureSlideshow() {
+  const [items] = useState(() => shuffled(FEATURES))
   const [current, setCurrent] = useState(0)
   const [animating, setAnimating] = useState(false)
 
@@ -99,15 +109,15 @@ export default function FeatureSlideshow() {
     }, 200)
   }, [animating])
 
-  const next = useCallback(() => goTo((current + 1) % FEATURES.length), [current, goTo])
-  const prev = useCallback(() => goTo((current - 1 + FEATURES.length) % FEATURES.length), [current, goTo])
+  const next = useCallback(() => goTo((current + 1) % items.length), [current, goTo, items.length])
+  const prev = useCallback(() => goTo((current - 1 + items.length) % items.length), [current, goTo, items.length])
 
   useEffect(() => {
-    const t = setInterval(next, 4000)
+    const t = setInterval(next, 3000)
     return () => clearInterval(t)
   }, [next])
 
-  const f = FEATURES[current]
+  const f = items[current]
 
   return (
     <div className="w-full flex flex-col items-center gap-3">
@@ -137,7 +147,7 @@ export default function FeatureSlideshow() {
           </svg>
         </button>
         <div className="flex items-center gap-1.5">
-          {FEATURES.map((_, i) => (
+          {items.map((_, i) => (
             <button
               key={i}
               onClick={() => goTo(i)}

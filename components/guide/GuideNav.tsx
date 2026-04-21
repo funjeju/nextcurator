@@ -26,7 +26,6 @@ const NAV = [
   { label: 'AI 대화 검색', href: '/guide/search', icon: '🔍' },
   { label: '스퀘어 활용법', href: '/guide/square', icon: '🌐' },
   { label: '클래스룸', href: '/guide/classroom', icon: '🎓' },
-  { label: '요금제 안내', href: '/guide/pricing', icon: '💳' },
 ]
 
 export default function GuideNav() {

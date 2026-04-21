@@ -30,7 +30,6 @@ const SECTIONS = [
     items: [
       { href: '/guide/square', icon: '🌐', title: '스퀘어 활용법', desc: '요약을 공유하고 다른 시청자의 해석 발견' },
       { href: '/guide/classroom', icon: '🎓', title: '클래스룸', desc: '선생님용 학습 관리 및 워크시트 배포' },
-      { href: '/guide/pricing', icon: '💳', title: '요금제 안내', desc: '무료·유료 플랜 비교' },
     ],
   },
 ]
