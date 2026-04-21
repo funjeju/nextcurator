@@ -16,10 +16,22 @@ interface PipelineSlot {
   status?: 'ready' | 'processing' | 'published' | string
 }
 
+interface ScoutQueueInfo {
+  status: string
+  savedAt: string
+  count: number
+  titles: string[]
+}
+
 interface PipelineSlots {
   news: PipelineSlot | null
   tools: PipelineSlot | null
   usecases: PipelineSlot | null
+  scoutQueue?: {
+    news: ScoutQueueInfo | null
+    tools: ScoutQueueInfo | null
+    usecases: ScoutQueueInfo | null
+  }
 }
 
 const SUBCATEGORY_META: Record<AiSubcategory, { label: string; emoji: string; color: string; border: string; bg: string }> = {
@@ -405,9 +417,23 @@ export default function CurationTab({ getAuthHeader }: {
                         <p className="text-[10px] text-[#4a4846]">{formatDate(slot.savedAt)}</p>
                       )}
                     </div>
-                  ) : (
-                    <p className="text-[11px] text-[#4a4846]">슬롯 비어있음</p>
-                  )}
+                  ) : (() => {
+                    const sq = slots?.scoutQueue?.[sub]
+                    return sq ? (
+                      <div>
+                        <div className="flex items-center gap-1.5 mb-1">
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded border font-bold ${sq.status === 'scouted' ? 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20' : 'bg-[#1c1a18] text-[#75716e] border-white/10'}`}>
+                            Scout {sq.status} · {sq.count}개
+                          </span>
+                        </div>
+                        {sq.titles.map((t, i) => (
+                          <p key={i} className="text-[10px] text-[#75716e] truncate">· {t}</p>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-[11px] text-[#4a4846]">슬롯 비어있음</p>
+                    )
+                  })()}
                 </div>
               )
             })}

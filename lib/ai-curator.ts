@@ -386,18 +386,26 @@ function toFields(obj: Record<string, unknown>) {
 }
 
 export async function saveScoutQueue(items: ScoutResult[]): Promise<void> {
-  await fetch(`${FS_BASE}/ai_scout_queue?key=${API_KEY}`, {
+  const subcategory = items[0]?.subcategory ?? 'news'
+  const res = await fetch(`${FS_BASE}/ai_scout_queue/${subcategory}?key=${API_KEY}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       fields: toFields({
-        items: items,
+        subcategory,
+        items,
         savedAt: new Date().toISOString(),
         status: 'scouted',
       })
     }),
     cache: 'no-store',
   })
+  if (!res.ok) {
+    const err = await res.text().catch(() => '')
+    console.error(`[Scout] saveScoutQueue failed HTTP ${res.status}: ${err.slice(0, 200)}`)
+  } else {
+    console.log(`[Scout] saveScoutQueue OK: ${subcategory} ${items.length}개`)
+  }
 }
 
 export async function saveEvaluateQueue(

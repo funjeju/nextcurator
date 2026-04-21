@@ -40,15 +40,19 @@ interface ScoutQueueItem {
   durationSec: number
 }
 
-async function readScoutQueue(): Promise<ScoutQueueItem[]> {
+async function readScoutQueue(subcategory: AiSubcategory): Promise<ScoutQueueItem[]> {
   try {
-    const res = await fetch(`${FS_BASE}/ai_scout_queue?key=${API_KEY}`, { cache: 'no-store' })
-    if (!res.ok) return []
+    const res = await fetch(`${FS_BASE}/ai_scout_queue/${subcategory}?key=${API_KEY}`, { cache: 'no-store' })
+    if (!res.ok) {
+      console.log(`[Evaluate] readScoutQueue HTTP ${res.status} for ${subcategory}`)
+      return []
+    }
     const doc = await res.json() as { fields?: Record<string, any> }
     if (!doc.fields) return []
 
     const status = doc.fields.status?.stringValue ?? ''
-    if (status !== 'scouted') return [] // 이미 처리됐거나 없음
+    console.log(`[Evaluate] scout queue status: ${status} for ${subcategory}`)
+    if (status !== 'scouted') return []
 
     const items = (doc.fields.items?.arrayValue?.values ?? []) as any[]
     return items.map((item: any) => {
@@ -58,16 +62,17 @@ async function readScoutQueue(): Promise<ScoutQueueItem[]> {
         title: f.title?.stringValue ?? '',
         channelTitle: f.channelTitle?.stringValue ?? '',
         publishedAt: f.publishedAt?.stringValue ?? '',
-        durationSec: Number(f.durationSec?.integerValue ?? 0),
+        durationSec: Number(f.durationSec?.integerValue ?? f.durationSec?.doubleValue ?? 0),
       }
     }).filter(i => i.videoId)
-  } catch {
+  } catch (e) {
+    console.log(`[Evaluate] readScoutQueue error: ${e}`)
     return []
   }
 }
 
-async function markScoutQueueProcessed(): Promise<void> {
-  await fetch(`${FS_BASE}/ai_scout_queue?key=${API_KEY}&updateMask.fieldPaths=status`, {
+async function markScoutQueueProcessed(subcategory: AiSubcategory): Promise<void> {
+  await fetch(`${FS_BASE}/ai_scout_queue/${subcategory}?key=${API_KEY}&updateMask.fieldPaths=status`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ fields: { status: { stringValue: 'processing' } } }),
@@ -76,12 +81,12 @@ async function markScoutQueueProcessed(): Promise<void> {
 }
 
 async function runEvaluate(subcategory: AiSubcategory) {
-  const candidates = await readScoutQueue()
+  const candidates = await readScoutQueue(subcategory)
   if (!candidates.length) {
     return NextResponse.json({ success: true, subcategory, message: 'No scout queue found' })
   }
 
-  await markScoutQueueProcessed()
+  await markScoutQueueProcessed(subcategory)
   console.log(`[AI Evaluate] ${candidates.length} candidates to evaluate for ${subcategory}`)
 
   // 최대 6개 자막 병렬 추출 (타임아웃 안전)

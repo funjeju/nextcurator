@@ -69,15 +69,33 @@ export async function POST(req: NextRequest) {
         initAdminApp()
         const { getFirestore: getFS3 } = await import('firebase-admin/firestore')
         const db = getFS3()
-        const [newsSnap, toolsSnap, usecasesSnap] = await Promise.all([
+        const [newsSnap, toolsSnap, usecasesSnap, scoutNews, scoutTools, scoutUsecases] = await Promise.all([
           db.collection('ai_pipeline').doc('news_slot').get(),
           db.collection('ai_pipeline').doc('tools_slot').get(),
           db.collection('ai_pipeline').doc('usecases_slot').get(),
+          db.collection('ai_scout_queue').doc('news').get(),
+          db.collection('ai_scout_queue').doc('tools').get(),
+          db.collection('ai_scout_queue').doc('usecases').get(),
         ])
+        const toScoutInfo = (snap: any) => {
+          if (!snap.exists) return null
+          const d = snap.data()
+          return {
+            status: d.status,
+            savedAt: d.savedAt,
+            count: (d.items ?? []).length,
+            titles: (d.items ?? []).slice(0, 3).map((i: any) => i.title?.slice(0, 50)),
+          }
+        }
         return NextResponse.json({
           news:     newsSnap.exists     ? newsSnap.data()     : null,
           tools:    toolsSnap.exists    ? toolsSnap.data()    : null,
           usecases: usecasesSnap.exists ? usecasesSnap.data() : null,
+          scoutQueue: {
+            news:     toScoutInfo(scoutNews),
+            tools:    toScoutInfo(scoutTools),
+            usecases: toScoutInfo(scoutUsecases),
+          },
         })
       }
 
