@@ -1,5 +1,6 @@
 import UrlInput from '@/components/home/UrlInput'
 import Header from '@/components/common/Header'
+import FeatureSlideshow from '@/components/home/FeatureSlideshow'
 
 export default function Home() {
   return (
@@ -38,6 +39,7 @@ export default function Home() {
           </div>
         </div>
 
+        <FeatureSlideshow />
         <UrlInput />
       </div>
       </main>

@@ -819,6 +819,62 @@ export async function getSavedSummariesByFolder(userId: string, folderId: string
 // ─────────────────────────────────────────────
 import { onSnapshot } from 'firebase/firestore'
 
+// ─────────────────────────────────────────────
+// YouTube Playlists Cache (Firestore)
+// ─────────────────────────────────────────────
+
+export interface YTCachedPlaylist {
+  id: string
+  title: string
+  itemCount: number
+  thumbnail: string
+  videoIds: string[]
+  lastSynced: any
+}
+
+export interface YTCachedVideo {
+  videoId: string
+  title: string
+  thumbnail: string
+  channelTitle: string
+  playlistId: string
+}
+
+export async function getYTPlaylists(userId: string): Promise<YTCachedPlaylist[]> {
+  const snap = await getDocs(collection(db, 'users', userId, 'yt_playlists'))
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }) as YTCachedPlaylist)
+}
+
+export async function getYTVideos(userId: string, playlistId: string): Promise<YTCachedVideo[]> {
+  const snap = await getDocs(collection(db, 'users', userId, 'yt_playlists', playlistId, 'videos'))
+  return snap.docs.map(d => d.data() as YTCachedVideo)
+}
+
+export async function saveYTPlaylistsAndVideos(
+  userId: string,
+  playlists: YTCachedPlaylist[],
+  videosByPlaylist: Record<string, YTCachedVideo[]>
+): Promise<void> {
+  const batch = writeBatch(db)
+  for (const pl of playlists) {
+    const plRef = doc(db, 'users', userId, 'yt_playlists', pl.id)
+    batch.set(plRef, pl, { merge: true })
+    for (const v of videosByPlaylist[pl.id] ?? []) {
+      const vRef = doc(db, 'users', userId, 'yt_playlists', pl.id, 'videos', v.videoId)
+      batch.set(vRef, v, { merge: true })
+    }
+  }
+  await batch.commit()
+}
+
+export async function getSummarizedVideoIds(userId: string): Promise<Set<string>> {
+  const q = query(collection(db, 'saved_summaries'), where('userId', '==', userId))
+  const snap = await getDocs(q)
+  const ids = new Set<string>()
+  snap.docs.forEach(d => { const vid = (d.data() as any).videoId; if (vid) ids.add(vid) })
+  return ids
+}
+
 export function subscribeFolders(userId: string, callback: (folders: Folder[]) => void) {
   const q = query(collection(db, 'folders'), where('userId', '==', userId))
   return onSnapshot(q, (snap) => {

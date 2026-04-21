@@ -270,8 +270,23 @@ export async function getRecentPublicSummaries(lookbackDays: number): Promise<Su
 
 // ─── Single video selection (hot_score 기반) ─────────────────────────────────
 
+function hasGoodQuality(s: SummaryForCuration): boolean {
+  const text = (s.contextSummary || s.reportSummary || '').trim()
+  // 요약이 너무 짧으면 자막 없는 영상일 가능성 높음
+  if (text.length < 150) return false
+  // 동일 구절이 5회 이상 반복되면 반복 자막 영상 (자막 오류)
+  const chunks = text.split(/[.\n!?]/).map(c => c.trim()).filter(c => c.length > 8)
+  const freq: Record<string, number> = {}
+  for (const chunk of chunks) {
+    const key = chunk.slice(0, 20)
+    freq[key] = (freq[key] ?? 0) + 1
+    if (freq[key] >= 5) return false
+  }
+  return true
+}
+
 export function pickBestSingle(summaries: SummaryForCuration[]): SummaryForCuration | null {
-  const candidates = summaries.filter(s => !s.postedToMagazine && s.title)
+  const candidates = summaries.filter(s => !s.postedToMagazine && s.title && hasGoodQuality(s))
   if (!candidates.length) return null
 
   const now = Date.now()
