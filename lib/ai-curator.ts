@@ -13,76 +13,11 @@ const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY!
 
 export type AiSubcategory = 'news' | 'tools' | 'usecases'
 
-interface ChannelDef {
-  name: string
-  lang: 'en' | 'ko'
-  priority: 1 | 2 | 3
-  /** YouTube @handle (e.g. 'lexfridman') — resolves with 1 quota instead of 100 */
-  handle?: string
-  /** Direct channelId — skips resolution entirely */
-  channelId?: string
-}
-
-export const WHITELIST: Record<AiSubcategory, ChannelDef[]> = {
-  news: [
-    { name: 'AI Explained',                      lang: 'en', priority: 1, handle: 'AIExplained' },
-    { name: 'Matthew Berman',                    lang: 'en', priority: 1, handle: 'matthew_berman' },
-    { name: 'Wes Roth',                          lang: 'en', priority: 1, handle: 'WesRoth' },
-    { name: 'The AI Daily Brief',                lang: 'en', priority: 1, handle: 'theaidailybrief' },
-    { name: 'Two Minute Papers',                 lang: 'en', priority: 1, handle: 'TwoMinutePapers' },
-    { name: 'Bloomberg Technology',              lang: 'en', priority: 1, handle: 'BloombergTechnology' },
-    { name: 'Machine Learning Street Talk',      lang: 'en', priority: 2, handle: 'MachineLearningStreetTalk' },
-    { name: 'Dwarkesh Patel',                    lang: 'en', priority: 2, handle: 'dwarkeshpatel' },
-    { name: 'Lex Fridman',                       lang: 'en', priority: 2, handle: 'lexfridman' },
-    { name: 'a16z',                              lang: 'en', priority: 2, handle: 'a16z' },
-    { name: '안될공학',                           lang: 'ko', priority: 1, handle: 'unrealclever' },
-    { name: '티타임즈TV',                         lang: 'ko', priority: 2, handle: 'ttimestv' },
-    { name: 'EO',                                lang: 'ko', priority: 2, handle: 'EO_studio' },
-    { name: '언더스탠딩',                         lang: 'ko', priority: 2, handle: 'understandingkorea' },
-    { name: 'AI타잔',                             lang: 'ko', priority: 3, handle: 'aitarzan' },
-  ],
-  tools: [
-    { name: 'Marques Brownlee',                  lang: 'en', priority: 1, handle: 'mkbhd' },
-    { name: 'The AI Advantage',                  lang: 'en', priority: 1, handle: 'TheAiAdvantage' },
-    { name: 'Theoretically Media',               lang: 'en', priority: 1, handle: 'Theoretically' },
-    { name: 'Fireship',                          lang: 'en', priority: 1, handle: 'Fireship' },
-    { name: 'All About AI',                      lang: 'en', priority: 2, handle: 'AllAboutAI' },
-    { name: 'Kevin Stratvert',                   lang: 'en', priority: 2, handle: 'KevinStratvert' },
-    { name: 'Cole Medin',                        lang: 'en', priority: 2, handle: 'ColeMedin' },
-    { name: '조코딩',                             lang: 'ko', priority: 1, handle: 'jocoding' },
-    { name: '테디노트',                           lang: 'ko', priority: 1, handle: 'teddynote' },
-    { name: '노마드코더',                         lang: 'ko', priority: 2, handle: 'nomadcoders' },
-    { name: '생활코딩',                           lang: 'ko', priority: 2, handle: 'egoing' },
-    { name: 'AI프리뷰',                           lang: 'ko', priority: 3 },
-  ],
-  usecases: [
-    { name: '일잘러를 위한 AI',                   lang: 'ko', priority: 1 },
-    { name: '노트북러너',                         lang: 'ko', priority: 1 },
-    { name: '월간 프롬프트',                      lang: 'ko', priority: 1 },
-    { name: 'The AI Advantage Igor Pogany',      lang: 'en', priority: 1, handle: 'TheAiAdvantage' },
-    { name: 'Prompt Engineering',                lang: 'en', priority: 1, handle: 'PromptEngineering' },
-    { name: 'Liam Ottley',                       lang: 'en', priority: 2, handle: 'LiamOttley' },
-    { name: 'Cole Medin',                        lang: 'en', priority: 2, handle: 'ColeMedin' },
-    { name: 'David Ondrej',                      lang: 'en', priority: 2, handle: 'DavidOndrej' },
-    { name: '자동화 연구소',                      lang: 'ko', priority: 2 },
-    { name: '드로우앤드류',                       lang: 'ko', priority: 2, handle: 'drewandrew' },
-    { name: 'Matt Wolfe Future Tools',           lang: 'en', priority: 3, handle: 'mreflow' },
-    { name: 'AI 업무비서',                        lang: 'ko', priority: 3 },
-  ],
-}
-
-// 카테고리별 키워드 폴백 (화이트리스트 후보 부족 시)
-export const FALLBACK_QUERIES: Record<AiSubcategory, string[]> = {
-  news:     ['AI news latest 2026', 'OpenAI Anthropic Google AI announcement', 'AI 최신 소식'],
-  tools:    ['new AI tool review 2026', 'AI tools comparison tutorial', 'AI 도구 리뷰'],
-  usecases: ['AI productivity workflow 2026', 'ChatGPT Claude practical use', 'AI 업무 활용'],
-}
-
-// 카테고리별 신선도 기준 (초)
+// ── 신선도 기준 (초) ──────────────────────────────────────────────────────────
 export const FRESHNESS_WINDOW: Record<AiSubcategory, number> = {
-  news:     48 * 3600,      // 48시간
-  tools:    7 * 24 * 3600,  // 1주일
-  usecases: 7 * 24 * 3600,  // 1주일
+  news:     48 * 3600,
+  tools:    7 * 24 * 3600,
+  usecases: 7 * 24 * 3600,
 }
 
 // ── 클릭베이트 필터 ────────────────────────────────────────────────────────────
@@ -91,165 +26,106 @@ const CLICKBAIT_KW = [
   'SHOCKING', 'DESTROYED', 'BANNED', 'You MUST', 'FINALLY',
   'Everything is OVER', 'CRAZY', 'INSANE reveal',
 ]
-
 export function isClickbait(title: string): boolean {
   return CLICKBAIT_KW.some(kw => title.toLowerCase().includes(kw.toLowerCase()))
 }
 
-// ── YouTube API 헬퍼 ───────────────────────────────────────────────────────────
-
-export interface VideoMeta {
-  videoId: string
-  title: string
-  channelTitle: string
-  channelId: string
-  publishedAt: string
-  durationSec: number
-  viewCount: number
-  hasCaption: boolean
-  lang: 'en' | 'ko' | 'other'
-}
-
-function parseDuration(iso: string): number {
-  const m = iso.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/)
-  if (!m) return 0
-  return (+(m[1] ?? 0)) * 3600 + (+(m[2] ?? 0)) * 60 + (+(m[3] ?? 0))
-}
-
-function detectLang(title: string, defaultLang: 'en' | 'ko'): 'en' | 'ko' | 'other' {
-  const hasKorean = /[가-힣]/.test(title)
-  if (hasKorean) return 'ko'
-  if (defaultLang === 'en') return 'en'
+function detectLang(title: string): 'en' | 'ko' | 'other' {
+  if (/[가-힣]/.test(title)) return 'ko'
+  if (/[a-zA-Z]/.test(title)) return 'en'
   return 'other'
 }
 
-// 채널 @handle로 채널 ID 조회 (1 quota — 검색 100 quota보다 훨씬 저렴)
-async function resolveChannelByHandle(handle: string): Promise<string | null> {
-  try {
-    const url = new URL('https://www.googleapis.com/youtube/v3/channels')
-    url.searchParams.set('part', 'id')
-    url.searchParams.set('forHandle', `@${handle}`)
-    url.searchParams.set('key', YOUTUBE_API_KEY)
-    const res = await fetch(url.toString(), { signal: AbortSignal.timeout(8000) })
-    if (!res.ok) return null
-    const data = await res.json() as { items?: { id?: string }[] }
-    return data.items?.[0]?.id ?? null
-  } catch {
-    return null
-  }
+// duration 파싱 — ISO8601 / 초(number) / "MM:SS" / "HH:MM:SS" 모두 대응
+function parseDurationFlex(d: string | number | undefined): number {
+  if (!d) return 0
+  if (typeof d === 'number') return d
+  const iso = d.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/)
+  if (iso) return (+(iso[1] ?? 0)) * 3600 + (+(iso[2] ?? 0)) * 60 + (+(iso[3] ?? 0))
+  const parts = d.split(':').map(Number)
+  if (parts.length === 2) return parts[0] * 60 + parts[1]
+  if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2]
+  return 0
 }
 
-// 채널명으로 YouTube 채널 ID 검색 (검색 1회당 100 quota — 폴백용)
-async function resolveChannelByName(channelName: string): Promise<string | null> {
-  try {
-    const url = new URL('https://www.googleapis.com/youtube/v3/search')
-    url.searchParams.set('part', 'id')
-    url.searchParams.set('type', 'channel')
-    url.searchParams.set('q', channelName)
-    url.searchParams.set('maxResults', '1')
-    url.searchParams.set('key', YOUTUBE_API_KEY)
-    const res = await fetch(url.toString(), { signal: AbortSignal.timeout(8000) })
-    if (!res.ok) return null
-    const data = await res.json() as { items?: { id?: { channelId?: string } }[] }
-    return data.items?.[0]?.id?.channelId ?? null
-  } catch {
-    return null
-  }
+function extractVideoId(raw: Record<string, unknown>): string {
+  if (typeof raw.videoId === 'string') return raw.videoId
+  if (typeof raw.id === 'string' && raw.id.length === 11) return raw.id
+  const url = (raw.url ?? raw.link ?? '') as string
+  const m = url.match(/(?:v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/)
+  return m?.[1] ?? ''
 }
 
-// 채널의 업로드 플레이리스트 ID 조회 (채널당 1 quota)
-async function getUploadPlaylistId(channelId: string): Promise<string | null> {
-  try {
-    const url = new URL('https://www.googleapis.com/youtube/v3/channels')
-    url.searchParams.set('part', 'contentDetails')
-    url.searchParams.set('id', channelId)
-    url.searchParams.set('key', YOUTUBE_API_KEY)
-    const res = await fetch(url.toString(), { signal: AbortSignal.timeout(8000) })
-    if (!res.ok) return null
-    const data = await res.json() as { items?: { contentDetails?: { relatedPlaylists?: { uploads?: string } } }[] }
-    return data.items?.[0]?.contentDetails?.relatedPlaylists?.uploads ?? null
-  } catch {
-    return null
-  }
-}
+// ── SocialKit Scout 헬퍼 ──────────────────────────────────────────────────────
 
-// 플레이리스트에서 최근 영상 ID 수집 (1 quota)
-async function getRecentVideoIds(playlistId: string, maxResults = 5): Promise<string[]> {
-  try {
-    const url = new URL('https://www.googleapis.com/youtube/v3/playlistItems')
-    url.searchParams.set('part', 'contentDetails')
-    url.searchParams.set('playlistId', playlistId)
-    url.searchParams.set('maxResults', String(maxResults))
-    url.searchParams.set('key', YOUTUBE_API_KEY)
-    const res = await fetch(url.toString(), { signal: AbortSignal.timeout(8000) })
-    if (!res.ok) return []
-    const data = await res.json() as { items?: { contentDetails?: { videoId?: string } }[] }
-    return (data.items ?? []).map(i => i.contentDetails?.videoId ?? '').filter(Boolean)
-  } catch {
-    return []
-  }
-}
+const SK_BASE = 'https://api.socialkit.dev'
 
-// videoId 배열의 메타 일괄 조회 (1 quota per call)
-export async function fetchVideoMetas(videoIds: string[]): Promise<VideoMeta[]> {
-  if (!videoIds.length) return []
+async function skGet(path: string, params: Record<string, string>): Promise<unknown> {
+  const key = process.env.SOCIALKIT_API_KEY
+  if (!key) return null
   try {
-    const url = new URL('https://www.googleapis.com/youtube/v3/videos')
-    url.searchParams.set('part', 'snippet,statistics,contentDetails')
-    url.searchParams.set('id', videoIds.join(','))
-    url.searchParams.set('key', YOUTUBE_API_KEY)
-    const res = await fetch(url.toString(), { signal: AbortSignal.timeout(10000) })
-    if (!res.ok) return []
-    const data = await res.json() as {
-      items?: {
-        id: string
-        snippet?: { title?: string; channelTitle?: string; channelId?: string; publishedAt?: string; defaultAudioLanguage?: string }
-        statistics?: { viewCount?: string }
-        contentDetails?: { duration?: string; caption?: string }
-      }[]
-    }
-    return (data.items ?? []).map(item => {
-      const audioLang = item.snippet?.defaultAudioLanguage ?? ''
-      const title = item.snippet?.title ?? ''
-      const chanLang: 'en' | 'ko' = audioLang.startsWith('ko') ? 'ko' : 'en'
-      return {
-        videoId: item.id,
-        title,
-        channelTitle: item.snippet?.channelTitle ?? '',
-        channelId: item.snippet?.channelId ?? '',
-        publishedAt: item.snippet?.publishedAt ?? '',
-        durationSec: parseDuration(item.contentDetails?.duration ?? ''),
-        viewCount: Number(item.statistics?.viewCount ?? 0),
-        hasCaption: item.contentDetails?.caption === 'true',
-        lang: detectLang(title, chanLang),
-      }
+    const url = new URL(`${SK_BASE}/${path}`)
+    Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v))
+    const res = await fetch(url.toString(), {
+      headers: { 'x-access-key': key },
+      signal: AbortSignal.timeout(12000),
     })
-  } catch {
-    return []
+    if (!res.ok) {
+      console.log(`[Scout] SK ${path} HTTP ${res.status}`)
+      return null
+    }
+    return await res.json()
+  } catch (e) {
+    console.log(`[Scout] SK ${path} error: ${e}`)
+    return null
   }
 }
 
-// 키워드 검색으로 videoId 수집 (100 quota)
-async function searchVideoIds(query: string, maxResults = 8): Promise<string[]> {
-  try {
-    const url = new URL('https://www.googleapis.com/youtube/v3/search')
-    url.searchParams.set('part', 'id')
-    url.searchParams.set('type', 'video')
-    url.searchParams.set('q', query)
-    url.searchParams.set('maxResults', String(maxResults))
-    url.searchParams.set('order', 'date')
-    url.searchParams.set('key', YOUTUBE_API_KEY)
-    const res = await fetch(url.toString(), { signal: AbortSignal.timeout(10000) })
-    if (!res.ok) return []
-    const data = await res.json() as { items?: { id?: { videoId?: string } }[] }
-    return (data.items ?? []).map(i => i.id?.videoId ?? '').filter(Boolean)
-  } catch {
-    return []
-  }
+// SocialKit search → 영상 목록 반환
+async function skSearch(query: string, limit = 10): Promise<Record<string, unknown>[]> {
+  const raw = await skGet('youtube/search', { q: query, limit: String(limit) })
+  if (!raw) return []
+  const r = raw as Record<string, unknown>
+  // 다양한 응답 형태 대응
+  const items = (Array.isArray(r.data) ? r.data
+    : Array.isArray((r.data as Record<string,unknown>)?.videos) ? (r.data as Record<string,unknown>).videos
+    : Array.isArray((r.data as Record<string,unknown>)?.results) ? (r.data as Record<string,unknown>).results
+    : Array.isArray(r.videos) ? r.videos
+    : Array.isArray(r.results) ? r.results
+    : []) as Record<string, unknown>[]
+  console.log(`[Scout] skSearch "${query}" → ${items.length}개`)
+  return items
 }
 
-// ── Scout: 화이트리스트 + 폴백 검색으로 후보 수집 ─────────────────────────────
+// SocialKit video-details → 단일 영상 상세
+async function skVideoDetails(videoId: string): Promise<Record<string, unknown> | null> {
+  const videoUrl = `https://www.youtube.com/watch?v=${videoId}`
+  const raw = await skGet('youtube/video-details', { url: videoUrl })
+  if (!raw) return null
+  const r = raw as Record<string, unknown>
+  return (r.data as Record<string, unknown>) ?? r
+}
 
+// ── Scout 검색 쿼리 ───────────────────────────────────────────────────────────
+export const SCOUT_QUERIES: Record<AiSubcategory, string[]> = {
+  news: [
+    'AI news latest 2026',
+    'OpenAI Anthropic Google AI announcement 2026',
+    'AI 최신 소식 인공지능 2026',
+  ],
+  tools: [
+    'new AI tool review tutorial 2026',
+    'best AI software productivity 2026',
+    'AI 도구 활용법 리뷰 2026',
+  ],
+  usecases: [
+    'AI workflow automation productivity 2026',
+    'ChatGPT Claude practical use case 2026',
+    'AI 업무 자동화 활용 2026',
+  ],
+}
+
+// ── Scout 결과 타입 ───────────────────────────────────────────────────────────
 export interface ScoutResult {
   videoId: string
   title: string
@@ -259,112 +135,97 @@ export interface ScoutResult {
   durationSec: number
   viewCount: number
   lang: 'en' | 'ko' | 'other'
-  source: 'whitelist' | 'search'
+  source: 'search'
   subcategory: AiSubcategory
 }
 
-async function resolveAndFetch(
-  channel: ChannelDef,
-  channelIdCache: Map<string, string>,
-): Promise<string[]> {
-  let channelId = channelIdCache.get(channel.name)
-  if (!channelId) {
-    if (channel.channelId) {
-      channelId = channel.channelId
-    } else if (channel.handle) {
-      channelId = await resolveChannelByHandle(channel.handle) ?? ''
-      if (!channelId) {
-        // handle이 틀렸을 수 있으니 이름 검색으로 폴백
-        channelId = await resolveChannelByName(channel.name) ?? ''
-      }
-    } else {
-      channelId = await resolveChannelByName(channel.name) ?? ''
-    }
-    if (channelId) channelIdCache.set(channel.name, channelId)
-  }
-  if (!channelId) {
-    console.log(`[Scout] ⚠️ Failed to resolve: ${channel.name}`)
-    return []
-  }
-
-  const playlistId = await getUploadPlaylistId(channelId)
-  if (!playlistId) {
-    console.log(`[Scout] ⚠️ No upload playlist: ${channel.name} (${channelId})`)
-    return []
-  }
-
-  const videoIds = await getRecentVideoIds(playlistId, 3)
-  console.log(`[Scout] ✅ ${channel.name}: ${videoIds.length} videos`)
-  return videoIds
-}
-
 export interface ScoutDiag {
-  channelsAttempted: number
-  channelsResolved: number
-  rawIds: number
+  queriesRun: number
+  rawFound: number
   afterFilter: number
-  fallbackUsed: boolean
-  fallbackFound: number
-  filteredReasons: { duration: number; clickbait: number; old: number }
+  detailsFetched: number
+  filteredReasons: { duration: number; clickbait: number; old: number; noId: number }
 }
 
 export async function scoutCandidates(
   subcategory: AiSubcategory,
-  channelIdCache: Map<string, string>,
+  _cache: Map<string, string>,       // 하위 호환 — 더 이상 사용 안 함
   alreadyCollectedIds: Set<string>,
 ): Promise<{ results: ScoutResult[]; diag: ScoutDiag }> {
-  const channels = WHITELIST[subcategory]
   const freshnessMs = FRESHNESS_WINDOW[subcategory] * 1000
   const cutoff = Date.now() - freshnessMs
-  const diag: ScoutDiag = { channelsAttempted: 0, channelsResolved: 0, rawIds: 0, afterFilter: 0, fallbackUsed: false, fallbackFound: 0, filteredReasons: { duration: 0, clickbait: 0, old: 0 } }
+  const diag: ScoutDiag = { queriesRun: 0, rawFound: 0, afterFilter: 0, detailsFetched: 0, filteredReasons: { duration: 0, clickbait: 0, old: 0, noId: 0 } }
 
-  const activeChannels = channels.filter(c => c.priority <= 2)
-  diag.channelsAttempted = activeChannels.length
+  const queries = SCOUT_QUERIES[subcategory]
+  const seen = new Set<string>()
+  const candidates: ScoutResult[] = []
 
-  const idBatches = await Promise.all(
-    activeChannels.map(async ch => {
-      const ids = await resolveAndFetch(ch, channelIdCache).catch(() => [] as string[])
-      if (ids.length > 0) diag.channelsResolved++
-      return ids
-    })
-  )
-  const whitelistIds = [...new Set(idBatches.flat())].filter(id => !alreadyCollectedIds.has(id))
-  diag.rawIds = whitelistIds.length
+  for (const query of queries) {
+    if (candidates.length >= 8) break
+    diag.queriesRun++
 
-  let metas = await fetchVideoMetas(whitelistIds.slice(0, 20))
+    const items = await skSearch(query, 10)
+    diag.rawFound += items.length
 
-  metas = metas.filter(v => {
-    if (v.durationSec < 180 || v.durationSec > 3600) { diag.filteredReasons.duration++; return false }
-    if (isClickbait(v.title)) { diag.filteredReasons.clickbait++; return false }
-    if (new Date(v.publishedAt).getTime() < cutoff) { diag.filteredReasons.old++; return false }
-    if (alreadyCollectedIds.has(v.videoId)) return false
-    return true
-  })
-  diag.afterFilter = metas.length
+    for (const item of items) {
+      if (candidates.length >= 8) break
 
-  let results: ScoutResult[] = metas.map(v => ({ ...v, source: 'whitelist' as const, subcategory }))
+      const videoId = extractVideoId(item)
+      if (!videoId || seen.has(videoId) || alreadyCollectedIds.has(videoId)) {
+        if (!videoId) diag.filteredReasons.noId++
+        continue
+      }
+      seen.add(videoId)
 
-  if (results.length < 4) {
-    diag.fallbackUsed = true
-    for (const query of FALLBACK_QUERIES[subcategory]) {
-      const ids = await searchVideoIds(query, 6)
-      const filtered = ids.filter(id => !alreadyCollectedIds.has(id) && !results.find(r => r.videoId === id))
-      const fallbackMetas = await fetchVideoMetas(filtered)
-      const valid = fallbackMetas.filter(v =>
-        v.durationSec >= 180 && v.durationSec <= 3600 &&
-        !isClickbait(v.title) &&
-        new Date(v.publishedAt).getTime() >= cutoff
-      )
-      results.push(...valid.map(v => ({ ...v, source: 'search' as const, subcategory })))
-      diag.fallbackFound += valid.length
-      if (results.length >= 6) break
+      // search 결과에 이미 메타가 있으면 바로 사용, 없으면 video-details 호출
+      let title = (item.title ?? item.name ?? '') as string
+      let channelTitle = (item.channelTitle ?? item.channel ?? '') as string
+      let channelId = (item.channelId ?? '') as string
+      let publishedAt = (item.publishedAt ?? item.published_at ?? item.date ?? '') as string
+      let durationSec = parseDurationFlex(item.duration as string | number | undefined)
+      let viewCount = Number(item.viewCount ?? item.views ?? 0)
+
+      // 핵심 정보 부족 시 video-details 추가 호출
+      if (!title || !publishedAt || durationSec === 0) {
+        diag.detailsFetched++
+        const detail = await skVideoDetails(videoId)
+        if (detail) {
+          title = title || (detail.title as string) || ''
+          channelTitle = channelTitle || (detail.channelTitle as string) || (detail.channel as string) || ''
+          channelId = channelId || (detail.channelId as string) || ''
+          publishedAt = publishedAt || (detail.publishedAt as string) || (detail.published_at as string) || ''
+          durationSec = durationSec || parseDurationFlex(detail.duration as string | number | undefined)
+          viewCount = viewCount || Number(detail.viewCount ?? detail.views ?? 0)
+        }
+      }
+
+      if (!title) continue
+
+      // 필터
+      if (durationSec > 0 && (durationSec < 180 || durationSec > 3600)) { diag.filteredReasons.duration++; continue }
+      if (isClickbait(title)) { diag.filteredReasons.clickbait++; continue }
+      if (publishedAt && new Date(publishedAt).getTime() < cutoff) { diag.filteredReasons.old++; continue }
+
+      candidates.push({
+        videoId,
+        title,
+        channelTitle,
+        channelId,
+        publishedAt,
+        durationSec,
+        viewCount,
+        lang: detectLang(title),
+        source: 'search',
+        subcategory,
+      })
     }
   }
 
+  diag.afterFilter = candidates.length
+  console.log(`[Scout] ${subcategory}: 쿼리${diag.queriesRun}개 → 원본${diag.rawFound}개 → 필터후${diag.afterFilter}개 (duration:${diag.filteredReasons.duration} old:${diag.filteredReasons.old} clickbait:${diag.filteredReasons.clickbait})`)
+
   return {
-    results: results
-      .sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime())
-      .slice(0, 8),
+    results: candidates.sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime()),
     diag,
   }
 }

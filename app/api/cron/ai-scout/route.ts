@@ -7,7 +7,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import {
   AiSubcategory,
-  ScoutDiag,
   scoutCandidates,
   saveScoutQueue,
 } from '@/lib/ai-curator'
@@ -62,7 +61,7 @@ async function runScout(subcategory: AiSubcategory) {
 
   const { results: candidates, diag } = await scoutCandidates(subcategory, channelIdCache, alreadyIds)
 
-  console.log(`[AI Scout] subcategory=${subcategory} channels=${diag.channelsResolved}/${diag.channelsAttempted} rawIds=${diag.rawIds} afterFilter=${diag.afterFilter} fallback=${diag.fallbackUsed}(+${diag.fallbackFound}) final=${candidates.length}`)
+  console.log(`[AI Scout] subcategory=${subcategory} queries=${diag.queriesRun} raw=${diag.rawFound} afterFilter=${diag.afterFilter} detailsFetched=${diag.detailsFetched} final=${candidates.length}`)
 
   if (candidates.length === 0) {
     return NextResponse.json({ success: true, found: 0, subcategory, diag, message: 'No candidates found' })
