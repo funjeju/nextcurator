@@ -107,7 +107,9 @@ export default function UrlInput() {
       setError('PDF 문서 또는 음성 파일(MP3, WAV, M4A 등)만 지원합니다.')
       return
     }
-    if (file.size > 20 * 1024 * 1024) {
+    // TODO: 요금제 차등화 — 무료: 20MB, 유료Pro: 100MB, 어드민: 무제한
+    const isAdmin = user?.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL
+    if (!isAdmin && file.size > 20 * 1024 * 1024) {
       setError('20MB 이하 파일만 업로드할 수 있습니다.')
       return
     }
@@ -125,9 +127,14 @@ export default function UrlInput() {
       formData.append('file', file)
       if (!isAudio && selectedCategory !== 'auto') formData.append('category', selectedCategory)
 
+      const headers: HeadersInit = {}
+      if (user) {
+        try { headers['Authorization'] = `Bearer ${await user.getIdToken()}` } catch {}
+      }
+
       setStep(3)
       const endpoint = isAudio ? '/api/summarize-voice' : '/api/summarize-pdf'
-      const res = await fetch(endpoint, { method: 'POST', body: formData, signal: controller.signal })
+      const res = await fetch(endpoint, { method: 'POST', body: formData, headers, signal: controller.signal })
       setStep(4)
       if (!res.ok) { const d = await res.json(); throw new Error(d.error || '처리 실패') }
       const data = await res.json()

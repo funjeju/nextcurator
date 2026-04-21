@@ -74,7 +74,10 @@ export async function POST(req: NextRequest) {
     if (!file.name.toLowerCase().endsWith('.pdf')) {
       return NextResponse.json({ error: 'PDF 파일만 업로드할 수 있습니다.' }, { status: 400 })
     }
-    if (file.size > 20 * 1024 * 1024) {
+    // TODO: 요금제 차등화 — 무료: 20MB, 유료Pro: 100MB, 어드민: 무제한
+    const idToken = req.headers.get('Authorization')?.replace('Bearer ', '')
+    const isAdmin = idToken ? await import('@/lib/admin').then(m => m.checkIsAdminByToken(idToken)) : false
+    if (!isAdmin && file.size > 20 * 1024 * 1024) {
       return NextResponse.json({ error: 'PDF 파일은 20MB 이하만 가능합니다.' }, { status: 400 })
     }
 
