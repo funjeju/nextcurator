@@ -33,20 +33,21 @@ export default function ExtensionAuthPage() {
       const idToken = await user.getIdToken(true)
 
       await new Promise<void>((resolve, reject) => {
-        if (typeof chrome === 'undefined' || !chrome.runtime) {
+        const w = window as any
+        if (typeof w.chrome === 'undefined' || !w.chrome?.runtime) {
           reject(new Error('Chrome 확장 환경이 아닙니다.'))
           return
         }
-        chrome.runtime.sendMessage(eid, {
+        w.chrome.runtime.sendMessage(eid, {
           type: 'ssoktube_auth',
           idToken,
           uid: user.uid,
           email: user.email,
           displayName: user.displayName,
           photoURL: user.photoURL,
-        }, (response) => {
-          if (chrome.runtime.lastError) {
-            reject(new Error(chrome.runtime.lastError.message))
+        }, (response: any) => {
+          if (w.chrome.runtime.lastError) {
+            reject(new Error(w.chrome.runtime.lastError.message))
           } else {
             resolve()
           }
