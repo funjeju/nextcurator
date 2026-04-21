@@ -96,8 +96,18 @@ function PipelineTrigger({
       })
       const data = await res.json()
       const ok = !!(data.success || data.ok)
-      const msg = data.error ?? data.message ?? data.reason
-        ?? (ok ? `${stage} 완료` : '알 수 없는 오류')
+      let msg: string
+      if (stage === 'scout') {
+        const d = data.diag
+        if (d) {
+          msg = `채널 ${d.channelsResolved}/${d.channelsAttempted}개 성공, ID ${d.rawIds}개 → 필터 후 ${d.afterFilter}개${d.fallbackUsed ? ` + 폴백 ${d.fallbackFound}개` : ''} → 최종 ${data.found ?? 0}개 저장`
+          if (d.filteredReasons?.duration || d.filteredReasons?.old) msg += ` [제외: 길이${d.filteredReasons.duration} 오래됨${d.filteredReasons.old}]`
+        } else {
+          msg = data.error ?? data.message ?? (ok ? 'scout 완료' : '알 수 없는 오류')
+        }
+      } else {
+        msg = data.error ?? data.message ?? data.reason ?? (ok ? `${stage} 완료` : '알 수 없는 오류')
+      }
       setResult({ stage, ok, msg })
       if (ok) onDone()
     } catch (e) {
