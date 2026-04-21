@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
 import { CurationSettings, CuratedPost, MagazineLog } from '@/lib/magazine'
+import type { PipelineLog } from '@/lib/pipeline-logger'
 
 type AiSubcategory = 'news' | 'tools' | 'usecases'
 
@@ -87,6 +88,255 @@ const STAGE_META: Record<PipelineStage, { label: string; api: string; color: str
   publish:  { label: '④ Publish',  api: '/api/cron/generate-post',color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/30' },
 }
 
+function PipelineLogModal({ log, onClose }: { log: PipelineLog; onClose: () => void }) {
+  const meta = SUBCATEGORY_META[log.subcategory as AiSubcategory] ?? SUBCATEGORY_META.news
+  const kstDate = log.startedAt
+    ? new Intl.DateTimeFormat('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Seoul' }).format(new Date(log.startedAt))
+    : '—'
+
+  const decisionBadge = (d: string) => {
+    if (d === 'PASS') return 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+    if (d === 'FAIL') return 'bg-red-500/20 text-red-400 border-red-500/30'
+    return 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'
+  }
+
+  const stageBadge = (status?: string) => {
+    if (!status)            return 'bg-[#2a2826] text-[#4a4846] border-white/8'
+    if (status === 'done')    return 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+    if (status === 'failed')  return 'bg-red-500/20 text-red-400 border-red-500/30'
+    if (status === 'skipped') return 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'
+    return 'bg-blue-500/20 text-blue-400 border-blue-500/30'
+  }
+
+  const statusLabel: Record<string, string> = { done: '완료', failed: '실패', skipped: '스킵', running: '실행중' }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-start justify-center bg-black/70 backdrop-blur-sm overflow-y-auto py-8 px-4"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-3xl bg-[#1c1a18] rounded-2xl border border-white/10 overflow-hidden shadow-2xl"
+        onClick={e => e.stopPropagation()}
+      >
+        {/* 헤더 */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-white/8 bg-[#161412]">
+          <div className="flex items-center gap-3">
+            <span className="text-2xl">{meta.emoji}</span>
+            <div>
+              <p className={`text-sm font-black ${meta.color}`}>{meta.label} 파이프라인 로그</p>
+              <p className="text-[11px] text-[#75716e]">{kstDate} (KST) · ID: {log.id}</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="text-[#75716e] hover:text-white transition-colors text-xl leading-none">✕</button>
+        </div>
+
+        <div className="p-6 space-y-5 overflow-y-auto max-h-[75vh]">
+
+          {/* ─── 1단계: Scout ─── */}
+          <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 overflow-hidden">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-blue-500/15">
+              <div className="flex items-center gap-2">
+                <span className="text-blue-400 font-black text-sm">① Scout</span>
+                {log.scout?.diag && (
+                  <span className="text-[10px] text-[#75716e]">
+                    쿼리 {log.scout.diag.queriesRun}개 → 원본 {log.scout.diag.rawFound}개 → 필터 후 {log.scout.diag.afterFilter}개
+                  </span>
+                )}
+              </div>
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${stageBadge(log.scout?.status)}`}>
+                {statusLabel[log.scout?.status ?? ''] ?? '미실행'}
+              </span>
+            </div>
+
+            {log.scout?.diag && (
+              <div className="flex gap-3 px-4 py-2 border-b border-blue-500/10 flex-wrap">
+                {Object.entries(log.scout.diag.filteredReasons ?? {}).map(([k, v]) => v > 0 && (
+                  <span key={k} className="text-[10px] text-red-400/70">
+                    {k === 'duration' ? '⏱길이제외' : k === 'old' ? '📅오래됨' : k === 'clickbait' ? '🚫클릭베이트' : k === 'noId' ? '❓ID없음' : k} {v}개
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {log.scout?.message && (
+              <p className="px-4 py-2 text-[11px] text-yellow-400/70">{log.scout.message}</p>
+            )}
+
+            {log.scout?.candidates && log.scout.candidates.length > 0 && (
+              <div className="divide-y divide-blue-500/10">
+                {log.scout.candidates.map((c, i) => (
+                  <div key={c.videoId} className="flex items-center gap-3 px-4 py-2.5">
+                    <span className="text-[10px] text-[#4a4846] w-4 shrink-0">{i + 1}</span>
+                    <a
+                      href={`https://www.youtube.com/watch?v=${c.videoId}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[10px] text-blue-400/70 hover:text-blue-400 shrink-0"
+                      onClick={e => e.stopPropagation()}
+                    >
+                      ▶
+                    </a>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[11px] text-white font-medium truncate">{c.title}</p>
+                      <p className="text-[9px] text-[#4a4846]">
+                        {c.channelTitle} · {Math.floor(c.durationSec / 60)}분{c.durationSec % 60}초
+                        {c.publishedAt ? ` · ${new Intl.DateTimeFormat('ko-KR', { month: 'short', day: 'numeric' }).format(new Date(c.publishedAt))}` : ''}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* ─── 2단계: Evaluate ─── */}
+          <div className="rounded-xl border border-purple-500/20 bg-purple-500/5 overflow-hidden">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-purple-500/15">
+              <div className="flex items-center gap-2">
+                <span className="text-purple-400 font-black text-sm">② Evaluate</span>
+                {log.evaluate?.results && (
+                  <span className="text-[10px] text-[#75716e]">
+                    {log.evaluate.results.filter(r => r.decision === 'PASS').length} PASS · {log.evaluate.results.filter(r => r.decision === 'HOLD').length} HOLD · {log.evaluate.results.filter(r => r.decision === 'FAIL').length} FAIL
+                  </span>
+                )}
+              </div>
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${stageBadge(log.evaluate?.status)}`}>
+                {statusLabel[log.evaluate?.status ?? ''] ?? '미실행'}
+              </span>
+            </div>
+
+            {log.evaluate?.message && (
+              <p className="px-4 py-2 text-[11px] text-yellow-400/70">{log.evaluate.message}</p>
+            )}
+
+            {log.evaluate?.results && log.evaluate.results.length > 0 && (
+              <div className="divide-y divide-purple-500/10">
+                {log.evaluate.results.map((r, i) => (
+                  <div key={r.videoId} className="px-4 py-3">
+                    <div className="flex items-start gap-2 mb-2">
+                      <span className="text-[10px] text-[#4a4846] w-4 shrink-0 mt-0.5">{i + 1}</span>
+                      <a
+                        href={`https://www.youtube.com/watch?v=${r.videoId}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-[10px] text-purple-400/70 hover:text-purple-400 shrink-0 mt-0.5"
+                        onClick={e => e.stopPropagation()}
+                      >
+                        ▶
+                      </a>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className={`text-[10px] font-black px-1.5 py-0.5 rounded border ${decisionBadge(r.decision)}`}>{r.decision}</span>
+                          <span className="text-[10px] text-[#a4a09c] font-bold">{r.compositeScore.toFixed(1)}점</span>
+                          <span className="text-[9px] text-[#4a4846]">{r.channelTitle}</span>
+                        </div>
+                        <p className="text-[11px] text-white font-medium truncate">{r.title}</p>
+                      </div>
+                    </div>
+                    <div className="ml-8 grid grid-cols-2 gap-2">
+                      <div className="bg-[#1c1a18] rounded-lg p-2 border border-white/6">
+                        <p className="text-[9px] text-[#75716e] font-bold mb-1">🤖 Gemini</p>
+                        <p className="text-[9px] text-[#a4a09c]">정보 {r.geminiInfo}/10 · 위험 {r.geminiRisk}/10</p>
+                        <p className="text-[9px] text-[#75716e] mt-0.5 leading-snug">{r.geminiReason}</p>
+                      </div>
+                      <div className="bg-[#1c1a18] rounded-lg p-2 border border-white/6">
+                        <p className="text-[9px] text-[#75716e] font-bold mb-1">🧠 Claude</p>
+                        <p className="text-[9px] text-[#a4a09c]">정보 {r.claudeInfo}/10 · 위험 {r.claudeRisk}/10</p>
+                        <p className="text-[9px] text-[#75716e] mt-0.5 leading-snug">{r.claudeReason}</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {log.evaluate?.winner && (
+              <div className="px-4 py-3 bg-emerald-500/8 border-t border-emerald-500/15">
+                <p className="text-[10px] font-black text-emerald-400 mb-1">🏆 최종 선택</p>
+                <div className="flex items-center gap-2">
+                  <a
+                    href={`https://www.youtube.com/watch?v=${log.evaluate.winner.videoId}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[10px] text-emerald-400/70 hover:text-emerald-400"
+                    onClick={e => e.stopPropagation()}
+                  >
+                    ▶ YouTube
+                  </a>
+                  <p className="text-[11px] text-white font-bold flex-1 truncate">{log.evaluate.winner.title}</p>
+                  <span className="text-[10px] text-emerald-400 font-bold shrink-0">{log.evaluate.winner.compositeScore.toFixed(1)}점</span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* ─── 3단계: Summarize ─── */}
+          <div className="rounded-xl border border-orange-500/20 bg-orange-500/5 overflow-hidden">
+            <div className="flex items-center justify-between px-4 py-3">
+              <div className="flex items-center gap-2">
+                <span className="text-orange-400 font-black text-sm">③ Summarize</span>
+                {log.summarize?.title && (
+                  <span className="text-[10px] text-[#75716e] truncate max-w-xs">{log.summarize.title}</span>
+                )}
+                {log.summarize?.transcriptLength && (
+                  <span className="text-[10px] text-[#4a4846]">자막 {log.summarize.transcriptLength}자</span>
+                )}
+              </div>
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${stageBadge(log.summarize?.status)}`}>
+                {statusLabel[log.summarize?.status ?? ''] ?? '미실행'}
+              </span>
+            </div>
+            {log.summarize?.message && (
+              <p className="px-4 pb-3 text-[11px] text-yellow-400/70">{log.summarize.message}</p>
+            )}
+          </div>
+
+          {/* ─── 4단계: Publish ─── */}
+          <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 overflow-hidden">
+            <div className="flex items-center justify-between px-4 py-3">
+              <div className="flex items-center gap-2">
+                <span className="text-emerald-400 font-black text-sm">④ Publish</span>
+                {log.publish?.postTitle && (
+                  <span className="text-[10px] text-[#75716e] truncate max-w-xs">{log.publish.postTitle}</span>
+                )}
+              </div>
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${stageBadge(log.publish?.status)}`}>
+                {statusLabel[log.publish?.status ?? ''] ?? '미실행'}
+              </span>
+            </div>
+            {log.publish?.postSlug && (
+              <div className="px-4 pb-3">
+                <Link
+                  href={`/magazine/${log.publish.postSlug}`}
+                  target="_blank"
+                  className="text-[10px] text-emerald-400 hover:underline"
+                  onClick={e => e.stopPropagation()}
+                >
+                  → /magazine/{log.publish.postSlug}
+                </Link>
+              </div>
+            )}
+            {log.publish?.message && (
+              <p className="px-4 pb-3 text-[11px] text-yellow-400/70">{log.publish.message}</p>
+            )}
+          </div>
+
+        </div>
+
+        <div className="flex justify-end px-6 py-4 border-t border-white/8 bg-[#161412]">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 rounded-xl bg-[#2a2826] text-[#a4a09c] hover:text-white text-sm font-bold border border-white/8 transition-colors"
+          >
+            닫기
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function PipelineTrigger({
   subcategory,
   onDone,
@@ -158,10 +408,12 @@ export default function CurationTab({ getAuthHeader }: {
   const [slots, setSlots]               = useState<PipelineSlots | null>(null)
   const [posts, setPosts]               = useState<CuratedPost[]>([])
   const [logs, setLogs]                 = useState<MagazineLog[]>([])
+  const [pipelineLogs, setPipelineLogs] = useState<PipelineLog[]>([])
   const [loadingSettings, setLoadingSettings] = useState(true)
   const [loadingSlots, setLoadingSlots] = useState(true)
   const [loadingPosts, setLoadingPosts] = useState(true)
   const [loadingLogs, setLoadingLogs]   = useState(true)
+  const [loadingPipelineLogs, setLoadingPipelineLogs] = useState(true)
   const [saving, setSaving]             = useState(false)
   const [triggering, setTriggering]     = useState(false)
   const [triggerResult, setTriggerResult] = useState('')
@@ -170,6 +422,7 @@ export default function CurationTab({ getAuthHeader }: {
   const [urlResult, setUrlResult]       = useState('')
   const [actionId, setActionId]         = useState<string | null>(null)
   const [previewPost, setPreviewPost]   = useState<CuratedPost | null>(null)
+  const [selectedPipelineLog, setSelectedPipelineLog] = useState<PipelineLog | null>(null)
 
   const callAdmin = useCallback(async (action: string, extra?: object) => {
     const headers = await getAuthHeader()
@@ -188,6 +441,13 @@ export default function CurationTab({ getAuthHeader }: {
     setLoadingSlots(false)
   }, [callAdmin])
 
+  const loadPipelineLogs = useCallback(async () => {
+    setLoadingPipelineLogs(true)
+    const data = await callAdmin('getPipelineLogs')
+    if (Array.isArray(data)) setPipelineLogs(data)
+    setLoadingPipelineLogs(false)
+  }, [callAdmin])
+
   const loadAll = useCallback(async () => {
     const [settingsData, postsData, logsData] = await Promise.all([
       callAdmin('getSettings'),
@@ -201,7 +461,8 @@ export default function CurationTab({ getAuthHeader }: {
     if (Array.isArray(logsData)) setLogs(logsData)
     setLoadingLogs(false)
     loadSlots()
-  }, [callAdmin, loadSlots])
+    loadPipelineLogs()
+  }, [callAdmin, loadSlots, loadPipelineLogs])
 
   useEffect(() => { loadAll() }, [loadAll])
 
@@ -515,6 +776,85 @@ export default function CurationTab({ getAuthHeader }: {
           )}
         </div>
       </div>
+
+      {/* ── AI 파이프라인 실행 로그 ── */}
+      <div className="bg-[#2a2826] rounded-2xl border border-white/8 p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-white font-black text-base">
+            🔬 파이프라인 실행 로그
+            <span className="text-[#75716e] font-normal text-sm ml-2">({pipelineLogs.length}건)</span>
+          </h2>
+          <button
+            onClick={loadPipelineLogs}
+            disabled={loadingPipelineLogs}
+            className="px-3 py-1.5 rounded-lg bg-[#1c1a18] hover:bg-[#252423] text-[#a4a09c] text-[11px] font-bold border border-white/8 transition-colors disabled:opacity-50"
+          >
+            {loadingPipelineLogs ? '로딩...' : '↻ 새로고침'}
+          </button>
+        </div>
+
+        {loadingPipelineLogs ? (
+          <div className="flex justify-center py-6">
+            <div className="w-5 h-5 rounded-full border-2 border-orange-500/30 border-t-orange-500 animate-spin" />
+          </div>
+        ) : pipelineLogs.length === 0 ? (
+          <p className="text-[#75716e] text-sm text-center py-6">아직 파이프라인 실행 기록이 없습니다.</p>
+        ) : (
+          <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
+            {pipelineLogs.map(log => {
+              const meta = SUBCATEGORY_META[log.subcategory as AiSubcategory] ?? SUBCATEGORY_META.news
+              const stages = [
+                { key: 'scout',    label: 'Scout',    data: log.scout },
+                { key: 'evaluate', label: 'Eval',     data: log.evaluate },
+                { key: 'summarize',label: 'Sum',      data: log.summarize },
+                { key: 'publish',  label: 'Pub',      data: log.publish },
+              ]
+              // KST 날짜 포맷
+              const kstDate = log.startedAt
+                ? new Intl.DateTimeFormat('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Seoul' }).format(new Date(log.startedAt))
+                : '—'
+              return (
+                <div
+                  key={log.id}
+                  onClick={() => setSelectedPipelineLog(log)}
+                  className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-[#1c1a18] border border-white/6 hover:border-orange-500/30 hover:bg-[#221f1d] transition-all cursor-pointer"
+                >
+                  <span className={`text-sm shrink-0 ${meta.color}`}>{meta.emoji}</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className={`text-[10px] font-bold ${meta.color}`}>{meta.label}</span>
+                      <span className="text-[10px] text-[#4a4846]">{kstDate}</span>
+                    </div>
+                    {log.evaluate?.winner && (
+                      <p className="text-[10px] text-[#a4a09c] truncate mt-0.5">🏆 {log.evaluate.winner.title}</p>
+                    )}
+                  </div>
+                  <div className="flex gap-1 shrink-0">
+                    {stages.map(s => {
+                      const st = (s.data as any)?.status
+                      const cls = !s.data ? 'bg-[#2a2826] text-[#4a4846] border-white/8'
+                        : st === 'done'    ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/20'
+                        : st === 'failed'  ? 'bg-red-500/15 text-red-400 border-red-500/20'
+                        : st === 'skipped' ? 'bg-yellow-500/15 text-yellow-400 border-yellow-500/20'
+                        : 'bg-blue-500/15 text-blue-400 border-blue-500/20'
+                      return (
+                        <span key={s.key} className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${cls}`}>
+                          {s.label}
+                        </span>
+                      )
+                    })}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* ── 파이프라인 로그 상세 모달 ── */}
+      {selectedPipelineLog && (
+        <PipelineLogModal log={selectedPipelineLog} onClose={() => setSelectedPipelineLog(null)} />
+      )}
 
       {/* ── 발행 로그 ── */}
       <div className="bg-[#2a2826] rounded-2xl border border-white/8 p-6">

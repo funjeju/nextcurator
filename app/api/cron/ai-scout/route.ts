@@ -11,6 +11,7 @@ import {
   saveScoutQueue,
 } from '@/lib/ai-curator'
 import { initAdminApp } from '@/lib/firebase-admin'
+import { initPipelineLog, logScout, scoutResultsToLog } from '@/lib/pipeline-logger'
 
 export const maxDuration = 60
 
@@ -54,6 +55,9 @@ function getSubcategoryForSlot(): AiSubcategory {
 }
 
 async function runScout(subcategory: AiSubcategory) {
+  const runId = await initPipelineLog(subcategory)
+  const startedAt = new Date().toISOString()
+
   const alreadyIds = await getAlreadyCollectedIds()
   const channelIdCache = new Map<string, string>()
 
@@ -64,16 +68,33 @@ async function runScout(subcategory: AiSubcategory) {
   console.log(`[AI Scout] subcategory=${subcategory} queries=${diag.queriesRun} raw=${diag.rawFound} afterFilter=${diag.afterFilter} detailsFetched=${diag.detailsFetched} final=${candidates.length}`)
 
   if (candidates.length === 0) {
+    await logScout(runId, {
+      startedAt,
+      status: 'done',
+      completedAt: new Date().toISOString(),
+      diag,
+      candidates: [],
+      message: 'No candidates found',
+    })
     return NextResponse.json({ success: true, found: 0, subcategory, diag, message: 'No candidates found' })
   }
 
   await saveScoutQueue(candidates)
+
+  await logScout(runId, {
+    startedAt,
+    status: 'done',
+    completedAt: new Date().toISOString(),
+    diag,
+    candidates: scoutResultsToLog(candidates),
+  })
 
   return NextResponse.json({
     success: true,
     subcategory,
     found: candidates.length,
     diag,
+    runId,
     candidates: candidates.map(c => ({
       videoId: c.videoId,
       title: c.title.slice(0, 60),

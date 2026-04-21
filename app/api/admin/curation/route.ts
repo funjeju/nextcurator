@@ -6,6 +6,7 @@ import {
 } from '@/lib/magazine-server'
 import { initAdminApp } from '@/lib/firebase-admin'
 import { checkIsAdminByToken } from '@/lib/admin'
+import { listPipelineLogs, getPipelineLog } from '@/lib/pipeline-logger'
 
 async function verifyAdmin(req: NextRequest): Promise<boolean> {
   const auth = req.headers.get('authorization')
@@ -19,7 +20,7 @@ export async function POST(req: NextRequest) {
   if (!isAdmin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await req.json().catch(() => ({})) as {
-    action: 'getSettings' | 'saveSettings' | 'listPosts' | 'publish' | 'delete' | 'getLogs' | 'getPipelineSlots'
+    action: 'getSettings' | 'saveSettings' | 'listPosts' | 'publish' | 'delete' | 'getLogs' | 'getPipelineSlots' | 'getPipelineLogs' | 'getPipelineLog'
     settings?: Partial<CurationSettings>
     id?: string
   }
@@ -97,6 +98,17 @@ export async function POST(req: NextRequest) {
             usecases: toScoutInfo(scoutUsecases),
           },
         })
+      }
+
+      case 'getPipelineLogs': {
+        const pLogs = await listPipelineLogs(50)
+        return NextResponse.json(pLogs)
+      }
+
+      case 'getPipelineLog': {
+        if (!body.id) return NextResponse.json({ error: 'id required' }, { status: 400 })
+        const pLog = await getPipelineLog(body.id)
+        return NextResponse.json(pLog)
       }
 
       default:

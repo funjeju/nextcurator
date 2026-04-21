@@ -12,6 +12,7 @@ import {
   saveEvaluateQueue,
 } from '@/lib/ai-curator'
 import { getTranscript } from '@/lib/transcript'
+import { initPipelineLog, logEvaluate, evaluatedToLog } from '@/lib/pipeline-logger'
 
 export const maxDuration = 120
 
@@ -69,8 +70,12 @@ async function markScoutQueueProcessed(subcategory: AiSubcategory): Promise<void
 }
 
 async function runEvaluate(subcategory: AiSubcategory) {
+  const runId = await initPipelineLog(subcategory)
+  const startedAt = new Date().toISOString()
+
   const candidates = await readScoutQueue(subcategory)
   if (!candidates.length) {
+    await logEvaluate(runId, { startedAt, status: 'skipped', completedAt: new Date().toISOString(), results: [], message: 'No scout queue found' })
     return NextResponse.json({ success: true, subcategory, message: 'No scout queue found' })
   }
 
@@ -96,6 +101,7 @@ async function runEvaluate(subcategory: AiSubcategory) {
     .filter(c => c.transcript.length >= 300)
 
   if (!withTranscript.length) {
+    await logEvaluate(runId, { startedAt, status: 'failed', completedAt: new Date().toISOString(), results: [], message: 'All transcripts too short or failed' })
     return NextResponse.json({ success: true, subcategory, message: 'All transcripts too short or failed' })
   }
 
@@ -104,7 +110,7 @@ async function runEvaluate(subcategory: AiSubcategory) {
   // 2 AI 심사관 병렬 교차 검증
   const evaluated = await evaluateVideos(withTranscript)
 
-  const passCount = evaluated.filter(e => e.decision === 'PASS').length
+  let passCount = evaluated.filter(e => e.decision === 'PASS').length
   const holdCount = evaluated.filter(e => e.decision === 'HOLD').length
 
   // 결과 저장
@@ -115,12 +121,22 @@ async function runEvaluate(subcategory: AiSubcategory) {
     const bestHold = evaluated.find(e => e.decision === 'HOLD')
     if (bestHold) {
       bestHold.decision = 'PASS'
+      passCount = 1
       console.log(`[AI Evaluate] No PASS found — promoting top HOLD: "${bestHold.title}"`)
       await saveEvaluateQueue(subcategory, evaluated)
     }
   }
 
   console.log(`[AI Evaluate] Done: PASS=${passCount}, HOLD=${holdCount}, FAIL=${evaluated.length - passCount - holdCount}`)
+
+  const winner = evaluated.find(e => e.decision === 'PASS')
+  await logEvaluate(runId, {
+    startedAt,
+    status: 'done',
+    completedAt: new Date().toISOString(),
+    results: evaluatedToLog(evaluated),
+    winner: winner ? { videoId: winner.videoId, title: winner.title, compositeScore: winner.compositeScore } : undefined,
+  })
 
   return NextResponse.json({
     success: true,
