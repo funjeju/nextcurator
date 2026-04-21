@@ -57,6 +57,12 @@ export default function RootLayout({
   return (
     <html lang="ko" className="dark">
       <head>
+        {/* Google AdSense */}
+        <script
+          async
+          src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-3976821769415958"
+          crossOrigin="anonymous"
+        />
         {/* FOUC 방지: 렌더 전에 저장된 테마 클래스 즉시 적용 */}
         <script dangerouslySetInnerHTML={{ __html: `
           (function(){
@@ -102,11 +108,6 @@ export default function RootLayout({
             style={{ display: 'none', visibility: 'hidden' }}
           />
         </noscript>
-        <Script
-          src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-3976821769415958"
-          strategy="afterInteractive"
-          crossOrigin="anonymous"
-        />
         <ThemeProvider>
           <AuthProvider>
             <ChatProvider>
