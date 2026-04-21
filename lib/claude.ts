@@ -106,12 +106,14 @@ export async function classifyCategory(transcript: string): Promise<{ category: 
   const result = await classifyModel.generateContent(`Classify this YouTube transcript into exactly one of these categories:
 - "recipe": cooking, baking, food preparation
 - "english": videos whose MAIN PURPOSE is teaching English language (lessons, expressions, grammar). NOT just videos that contain English words.
-- "learning": academic lectures, science, math, history, certifications
+- "recipe": cooking, baking, food preparation
+- "english": videos whose MAIN PURPOSE is teaching English language (lessons, expressions, grammar). NOT just videos that contain English words.
+- "learning": academic lectures, science, math, history, certifications. NOT travel guides, NOT destination/place lists, NOT product reviews.
 - "news": news, current events, reviews, analysis, information
 - "selfdev": self-improvement, motivation, psychology, meditation
-- "travel": travel vlogs, place introductions, tourism, local food tours
+- "travel": travel vlogs, place introductions, destination guides, tourism, local food tours, ranked travel destination lists ("TOP N 여행지" etc.)
 - "story": drama, movies, storytelling, gossip, narrative content focusing on a sequence of events
-- "tips": life hacks, how-to guides, productivity tips, daily life tips, saving money, home organization, app/tool usage tips. Use this when the video presents a numbered or listed set of practical tips/hacks.
+- "tips": life hacks, how-to guides, productivity tips, daily life tips, saving money, home organization, app/tool usage tips. Use this when the video presents a numbered or listed set of practical tips/hacks — but NOT if the topic is travel destinations.
 
 Transcript:
 ${transcript.slice(0, 2000)}
@@ -149,6 +151,7 @@ const SUMMARY_PROMPTS: Record<Category, string> = {
   learning: `다음 학습 영상 자막을 분석해서 학습정리 JSON을 만드세요.
 
 [필수 지침]
+- concepts의 name은 반드시 자막에 실제로 등장하는 용어만 사용하세요. 자막에 없는 개념을 만들어내지 마세요.
 - concepts의 desc는 "이 개념이 무엇인지"와 "왜 중요한지"를 2문장으로 설명하세요. 단순 정의에 그치지 말고, 이해를 돕는 맥락을 담으세요.
 - key_points는 "이것만 알면 된다"는 핵심 인사이트를 완전한 문장으로 써주세요.
 - examples는 강사가 든 구체적인 예시·비유·사례를 원문에 가깝게 재현하세요.

@@ -298,56 +298,54 @@ async function resolveAndFetch(
   return videoIds
 }
 
+export interface ScoutDiag {
+  channelsAttempted: number
+  channelsResolved: number
+  rawIds: number
+  afterFilter: number
+  fallbackUsed: boolean
+  fallbackFound: number
+  filteredReasons: { duration: number; clickbait: number; old: number }
+}
+
 export async function scoutCandidates(
   subcategory: AiSubcategory,
   channelIdCache: Map<string, string>,
   alreadyCollectedIds: Set<string>,
-): Promise<ScoutResult[]> {
+): Promise<{ results: ScoutResult[]; diag: ScoutDiag }> {
   const channels = WHITELIST[subcategory]
   const freshnessMs = FRESHNESS_WINDOW[subcategory] * 1000
   const cutoff = Date.now() - freshnessMs
+  const diag: ScoutDiag = { channelsAttempted: 0, channelsResolved: 0, rawIds: 0, afterFilter: 0, fallbackUsed: false, fallbackFound: 0, filteredReasons: { duration: 0, clickbait: 0, old: 0 } }
 
-  // Priority 1·2 채널만 실행 (시간·quota 절약, priority 3은 폴백용)
   const activeChannels = channels.filter(c => c.priority <= 2)
+  diag.channelsAttempted = activeChannels.length
 
-  // 채널별 최근 영상 병렬 수집 (채널당 최대 3개 ID)
   const idBatches = await Promise.all(
-    activeChannels.map(ch => resolveAndFetch(ch, channelIdCache).catch(() => [] as string[]))
+    activeChannels.map(async ch => {
+      const ids = await resolveAndFetch(ch, channelIdCache).catch(() => [] as string[])
+      if (ids.length > 0) diag.channelsResolved++
+      return ids
+    })
   )
   const whitelistIds = [...new Set(idBatches.flat())].filter(id => !alreadyCollectedIds.has(id))
-  console.log(`[Scout] Whitelist raw IDs: ${whitelistIds.length}`)
+  diag.rawIds = whitelistIds.length
 
-  // 메타 조회
   let metas = await fetchVideoMetas(whitelistIds.slice(0, 20))
-  console.log(`[Scout] Metas fetched: ${metas.length}`)
 
-  // 메타 필터
   metas = metas.filter(v => {
-    if (v.durationSec < 180 || v.durationSec > 3600) {
-      console.log(`[Scout] Filtered (duration ${v.durationSec}s): ${v.title.slice(0, 50)}`)
-      return false
-    }
-    if (isClickbait(v.title)) {
-      console.log(`[Scout] Filtered (clickbait): ${v.title.slice(0, 50)}`)
-      return false
-    }
-    if (new Date(v.publishedAt).getTime() < cutoff) {
-      console.log(`[Scout] Filtered (old: ${v.publishedAt}): ${v.title.slice(0, 50)}`)
-      return false
-    }
+    if (v.durationSec < 180 || v.durationSec > 3600) { diag.filteredReasons.duration++; return false }
+    if (isClickbait(v.title)) { diag.filteredReasons.clickbait++; return false }
+    if (new Date(v.publishedAt).getTime() < cutoff) { diag.filteredReasons.old++; return false }
     if (alreadyCollectedIds.has(v.videoId)) return false
     return true
   })
-  console.log(`[Scout] After filter: ${metas.length}`)
+  diag.afterFilter = metas.length
 
-  let results: ScoutResult[] = metas.map(v => ({
-    ...v,
-    source: 'whitelist' as const,
-    subcategory,
-  }))
+  let results: ScoutResult[] = metas.map(v => ({ ...v, source: 'whitelist' as const, subcategory }))
 
-  // 화이트리스트 후보가 4개 미만이면 키워드 검색으로 보완
   if (results.length < 4) {
+    diag.fallbackUsed = true
     for (const query of FALLBACK_QUERIES[subcategory]) {
       const ids = await searchVideoIds(query, 6)
       const filtered = ids.filter(id => !alreadyCollectedIds.has(id) && !results.find(r => r.videoId === id))
@@ -358,14 +356,17 @@ export async function scoutCandidates(
         new Date(v.publishedAt).getTime() >= cutoff
       )
       results.push(...valid.map(v => ({ ...v, source: 'search' as const, subcategory })))
+      diag.fallbackFound += valid.length
       if (results.length >= 6) break
     }
   }
 
-  // priority 1 채널 우선, 같은 우선순위면 최신순
-  return results
-    .sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime())
-    .slice(0, 8)
+  return {
+    results: results
+      .sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime())
+      .slice(0, 8),
+    diag,
+  }
 }
 
 // ── Evaluate: 2 AI 심사관 교차 검증 ──────────────────────────────────────────
