@@ -17,63 +17,56 @@ interface ChannelDef {
   name: string
   lang: 'en' | 'ko'
   priority: 1 | 2 | 3
+  /** YouTube @handle (e.g. 'lexfridman') — resolves with 1 quota instead of 100 */
+  handle?: string
+  /** Direct channelId — skips resolution entirely */
+  channelId?: string
 }
 
 export const WHITELIST: Record<AiSubcategory, ChannelDef[]> = {
   news: [
-    { name: 'AI Explained',                      lang: 'en', priority: 1 },
-    { name: 'Matthew Berman',                    lang: 'en', priority: 1 },
-    { name: 'Wes Roth',                          lang: 'en', priority: 1 },
-    { name: 'The AI Daily Brief Nathaniel Whittemore', lang: 'en', priority: 1 },
-    { name: 'Two Minute Papers',                 lang: 'en', priority: 1 },
-    { name: 'Bloomberg Technology',              lang: 'en', priority: 1 },
-    { name: 'Machine Learning Street Talk',      lang: 'en', priority: 2 },
-    { name: 'Dwarkesh Patel',                    lang: 'en', priority: 2 },
-    { name: 'Lex Fridman',                       lang: 'en', priority: 2 },
-    { name: 'Last Week in AI',                   lang: 'en', priority: 2 },
-    { name: 'a16z',                              lang: 'en', priority: 2 },
-    { name: 'Sequoia Capital',                   lang: 'en', priority: 3 },
-    { name: 'Sam Witteveen',                     lang: 'en', priority: 3 },
-    { name: '안될공학',                           lang: 'ko', priority: 1 },
-    { name: '티타임즈TV',                         lang: 'ko', priority: 2 },
-    { name: 'EO',                                lang: 'ko', priority: 2 },
-    { name: '언더스탠딩 세상의 모든 지식',          lang: 'ko', priority: 2 },
-    { name: 'AI타잔',                             lang: 'ko', priority: 3 },
-    { name: 'MBN골라듣는뉴스룸',                  lang: 'ko', priority: 3 },
+    { name: 'AI Explained',                      lang: 'en', priority: 1, handle: 'AIExplained' },
+    { name: 'Matthew Berman',                    lang: 'en', priority: 1, handle: 'matthew_berman' },
+    { name: 'Wes Roth',                          lang: 'en', priority: 1, handle: 'WesRoth' },
+    { name: 'The AI Daily Brief',                lang: 'en', priority: 1, handle: 'theaidailybrief' },
+    { name: 'Two Minute Papers',                 lang: 'en', priority: 1, handle: 'TwoMinutePapers' },
+    { name: 'Bloomberg Technology',              lang: 'en', priority: 1, handle: 'BloombergTechnology' },
+    { name: 'Machine Learning Street Talk',      lang: 'en', priority: 2, handle: 'MachineLearningStreetTalk' },
+    { name: 'Dwarkesh Patel',                    lang: 'en', priority: 2, handle: 'dwarkeshpatel' },
+    { name: 'Lex Fridman',                       lang: 'en', priority: 2, handle: 'lexfridman' },
+    { name: 'a16z',                              lang: 'en', priority: 2, handle: 'a16z' },
+    { name: '안될공학',                           lang: 'ko', priority: 1, handle: 'unrealclever' },
+    { name: '티타임즈TV',                         lang: 'ko', priority: 2, handle: 'ttimestv' },
+    { name: 'EO',                                lang: 'ko', priority: 2, handle: 'EO_studio' },
+    { name: '언더스탠딩',                         lang: 'ko', priority: 2, handle: 'understandingkorea' },
+    { name: 'AI타잔',                             lang: 'ko', priority: 3, handle: 'aitarzan' },
   ],
   tools: [
-    { name: 'Marques Brownlee',                  lang: 'en', priority: 1 },
-    { name: 'The AI Advantage',                  lang: 'en', priority: 1 },
-    { name: 'Theoretically Media',               lang: 'en', priority: 1 },
-    { name: 'Fireship',                          lang: 'en', priority: 1 },
-    { name: 'All About AI',                      lang: 'en', priority: 2 },
-    { name: 'Kevin Stratvert',                   lang: 'en', priority: 2 },
-    { name: 'WorldofAI',                         lang: 'en', priority: 2 },
-    { name: 'Cole Medin',                        lang: 'en', priority: 2 },
-    { name: 'Ishan Sharma',                      lang: 'en', priority: 3 },
-    { name: 'Skill Leap AI',                     lang: 'en', priority: 3 },
-    { name: '조코딩',                             lang: 'ko', priority: 1 },
-    { name: '테디노트',                           lang: 'ko', priority: 1 },
-    { name: '노마드코더',                         lang: 'ko', priority: 2 },
-    { name: '생활코딩',                           lang: 'ko', priority: 2 },
+    { name: 'Marques Brownlee',                  lang: 'en', priority: 1, handle: 'mkbhd' },
+    { name: 'The AI Advantage',                  lang: 'en', priority: 1, handle: 'TheAiAdvantage' },
+    { name: 'Theoretically Media',               lang: 'en', priority: 1, handle: 'Theoretically' },
+    { name: 'Fireship',                          lang: 'en', priority: 1, handle: 'Fireship' },
+    { name: 'All About AI',                      lang: 'en', priority: 2, handle: 'AllAboutAI' },
+    { name: 'Kevin Stratvert',                   lang: 'en', priority: 2, handle: 'KevinStratvert' },
+    { name: 'Cole Medin',                        lang: 'en', priority: 2, handle: 'ColeMedin' },
+    { name: '조코딩',                             lang: 'ko', priority: 1, handle: 'jocoding' },
+    { name: '테디노트',                           lang: 'ko', priority: 1, handle: 'teddynote' },
+    { name: '노마드코더',                         lang: 'ko', priority: 2, handle: 'nomadcoders' },
+    { name: '생활코딩',                           lang: 'ko', priority: 2, handle: 'egoing' },
     { name: 'AI프리뷰',                           lang: 'ko', priority: 3 },
   ],
   usecases: [
     { name: '일잘러를 위한 AI',                   lang: 'ko', priority: 1 },
     { name: '노트북러너',                         lang: 'ko', priority: 1 },
     { name: '월간 프롬프트',                      lang: 'ko', priority: 1 },
-    { name: 'The AI Advantage Igor Pogany',      lang: 'en', priority: 1 },
-    { name: 'Rick Mulready',                     lang: 'en', priority: 1 },
-    { name: 'Prompt Engineering',                lang: 'en', priority: 1 },
-    { name: 'Corbin Brown',                      lang: 'en', priority: 2 },
-    { name: 'Liam Ottley',                       lang: 'en', priority: 2 },
-    { name: 'Automata Learning Lab',             lang: 'en', priority: 2 },
-    { name: 'David Ondrej',                      lang: 'en', priority: 2 },
+    { name: 'The AI Advantage Igor Pogany',      lang: 'en', priority: 1, handle: 'TheAiAdvantage' },
+    { name: 'Prompt Engineering',                lang: 'en', priority: 1, handle: 'PromptEngineering' },
+    { name: 'Liam Ottley',                       lang: 'en', priority: 2, handle: 'LiamOttley' },
+    { name: 'Cole Medin',                        lang: 'en', priority: 2, handle: 'ColeMedin' },
+    { name: 'David Ondrej',                      lang: 'en', priority: 2, handle: 'DavidOndrej' },
     { name: '자동화 연구소',                      lang: 'ko', priority: 2 },
-    { name: '프롬프트 지식인',                    lang: 'ko', priority: 2 },
-    { name: '드로우앤드류',                       lang: 'ko', priority: 2 },
-    { name: 'Matt Wolfe Future Tools',           lang: 'en', priority: 3 },
-    { name: 'Ramon Berrios',                     lang: 'en', priority: 3 },
+    { name: '드로우앤드류',                       lang: 'ko', priority: 2, handle: 'drewandrew' },
+    { name: 'Matt Wolfe Future Tools',           lang: 'en', priority: 3, handle: 'mreflow' },
     { name: 'AI 업무비서',                        lang: 'ko', priority: 3 },
   ],
 }
@@ -130,8 +123,24 @@ function detectLang(title: string, defaultLang: 'en' | 'ko'): 'en' | 'ko' | 'oth
   return 'other'
 }
 
-// 채널명으로 YouTube 채널 ID 검색 (검색 1회당 100 quota)
-async function resolveChannelId(channelName: string): Promise<string | null> {
+// 채널 @handle로 채널 ID 조회 (1 quota — 검색 100 quota보다 훨씬 저렴)
+async function resolveChannelByHandle(handle: string): Promise<string | null> {
+  try {
+    const url = new URL('https://www.googleapis.com/youtube/v3/channels')
+    url.searchParams.set('part', 'id')
+    url.searchParams.set('forHandle', `@${handle}`)
+    url.searchParams.set('key', YOUTUBE_API_KEY)
+    const res = await fetch(url.toString(), { signal: AbortSignal.timeout(8000) })
+    if (!res.ok) return null
+    const data = await res.json() as { items?: { id?: string }[] }
+    return data.items?.[0]?.id ?? null
+  } catch {
+    return null
+  }
+}
+
+// 채널명으로 YouTube 채널 ID 검색 (검색 1회당 100 quota — 폴백용)
+async function resolveChannelByName(channelName: string): Promise<string | null> {
   try {
     const url = new URL('https://www.googleapis.com/youtube/v3/search')
     url.searchParams.set('part', 'id')
@@ -257,19 +266,35 @@ export interface ScoutResult {
 async function resolveAndFetch(
   channel: ChannelDef,
   channelIdCache: Map<string, string>,
-  freshnessSec: number,
 ): Promise<string[]> {
   let channelId = channelIdCache.get(channel.name)
   if (!channelId) {
-    channelId = await resolveChannelId(channel.name) ?? ''
+    if (channel.channelId) {
+      channelId = channel.channelId
+    } else if (channel.handle) {
+      channelId = await resolveChannelByHandle(channel.handle) ?? ''
+      if (!channelId) {
+        // handle이 틀렸을 수 있으니 이름 검색으로 폴백
+        channelId = await resolveChannelByName(channel.name) ?? ''
+      }
+    } else {
+      channelId = await resolveChannelByName(channel.name) ?? ''
+    }
     if (channelId) channelIdCache.set(channel.name, channelId)
   }
-  if (!channelId) return []
+  if (!channelId) {
+    console.log(`[Scout] ⚠️ Failed to resolve: ${channel.name}`)
+    return []
+  }
 
   const playlistId = await getUploadPlaylistId(channelId)
-  if (!playlistId) return []
+  if (!playlistId) {
+    console.log(`[Scout] ⚠️ No upload playlist: ${channel.name} (${channelId})`)
+    return []
+  }
 
   const videoIds = await getRecentVideoIds(playlistId, 3)
+  console.log(`[Scout] ✅ ${channel.name}: ${videoIds.length} videos`)
   return videoIds
 }
 
@@ -287,21 +312,33 @@ export async function scoutCandidates(
 
   // 채널별 최근 영상 병렬 수집 (채널당 최대 3개 ID)
   const idBatches = await Promise.all(
-    activeChannels.map(ch => resolveAndFetch(ch, channelIdCache, freshnessMs).catch(() => [] as string[]))
+    activeChannels.map(ch => resolveAndFetch(ch, channelIdCache).catch(() => [] as string[]))
   )
   const whitelistIds = [...new Set(idBatches.flat())].filter(id => !alreadyCollectedIds.has(id))
+  console.log(`[Scout] Whitelist raw IDs: ${whitelistIds.length}`)
 
   // 메타 조회
   let metas = await fetchVideoMetas(whitelistIds.slice(0, 20))
+  console.log(`[Scout] Metas fetched: ${metas.length}`)
 
   // 메타 필터
   metas = metas.filter(v => {
-    if (v.durationSec < 180 || v.durationSec > 3600) return false
-    if (isClickbait(v.title)) return false
-    if (new Date(v.publishedAt).getTime() < cutoff) return false
+    if (v.durationSec < 180 || v.durationSec > 3600) {
+      console.log(`[Scout] Filtered (duration ${v.durationSec}s): ${v.title.slice(0, 50)}`)
+      return false
+    }
+    if (isClickbait(v.title)) {
+      console.log(`[Scout] Filtered (clickbait): ${v.title.slice(0, 50)}`)
+      return false
+    }
+    if (new Date(v.publishedAt).getTime() < cutoff) {
+      console.log(`[Scout] Filtered (old: ${v.publishedAt}): ${v.title.slice(0, 50)}`)
+      return false
+    }
     if (alreadyCollectedIds.has(v.videoId)) return false
     return true
   })
+  console.log(`[Scout] After filter: ${metas.length}`)
 
   let results: ScoutResult[] = metas.map(v => ({
     ...v,
