@@ -140,7 +140,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json().catch(() => ({}))
-    const { force, autoPublish, sessionId, subcategory: bodySubcategory } = body as { force?: boolean; autoPublish?: boolean; sessionId?: string; subcategory?: string }
+    const { force, autoPublish, sessionId, subcategory: bodySubcategory, runId: bodyRunId } = body as { force?: boolean; autoPublish?: boolean; sessionId?: string; subcategory?: string; runId?: string }
 
     const settings = await getCurationSettings()
 
@@ -208,7 +208,7 @@ export async function POST(req: NextRequest) {
     // pipeline_logs에 Publish 기록
     try {
       const sub = (bodySubcategory ?? item.aiSubcategory ?? getSubcategoryForSlot()) as import('@/lib/ai-curator').AiSubcategory
-      const runId = await initPipelineLog(sub)
+      const runId = bodyRunId ?? await initPipelineLog(sub)
       await logPublish(runId, {
         status: 'done',
         completedAt: new Date().toISOString(),

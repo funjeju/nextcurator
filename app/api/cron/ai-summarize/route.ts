@@ -39,8 +39,8 @@ const SUBCATEGORY_TO_CATEGORY: Record<AiSubcategory, string> = {
   usecases: 'selfdev',
 }
 
-async function runSummarize(subcategory: AiSubcategory) {
-  const runId = await initPipelineLog(subcategory)
+async function runSummarize(subcategory: AiSubcategory, existingRunId?: string) {
+  const runId = existingRunId ?? await initPipelineLog(subcategory)
   const startedAt = new Date().toISOString()
 
   // evaluate_queue에서 1위 픽 가져오기
@@ -183,10 +183,10 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const body = await req.json().catch(() => ({})) as { subcategory?: AiSubcategory; force?: boolean }
+  const body = await req.json().catch(() => ({})) as { subcategory?: AiSubcategory; force?: boolean; runId?: string }
   if (!body.force) {
     return NextResponse.json({ error: 'force:true required' }, { status: 400 })
   }
   const subcategory = body.subcategory ?? getSubcategoryForSlot()
-  return runSummarize(subcategory)
+  return runSummarize(subcategory, body.runId)
 }

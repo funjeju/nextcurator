@@ -48,6 +48,7 @@ export interface PipelineLogSummarize {
   completedAt?: string
   videoId?: string
   title?: string
+  sessionId?: string
   transcriptLength?: number
   message?: string
 }

@@ -106,7 +106,7 @@ function PipelineLogModal({ log, onClose, onStageComplete }: { log: PipelineLog;
       const res = await fetch(api, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ force: true, subcategory: currentLog.subcategory, autoPublish: true }),
+        body: JSON.stringify({ force: true, subcategory: currentLog.subcategory, autoPublish: true, runId: currentLog.id }),
       })
       const data = await res.json()
       const ok = !!(data.success || data.ok)
