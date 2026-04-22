@@ -451,28 +451,25 @@ export async function getTopPickForPublish(subcategory: AiSubcategory): Promise<
     const { getFirestore } = await import('firebase-admin/firestore')
     const db = getFirestore()
 
-    // 정확한 hour docId 대신 최근 4시간 이내 최신 문서 쿼리
-    const cutoff = new Date(Date.now() - 4 * 3600 * 1000).toISOString()
-    const snap = await db.collection('ai_evaluate_queue')
-      .where('subcategory', '==', subcategory)
-      .where('status', '==', 'evaluated')
-      .where('savedAt', '>=', cutoff)
-      .orderBy('savedAt', 'desc')
-      .limit(1)
-      .get()
+    // 현재 시각 기준 최근 4시간의 docId를 순서대로 시도 (복합 인덱스 불필요)
+    for (let h = 0; h < 4; h++) {
+      const docId = `${subcategory}_${new Date(Date.now() - h * 3600 * 1000).toISOString().slice(0, 13)}`
+      const doc = await db.collection('ai_evaluate_queue').doc(docId).get()
+      if (!doc.exists) continue
 
-    if (snap.empty) {
-      console.log(`[Summarize] No recent evaluate queue found for ${subcategory} (cutoff: ${cutoff})`)
-      return null
+      const data = doc.data()!
+      if (data.status !== 'evaluated') continue
+
+      console.log(`[Summarize] Found evaluate queue: ${docId} (${h}h ago)`)
+      const evaluated = (data.evaluated ?? []) as any[]
+      const passes = evaluated
+        .filter(e => e.decision === 'PASS')
+        .sort((a, b) => b.compositeScore - a.compositeScore)
+      if (passes[0]) return passes[0]
     }
 
-    const data = snap.docs[0].data()
-    console.log(`[Summarize] Found evaluate queue: ${snap.docs[0].id} savedAt=${data.savedAt}`)
-    const evaluated = (data.evaluated ?? []) as any[]
-    const passes = evaluated
-      .filter(e => e.decision === 'PASS')
-      .sort((a, b) => b.compositeScore - a.compositeScore)
-    return passes[0] ?? null
+    console.log(`[Summarize] No evaluate queue found for ${subcategory} in last 4 hours`)
+    return null
   } catch (e) {
     console.error(`[Summarize] getTopPickForPublish error: ${e}`)
     return null
