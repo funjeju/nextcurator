@@ -15,9 +15,9 @@ export type AiSubcategory = 'news' | 'tools' | 'usecases'
 
 // ── 신선도 기준 (초) ──────────────────────────────────────────────────────────
 export const FRESHNESS_WINDOW: Record<AiSubcategory, number> = {
-  news:     48 * 3600,
-  tools:    7 * 24 * 3600,
-  usecases: 7 * 24 * 3600,
+  news:     72 * 3600,       // 3일
+  tools:    14 * 24 * 3600,  // 14일
+  usecases: 14 * 24 * 3600,  // 14일
 }
 
 // ── 클릭베이트 필터 ────────────────────────────────────────────────────────────
@@ -84,7 +84,7 @@ async function skGet(path: string, params: Record<string, string>): Promise<unkn
 
 // SocialKit search → 영상 목록 반환
 async function skSearch(query: string, limit = 10): Promise<Record<string, unknown>[]> {
-  const raw = await skGet('youtube/search', { query, limit: String(limit) })
+  const raw = await skGet('youtube/search', { query, limit: String(limit), order: 'date' })
   if (!raw) return []
   const r = raw as Record<string, unknown>
   const items = (Array.isArray(r.data) ? r.data
