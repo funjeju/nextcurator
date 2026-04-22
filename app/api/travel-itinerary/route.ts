@@ -29,6 +29,8 @@ export async function POST(req: NextRequest) {
       accommodations,
       withKids = false,
       withPets = false,
+      flightArrivalTime,
+      flightDepartureTime,
     } = await req.json()
 
     if (!spots || spots.length === 0) {
@@ -58,10 +60,23 @@ export async function POST(req: NextRequest) {
       return `Day ${di + 1}:\n${lines}`
     }).join('\n\n')
 
-    const arrivalLabel =
-      arrivalTime === 'morning'   ? '오전 (12시 이전)' :
-      arrivalTime === 'afternoon' ? '오후 (12~18시)'   :
-      arrivalTime === 'evening'   ? '저녁 (18시 이후)' : '미정'
+    // 비행 시간 기반 실제 일정 가능 시간 계산
+    function addMin(t: string, m: number) {
+      const [h, min] = t.split(':').map(Number)
+      const total = h * 60 + min + m
+      return `${String(Math.floor(((total % 1440) + 1440) % 1440 / 60)).padStart(2,'0')}:${String(((total % 60)+60)%60).padStart(2,'0')}`
+    }
+    const arrivalNote = flightArrivalTime
+      ? `착륙 ${flightArrivalTime} → 렌트카 픽업 약 40분 → 첫 활동 시작 최소 ${addMin(flightArrivalTime, 40)} 이후`
+      : arrivalTime === 'morning'   ? '오전 도착 (12시 이전)'
+      : arrivalTime === 'afternoon' ? '오후 도착 (12~18시)'
+      : arrivalTime === 'evening'   ? '저녁 도착 (18시 이후)' : '미정'
+
+    const departureNote = flightDepartureTime
+      ? `이륙 ${flightDepartureTime} → 공항 도착 최소 ${addMin(flightDepartureTime, -90)} → 마지막 스팟 ${addMin(flightDepartureTime, -120)} 이전 완료`
+      : '마지막날 체크아웃 후 공항 이동 시간 여유'
+
+    const arrivalLabel = arrivalNote
 
     const accomLabel = !accommodations?.length
       ? '정보 없음'
@@ -76,6 +91,7 @@ export async function POST(req: NextRequest) {
 
 여행 기간: ${startDate} ~ ${endDate} (${numNights}박 ${numDays}일)
 첫날 도착: ${arrivalLabel}
+마지막날 출발: ${departureNote}
 숙소: ${accomLabel}
 통과 지역: ${corridorRegions.join(' → ')}
 ${withKids ? '👶 아이 동반 여행\n' : ''}${withPets ? '🐾 반려동물 동반 여행\n' : ''}
@@ -86,8 +102,8 @@ ${spotListByDay}
 [규칙]
 - [찜] 스팟은 반드시 포함. [추천] 스팟은 동선과 시간에 맞게 적절히 선택
 - 같은 날 스팟끼리 지리적으로 가까운 순서로 배치 (이동 최소화)
-- 첫날 도착 시간대 반영 (저녁 도착 → 가볍게 시작)
-- 마지막날 체크아웃 + 공항 이동 시간 여유
+- 첫날: 위의 도착 시간 정확히 반영. 첫 slot 시간은 실제 활동 가능 시간 이후로 설정
+- 마지막날: 위의 출발 시간 정확히 반영. 공항 이동 시간 역산해서 마지막 slot 완료 시간 준수
 - 각 slot의 tip은 실용 정보 (주차, 혼잡 시간, 예약 필요 여부 등)
 ${mode === 'with_recommendations' ? '- 미예약 숙소가 있으면 accommodation_suggestion에 추천 지역/유형 작성' : ''}
 

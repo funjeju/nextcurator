@@ -26,6 +26,7 @@ interface ParsedMemo {
   dates: { startDate: string; endDate: string } | null
   spots: ParsedSpot[]
   accommodations: Array<{ night: number; name: string; area?: string }> | null
+  flightTimes: { arrival: string; departure: string } | null
   summary: string
 }
 
@@ -45,6 +46,14 @@ function calcNightsdays(start: string, end: string) {
   const s = new Date(start), e = new Date(end)
   const diff = Math.round((e.getTime() - s.getTime()) / 86400000)
   return { nights: Math.max(0, diff), days: Math.max(1, diff + 1) }
+}
+
+function addMinutes(time: string, mins: number): string {
+  const [h, m] = time.split(':').map(Number)
+  const total = h * 60 + m + mins
+  const hh = Math.floor(((total % 1440) + 1440) % 1440 / 60)
+  const mm = ((total % 60) + 60) % 60
+  return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`
 }
 
 function formatDate(dateStr: string) {
@@ -166,6 +175,8 @@ export default function ItineraryWizardModal({ region, spots, onClose }: Props) 
         startDate, endDate,
         nights: n, days: d,
         mode: selectedMode,
+        flightArrivalTime: parsedMemo?.flightTimes?.arrival ?? null,
+        flightDepartureTime: parsedMemo?.flightTimes?.departure ?? null,
       }
       if (selectedMode === 'with_recommendations') {
         body.arrivalTime = arrivalTime
@@ -348,6 +359,29 @@ export default function ItineraryWizardModal({ region, spots, onClose }: Props) 
                   <p className="text-zinc-500 text-xs">스팟 없음 — 마이스팟 또는 AI 추천 사용</p>
                 )}
               </div>
+
+              {/* 비행 시간 */}
+              {parsedMemo.flightTimes && (
+                <div className="bg-[#23211f] border border-white/8 rounded-2xl px-4 py-3">
+                  <p className="text-zinc-500 text-[10px] font-semibold mb-2">✈️ 비행 시간</p>
+                  <div className="flex items-center gap-4 text-xs">
+                    {parsedMemo.flightTimes.arrival && (
+                      <div>
+                        <span className="text-zinc-500">도착</span>
+                        <span className="text-white font-bold ml-1.5">{parsedMemo.flightTimes.arrival}</span>
+                        <span className="text-zinc-600 ml-1">→ 일정 시작 ~{addMinutes(parsedMemo.flightTimes.arrival, 40)}</span>
+                      </div>
+                    )}
+                    {parsedMemo.flightTimes.departure && (
+                      <div>
+                        <span className="text-zinc-500">출발</span>
+                        <span className="text-white font-bold ml-1.5">{parsedMemo.flightTimes.departure}</span>
+                        <span className="text-zinc-600 ml-1">→ 마지막 {addMinutes(parsedMemo.flightTimes.departure, -90)}까지</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* 숙소 */}
               {parsedMemo.accommodations && parsedMemo.accommodations.length > 0 && (
