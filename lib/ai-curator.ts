@@ -393,19 +393,19 @@ export async function evaluateVideos(
 
 // ── Firestore 큐 관리 ─────────────────────────────────────────────────────────
 
-export async function saveScoutQueue(items: ScoutResult[]): Promise<void> {
-  const subcategory = items[0]?.subcategory ?? 'news'
+export async function saveScoutQueue(items: ScoutResult[], subcategory?: AiSubcategory): Promise<void> {
+  const sub = subcategory ?? items[0]?.subcategory ?? 'news'
   try {
     const { initAdminApp } = await import('./firebase-admin')
     initAdminApp()
     const { getFirestore } = await import('firebase-admin/firestore')
-    await getFirestore().collection('ai_scout_queue').doc(subcategory).set({
-      subcategory,
+    await getFirestore().collection('ai_scout_queue').doc(sub).set({
+      subcategory: sub,
       items,
       savedAt: new Date().toISOString(),
       status: 'scouted',
     })
-    console.log(`[Scout] saveScoutQueue OK: ${subcategory} ${items.length}개`)
+    console.log(`[Scout] saveScoutQueue OK: ${sub} ${items.length}개`)
   } catch (e) {
     console.error(`[Scout] saveScoutQueue error: ${e}`)
   }

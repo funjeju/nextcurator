@@ -190,6 +190,55 @@ export async function getPipelineLog(id: string): Promise<PipelineLog | null> {
   }
 }
 
+// ── 활성 파이프라인 상태 관리 ─────────────────────────────────────────────────
+
+export type PipelineStatus = 'idle' | 'scouted' | 'evaluated' | 'summarized' | 'published'
+
+export interface PipelineState {
+  subcategory: AiSubcategory
+  activeRunId: string
+  pipelineStatus: PipelineStatus
+  updatedAt: string
+  sessionId?: string
+  savedSummaryId?: string
+  videoId?: string
+  title?: string
+}
+
+export async function setActiveRunId(
+  subcategory: AiSubcategory,
+  runId: string,
+  status: PipelineStatus,
+  extra?: Partial<PipelineState>,
+): Promise<void> {
+  try {
+    const firestore = await db()
+    await firestore.collection('ai_pipeline_state').doc(subcategory).set({
+      subcategory,
+      activeRunId: runId,
+      pipelineStatus: status,
+      updatedAt: new Date().toISOString(),
+      ...extra,
+    }, { merge: true })
+  } catch (e) {
+    console.error('[PipelineState] setActiveRunId error:', e)
+  }
+}
+
+export async function getActiveRunId(subcategory: AiSubcategory): Promise<{ runId: string; state: PipelineState } | null> {
+  try {
+    const firestore = await db()
+    const doc = await firestore.collection('ai_pipeline_state').doc(subcategory).get()
+    if (!doc.exists) return null
+    const data = doc.data() as PipelineState
+    if (!data.activeRunId) return null
+    return { runId: data.activeRunId, state: data }
+  } catch (e) {
+    console.error('[PipelineState] getActiveRunId error:', e)
+    return null
+  }
+}
+
 // Scout 결과 → 로그용 포맷 변환
 export function scoutResultsToLog(results: ScoutResult[]) {
   return results.map(r => ({

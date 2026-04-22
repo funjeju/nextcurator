@@ -11,7 +11,7 @@ import {
   saveScoutQueue,
 } from '@/lib/ai-curator'
 import { initAdminApp } from '@/lib/firebase-admin'
-import { initPipelineLog, logScout, scoutResultsToLog } from '@/lib/pipeline-logger'
+import { initPipelineLog, logScout, scoutResultsToLog, setActiveRunId } from '@/lib/pipeline-logger'
 
 export const maxDuration = 60
 
@@ -55,7 +55,9 @@ function getSubcategoryForSlot(): AiSubcategory {
 }
 
 async function runScout(subcategory: AiSubcategory) {
+  // Scout는 항상 새 runId 생성 — 이전 파이프라인 사이클 종료
   const runId = await initPipelineLog(subcategory)
+  await setActiveRunId(subcategory, runId, 'scouted')
   const startedAt = new Date().toISOString()
 
   const alreadyIds = await getAlreadyCollectedIds()
@@ -79,7 +81,7 @@ async function runScout(subcategory: AiSubcategory) {
     return NextResponse.json({ success: true, found: 0, subcategory, diag, message: 'No candidates found' })
   }
 
-  await saveScoutQueue(candidates)
+  await saveScoutQueue(candidates, subcategory)
 
   await logScout(runId, {
     startedAt,

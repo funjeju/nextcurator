@@ -10,7 +10,7 @@ import {
 } from '@/lib/magazine-server'
 import { fetchVideoComments, formatCommentsForPrompt } from '@/lib/youtube-comments'
 import { initAdminApp } from '@/lib/firebase-admin'
-import { initPipelineLog, logPublish } from '@/lib/pipeline-logger'
+import { initPipelineLog, logPublish, getActiveRunId, setActiveRunId } from '@/lib/pipeline-logger'
 
 async function writeLog(log: Omit<import('@/lib/magazine').MagazineLog, 'id'>) {
   try {
@@ -41,35 +41,44 @@ function getSubcategoryForSlot(): AiSubcategory {
 
 // ai-summarize가 슬롯 문서에 저장한 sessionId로 정확히 픽업
 // 없거나 실패하면 기존 saved_summaries 폴백
-async function pickItem(lookbackDays: number) {
+async function pickItem(lookbackDays: number, subcategoryOverride?: string) {
   try {
     initAdminApp()
     const { getFirestore } = await import('firebase-admin/firestore')
     const db = getFirestore()
 
-    const subcategory = getSubcategoryForSlot()
-    const slotDoc = await db.collection('ai_pipeline').doc(`${subcategory}_slot`).get()
+    const subcategory = (subcategoryOverride ?? getSubcategoryForSlot()) as import('@/lib/ai-curator').AiSubcategory
 
+    // 1순위: ai_pipeline_state (새 아키텍처)
+    const active = await getActiveRunId(subcategory)
+    if (active?.state.pipelineStatus === 'summarized' && active.state.savedSummaryId) {
+      const summaryDoc = await db.collection('saved_summaries').doc(active.state.savedSummaryId).get()
+      if (summaryDoc.exists && !summaryDoc.data()?.postedToMagazine) {
+        console.log(`[generate-post] Picked from ai_pipeline_state: ${active.state.title}`)
+        return { id: summaryDoc.id, ...summaryDoc.data() } as any
+      }
+    }
+
+    // 2순위: 기존 ai_pipeline slot (하위 호환)
+    const slotDoc = await db.collection('ai_pipeline').doc(`${subcategory}_slot`).get()
     if (slotDoc.exists) {
       const slot = slotDoc.data()!
-      // status가 ready여야 하고, 1시간 이내 저장된 것만 유효
       const savedAt = new Date(slot.savedAt as string).getTime()
-      const isRecent = Date.now() - savedAt < 90 * 60 * 1000 // 90분 이내
+      const isRecent = Date.now() - savedAt < 90 * 60 * 1000
       if (slot.status === 'ready' && isRecent && slot.savedSummaryId) {
         const summaryDoc = await db.collection('saved_summaries').doc(slot.savedSummaryId as string).get()
         if (summaryDoc.exists && !summaryDoc.data()?.postedToMagazine) {
           console.log(`[generate-post] Picked from ai_pipeline slot: ${slot.title}`)
-          // 슬롯 상태를 'processing'으로 변경 (중복 발행 방지)
           await slotDoc.ref.update({ status: 'processing' })
           return { id: summaryDoc.id, ...summaryDoc.data() } as any
         }
       }
     }
   } catch (e) {
-    console.warn('[generate-post] ai_pipeline slot read failed, falling back:', e)
+    console.warn('[generate-post] pipeline state read failed, falling back:', e)
   }
 
-  // 폴백: 기존 로직
+  // 3순위: 폴백
   const summaries = await getRecentPublicSummaries(lookbackDays)
   return pickBestSingle(summaries)
 }
@@ -208,7 +217,9 @@ export async function POST(req: NextRequest) {
     // pipeline_logs에 Publish 기록
     try {
       const sub = (bodySubcategory ?? item.aiSubcategory ?? getSubcategoryForSlot()) as import('@/lib/ai-curator').AiSubcategory
-      const runId = bodyRunId ?? await initPipelineLog(sub)
+      const active = bodyRunId ? null : await getActiveRunId(sub)
+      const runId = bodyRunId ?? active?.runId ?? await initPipelineLog(sub)
+      await setActiveRunId(sub, runId, 'published')
       await logPublish(runId, {
         status: 'done',
         completedAt: new Date().toISOString(),

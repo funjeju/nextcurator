@@ -12,7 +12,7 @@ import {
   saveEvaluateQueue,
 } from '@/lib/ai-curator'
 import { getTranscript } from '@/lib/transcript'
-import { initPipelineLog, logEvaluate, evaluatedToLog } from '@/lib/pipeline-logger'
+import { initPipelineLog, logEvaluate, evaluatedToLog, getActiveRunId, setActiveRunId } from '@/lib/pipeline-logger'
 
 export const maxDuration = 120
 
@@ -69,8 +69,9 @@ async function markScoutQueueProcessed(subcategory: AiSubcategory): Promise<void
   }
 }
 
-async function runEvaluate(subcategory: AiSubcategory) {
-  const runId = await initPipelineLog(subcategory)
+async function runEvaluate(subcategory: AiSubcategory, existingRunId?: string) {
+  const active = existingRunId ? null : await getActiveRunId(subcategory)
+  const runId = existingRunId ?? active?.runId ?? await initPipelineLog(subcategory)
   const startedAt = new Date().toISOString()
 
   const candidates = await readScoutQueue(subcategory)
@@ -130,6 +131,7 @@ async function runEvaluate(subcategory: AiSubcategory) {
   console.log(`[AI Evaluate] Done: PASS=${passCount}, HOLD=${holdCount}, FAIL=${evaluated.length - passCount - holdCount}`)
 
   const winner = evaluated.find(e => e.decision === 'PASS')
+  await setActiveRunId(subcategory, runId, 'evaluated', winner ? { videoId: winner.videoId, title: winner.title } : {})
   await logEvaluate(runId, {
     startedAt,
     status: 'done',
@@ -141,6 +143,7 @@ async function runEvaluate(subcategory: AiSubcategory) {
   return NextResponse.json({
     success: true,
     subcategory,
+    runId,
     total: evaluated.length,
     passCount,
     holdCount,
@@ -161,10 +164,10 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const body = await req.json().catch(() => ({})) as { subcategory?: AiSubcategory; force?: boolean }
+  const body = await req.json().catch(() => ({})) as { subcategory?: AiSubcategory; force?: boolean; runId?: string }
   if (!body.force) {
     return NextResponse.json({ error: 'force:true required' }, { status: 400 })
   }
   const subcategory = body.subcategory ?? getSubcategoryForSlot()
-  return runEvaluate(subcategory)
+  return runEvaluate(subcategory, body.runId)
 }

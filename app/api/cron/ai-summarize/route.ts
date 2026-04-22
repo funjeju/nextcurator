@@ -15,7 +15,7 @@ import {
 import { fetchVideoComments } from '@/lib/youtube-comments'
 import { initAdminApp } from '@/lib/firebase-admin'
 import { randomUUID } from 'crypto'
-import { initPipelineLog, logSummarize } from '@/lib/pipeline-logger'
+import { initPipelineLog, logSummarize, getActiveRunId, setActiveRunId } from '@/lib/pipeline-logger'
 
 export const maxDuration = 120
 
@@ -40,7 +40,8 @@ const SUBCATEGORY_TO_CATEGORY: Record<AiSubcategory, string> = {
 }
 
 async function runSummarize(subcategory: AiSubcategory, existingRunId?: string) {
-  const runId = existingRunId ?? await initPipelineLog(subcategory)
+  const active = existingRunId ? null : await getActiveRunId(subcategory)
+  const runId = existingRunId ?? active?.runId ?? await initPipelineLog(subcategory)
   const startedAt = new Date().toISOString()
 
   // evaluate_queue에서 1위 픽 가져오기
@@ -157,6 +158,14 @@ async function runSummarize(subcategory: AiSubcategory, existingRunId?: string) 
       status: 'ready',
     })
 
+    // ai_pipeline_state에 summarize 결과 저장 → generate-post가 이걸 읽어서 발행
+    await setActiveRunId(subcategory, runId, 'summarized', {
+      sessionId,
+      savedSummaryId: ref.id,
+      videoId: pick.videoId,
+      title: pick.title,
+    })
+
     console.log(`[AI Summarize] ✅ Saved to Square K + slot: "${pick.title}" (docId=${ref.id})`)
     await logSummarize(runId, {
       startedAt,
@@ -166,7 +175,7 @@ async function runSummarize(subcategory: AiSubcategory, existingRunId?: string) 
       title: pick.title,
       transcriptLength: pick.transcript.length,
     })
-    return NextResponse.json({ success: true, subcategory, sessionId, title: pick.title, category: finalCategory })
+    return NextResponse.json({ success: true, subcategory, runId, sessionId, title: pick.title, category: finalCategory })
   } catch (e) {
     console.error('[AI Summarize] Firestore save failed:', e)
     await logSummarize(runId, { startedAt, status: 'failed', completedAt: new Date().toISOString(), message: String(e) })
