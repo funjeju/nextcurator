@@ -88,7 +88,7 @@ const STAGE_META: Record<PipelineStage, { label: string; api: string; color: str
   publish:  { label: '④ Publish',  api: '/api/cron/generate-post',color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/30' },
 }
 
-function PipelineLogModal({ log, onClose, onStageComplete }: { log: PipelineLog; onClose: () => void; onStageComplete?: () => void }) {
+function PipelineLogModal({ log, onClose, onStageComplete, onDelete }: { log: PipelineLog; onClose: () => void; onStageComplete?: () => void; onDelete?: (id: string) => void }) {
   const meta = SUBCATEGORY_META[log.subcategory as AiSubcategory] ?? SUBCATEGORY_META.news
   const kstDate = log.startedAt
     ? new Intl.DateTimeFormat('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Seoul' }).format(new Date(log.startedAt))
@@ -424,7 +424,17 @@ function PipelineLogModal({ log, onClose, onStageComplete }: { log: PipelineLog;
 
         </div>
 
-        <div className="flex justify-end px-6 py-4 border-t border-white/8 bg-[#161412]">
+        <div className="flex justify-between px-6 py-4 border-t border-white/8 bg-[#161412]">
+          <button
+            onClick={() => {
+              if (!confirm('이 파이프라인 로그를 삭제하시겠습니까?')) return
+              onDelete?.(log.id)
+              onClose()
+            }}
+            className="px-4 py-2 rounded-xl bg-red-500/10 text-red-400 hover:bg-red-500/20 text-sm font-bold border border-red-500/20 transition-colors"
+          >
+            로그 삭제
+          </button>
           <button
             onClick={onClose}
             className="px-4 py-2 rounded-xl bg-[#2a2826] text-[#a4a09c] hover:text-white text-sm font-bold border border-white/8 transition-colors"
@@ -907,6 +917,10 @@ export default function CurationTab({ getAuthHeader }: {
               if (fresh) setSelectedPipelineLog(fresh)
             }
             setLoadingPipelineLogs(false)
+          }}
+          onDelete={async (id) => {
+            await callAdmin('deletePipelineLog', { id })
+            setPipelineLogs(prev => prev.filter(l => l.id !== id))
           }}
         />
       )}

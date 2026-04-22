@@ -111,6 +111,14 @@ export async function POST(req: NextRequest) {
         return NextResponse.json(pLog)
       }
 
+      case 'deletePipelineLog': {
+        if (!body.id) return NextResponse.json({ error: 'id required' }, { status: 400 })
+        initAdminApp()
+        const { getFirestore: getFS4 } = await import('firebase-admin/firestore')
+        await getFS4().collection('pipeline_logs').doc(body.id).delete()
+        return NextResponse.json({ ok: true })
+      }
+
       default:
         return NextResponse.json({ error: 'Unknown action' }, { status: 400 })
     }
