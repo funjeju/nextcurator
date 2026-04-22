@@ -10,6 +10,7 @@ import {
 } from '@/lib/magazine-server'
 import { fetchVideoComments, formatCommentsForPrompt } from '@/lib/youtube-comments'
 import { initAdminApp } from '@/lib/firebase-admin'
+import { initPipelineLog, logPublish } from '@/lib/pipeline-logger'
 
 async function writeLog(log: Omit<import('@/lib/magazine').MagazineLog, 'id'>) {
   try {
@@ -203,6 +204,19 @@ export async function POST(req: NextRequest) {
       triggerType: 'manual',
       createdAt: new Date().toISOString(),
     })
+
+    // pipeline_logs에 Publish 기록
+    try {
+      const sub = (item.aiSubcategory ?? getSubcategoryForSlot()) as import('@/lib/ai-curator').AiSubcategory
+      const runId = await initPipelineLog(sub)
+      await logPublish(runId, {
+        status: 'done',
+        completedAt: new Date().toISOString(),
+        postTitle: post.title,
+        postSlug: post.slug,
+        autoPublish: shouldPublish,
+      })
+    } catch { /* non-critical */ }
 
     return NextResponse.json({
       success: true,

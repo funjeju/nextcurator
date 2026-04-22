@@ -15,6 +15,7 @@ import {
 import { fetchVideoComments } from '@/lib/youtube-comments'
 import { initAdminApp } from '@/lib/firebase-admin'
 import { randomUUID } from 'crypto'
+import { initPipelineLog, logSummarize } from '@/lib/pipeline-logger'
 
 export const maxDuration = 120
 
@@ -39,9 +40,13 @@ const SUBCATEGORY_TO_CATEGORY: Record<AiSubcategory, string> = {
 }
 
 async function runSummarize(subcategory: AiSubcategory) {
+  const runId = await initPipelineLog(subcategory)
+  const startedAt = new Date().toISOString()
+
   // evaluate_queue에서 1위 픽 가져오기
   const pick = await getTopPickForPublish(subcategory)
   if (!pick) {
+    await logSummarize(runId, { startedAt, status: 'skipped', completedAt: new Date().toISOString(), message: 'No evaluated pick found' })
     return NextResponse.json({ success: true, subcategory, message: 'No evaluated pick found — evaluate cron may not have run yet' })
   }
 
@@ -153,9 +158,18 @@ async function runSummarize(subcategory: AiSubcategory) {
     })
 
     console.log(`[AI Summarize] ✅ Saved to Square K + slot: "${pick.title}" (docId=${ref.id})`)
+    await logSummarize(runId, {
+      startedAt,
+      status: 'done',
+      completedAt: new Date().toISOString(),
+      videoId: pick.videoId,
+      title: pick.title,
+      transcriptLength: pick.transcript.length,
+    })
     return NextResponse.json({ success: true, subcategory, sessionId, title: pick.title, category: finalCategory })
   } catch (e) {
     console.error('[AI Summarize] Firestore save failed:', e)
+    await logSummarize(runId, { startedAt, status: 'failed', completedAt: new Date().toISOString(), message: String(e) })
     return NextResponse.json({ error: String(e) }, { status: 500 })
   }
 }

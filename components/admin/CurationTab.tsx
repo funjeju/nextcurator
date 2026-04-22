@@ -88,7 +88,7 @@ const STAGE_META: Record<PipelineStage, { label: string; api: string; color: str
   publish:  { label: '④ Publish',  api: '/api/cron/generate-post',color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/30' },
 }
 
-function PipelineLogModal({ log, onClose }: { log: PipelineLog; onClose: () => void }) {
+function PipelineLogModal({ log, onClose, onStageComplete }: { log: PipelineLog; onClose: () => void; onStageComplete?: () => void }) {
   const meta = SUBCATEGORY_META[log.subcategory as AiSubcategory] ?? SUBCATEGORY_META.news
   const kstDate = log.startedAt
     ? new Intl.DateTimeFormat('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Seoul' }).format(new Date(log.startedAt))
@@ -96,7 +96,7 @@ function PipelineLogModal({ log, onClose }: { log: PipelineLog; onClose: () => v
 
   const [currentLog, setCurrentLog] = useState<PipelineLog>(log)
   const [running, setRunning] = useState<'summarize' | 'publish' | null>(null)
-  const [stageResult, setStageResult] = useState<{ stage: string; ok: boolean; msg: string } | null>(null)
+  const [stageResult, setStageResult] = useState<{ stage: string; ok: boolean; msg: string; sessionId?: string; slug?: string; title?: string } | null>(null)
 
   const runStage = async (stage: 'summarize' | 'publish') => {
     setRunning(stage)
@@ -106,18 +106,23 @@ function PipelineLogModal({ log, onClose }: { log: PipelineLog; onClose: () => v
       const res = await fetch(api, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ force: true, subcategory: currentLog.subcategory }),
+        body: JSON.stringify({ force: true, subcategory: currentLog.subcategory, autoPublish: true }),
       })
       const data = await res.json()
       const ok = !!(data.success || data.ok)
       const msg = data.error ?? data.message ?? data.reason ?? (ok ? `${stage} 완료` : '알 수 없는 오류')
-      setStageResult({ stage, ok, msg })
+      setStageResult({ stage, ok, msg, sessionId: data.sessionId, slug: data.slug, title: data.title })
       if (ok) {
-        // 로그 상태 업데이트 (로컬 반영)
         setCurrentLog(prev => ({
           ...prev,
-          [stage]: { ...prev[stage as keyof PipelineLog] as any, status: 'done', completedAt: new Date().toISOString(), message: msg },
+          [stage]: {
+            ...(prev[stage as keyof PipelineLog] as any),
+            status: 'done',
+            completedAt: new Date().toISOString(),
+            ...(stage === 'summarize' ? { title: data.title } : { postTitle: data.title, postSlug: data.slug }),
+          },
         }))
+        onStageComplete?.()
       }
     } catch (e) {
       setStageResult({ stage, ok: false, msg: String(e) })
@@ -333,9 +338,25 @@ function PipelineLogModal({ log, onClose }: { log: PipelineLog; onClose: () => v
               <p className="px-4 pb-3 text-[11px] text-yellow-400/70">{currentLog.summarize.message}</p>
             )}
             {stageResult?.stage === 'summarize' && (
-              <p className={`px-4 pb-3 text-[11px] font-bold ${stageResult.ok ? 'text-emerald-400' : 'text-red-400'}`}>
-                {stageResult.ok ? '✅' : '❌'} {stageResult.msg}
-              </p>
+              <div className="px-4 pb-3 space-y-1">
+                <p className={`text-[11px] font-bold ${stageResult.ok ? 'text-emerald-400' : 'text-red-400'}`}>
+                  {stageResult.ok ? '✅' : '❌'} {stageResult.msg}
+                </p>
+                {stageResult.ok && stageResult.title && (
+                  <p className="text-[10px] text-white font-medium">{stageResult.title}</p>
+                )}
+                {stageResult.ok && stageResult.sessionId && (
+                  <a
+                    href={`/result/${stageResult.sessionId}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-block text-[10px] text-orange-400 hover:text-orange-300 underline"
+                    onClick={e => e.stopPropagation()}
+                  >
+                    → 스퀘어에서 요약 보기
+                  </a>
+                )}
+              </div>
             )}
           </div>
 
@@ -379,9 +400,25 @@ function PipelineLogModal({ log, onClose }: { log: PipelineLog; onClose: () => v
               <p className="px-4 pb-3 text-[11px] text-yellow-400/70">{currentLog.publish.message}</p>
             )}
             {stageResult?.stage === 'publish' && (
-              <p className={`px-4 pb-3 text-[11px] font-bold ${stageResult.ok ? 'text-emerald-400' : 'text-red-400'}`}>
-                {stageResult.ok ? '✅' : '❌'} {stageResult.msg}
-              </p>
+              <div className="px-4 pb-3 space-y-1">
+                <p className={`text-[11px] font-bold ${stageResult.ok ? 'text-emerald-400' : 'text-red-400'}`}>
+                  {stageResult.ok ? '✅' : '❌'} {stageResult.msg}
+                </p>
+                {stageResult.ok && stageResult.title && (
+                  <p className="text-[10px] text-white font-medium">{stageResult.title}</p>
+                )}
+                {stageResult.ok && stageResult.slug && (
+                  <a
+                    href={`/magazine/${stageResult.slug}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-block text-[10px] text-emerald-400 hover:text-emerald-300 underline"
+                    onClick={e => e.stopPropagation()}
+                  >
+                    → 매거진에서 기사 보기
+                  </a>
+                )}
+              </div>
             )}
           </div>
 
@@ -858,7 +895,20 @@ export default function CurationTab({ getAuthHeader }: {
 
       {/* ── 파이프라인 로그 상세 모달 ── */}
       {selectedPipelineLog && (
-        <PipelineLogModal log={selectedPipelineLog} onClose={() => setSelectedPipelineLog(null)} />
+        <PipelineLogModal
+          log={selectedPipelineLog}
+          onClose={() => setSelectedPipelineLog(null)}
+          onStageComplete={async () => {
+            setLoadingPipelineLogs(true)
+            const data = await callAdmin('getPipelineLogs')
+            if (Array.isArray(data)) {
+              setPipelineLogs(data)
+              const fresh = (data as PipelineLog[]).find(l => l.id === selectedPipelineLog.id)
+              if (fresh) setSelectedPipelineLog(fresh)
+            }
+            setLoadingPipelineLogs(false)
+          }}
+        />
       )}
 
       {/* ── 특정 요약으로 매거진 생성 ── */}
