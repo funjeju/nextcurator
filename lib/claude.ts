@@ -213,13 +213,7 @@ const SUMMARY_PROMPTS: Record<Category, string> = {
   // voice는 별도 API에서 Gemini가 직접 처리하므로 placeholder만 사용
   voice: '',
 
-  report: `다음 영상 자막을 분석해서 보고서 형식의 JSON을 만드세요.
-sections는 영상 흐름에 따라 4~7개로 구성하고, 각 섹션은 2~3문장의 서술형 body로 작성하세요.
-timestamp는 해당 섹션이 시작되는 시점(MM:SS 또는 HH:MM:SS)을 기입하세요.
-context_summary는 200~300자 분량의 한국어 맥락 요약입니다.
-conclusion은 한 문장 핵심 결론입니다.
-
-{"square_meta":{"tags":["키워드1","키워드2","키워드3","키워드4","키워드5"],"topic_cluster":"대주제","vibe":"분위기"},"title":"보고서 제목","context_summary":"전체 맥락 200~300자 요약","table_of_contents":["1. 섹션 제목","2. 섹션 제목"],"sections":[{"number":1,"heading":"소제목","timestamp":"MM:SS","body":"서술형 요약 2~3문장"}],"conclusion":"핵심 결론 한 문장"}`,
+  report: `__REPORT_DYNAMIC__`,
 }
 
 /**
@@ -250,7 +244,22 @@ export async function generateSummary(
   source: 'youtube' | 'pdf' | 'web' = 'youtube',
   outputLang: 'ko' | 'original' = 'ko'
 ): Promise<SummaryData> {
-  const prompt = SUMMARY_PROMPTS[category]
+  // report 카테고리: 영상 길이에 비례해 섹션 수 동적 결정
+  let prompt = SUMMARY_PROMPTS[category]
+  if (category === 'report') {
+    const approxMinutes = Math.round(transcript.length / 800)
+    const sectionCount = approxMinutes >= 40 ? '12~18개' : approxMinutes >= 20 ? '8~12개' : approxMinutes >= 10 ? '5~8개' : '4~6개'
+    const bodyLen = approxMinutes >= 20 ? '3~5문장' : '2~3문장'
+    prompt = `다음 영상 자막을 분석해서 보고서 형식의 JSON을 만드세요.
+sections는 영상 흐름에 따라 ${sectionCount}로 구성하고, 각 섹션은 ${bodyLen}의 서술형 body로 작성하세요.
+영상 전체 구간을 빠짐없이 커버하도록 timestamp를 균등하게 배분하세요.
+timestamp는 해당 섹션이 시작되는 시점(MM:SS 또는 HH:MM:SS)을 기입하세요.
+context_summary는 200~300자 분량의 한국어 맥락 요약입니다.
+conclusion은 한 문장 핵심 결론입니다.
+
+{"square_meta":{"tags":["키워드1","키워드2","키워드3","키워드4","키워드5"],"topic_cluster":"대주제","vibe":"분위기"},"title":"보고서 제목","context_summary":"전체 맥락 200~300자 요약","table_of_contents":["1. 섹션 제목","2. 섹션 제목"],"sections":[{"number":1,"heading":"소제목","timestamp":"MM:SS","body":"서술형 요약"}],"conclusion":"핵심 결론 한 문장"}`
+  }
+
   const sampled = sampleTranscript(transcript)  // 기본 6만자
 
   const sourceNote = source !== 'youtube'
@@ -276,7 +285,7 @@ const reportModel = genAI.getGenerativeModel({
   model: 'gemini-2.5-flash',
   generationConfig: {
     temperature: 0.4,
-    maxOutputTokens: 4096,
+    maxOutputTokens: 8192,
     // @ts-expect-error thinkingConfig not yet in types but supported
     thinkingConfig: { thinkingBudget: 0 },
   },
@@ -287,6 +296,10 @@ export async function generateReportSummary(
   title: string,
   fullContext: string
 ): Promise<string> {
+  // 자막 길이로 영상 분량 추정 → 보고서 분량 동적 조절
+  const approxMinutes = Math.round(fullContext.length / 800)
+  const targetChars = approxMinutes >= 30 ? '2000~3000자' : approxMinutes >= 15 ? '1200~2000자' : '800~1200자'
+  const sectionCount = approxMinutes >= 30 ? '8~12개' : approxMinutes >= 15 ? '6~8개' : '4~6개'
   const categoryHint: Record<Category, string> = {
     recipe:   '요리/레시피 영상',
     english:  '영어 학습 영상',
@@ -304,12 +317,12 @@ export async function generateReportSummary(
 아래 "${categoryHint[category]}"의 자막/설명을 읽고, 보고서 형식의 정리 문서를 한국어로 작성하세요.
 
 요구사항:
-- 4~6개의 소제목(##)으로 구성
-- 각 섹션은 2~4문장의 서술형 단락으로 작성 (글머리표 최소화)
+- ${sectionCount}의 소제목(##)으로 구성
+- 각 섹션은 3~5문장의 서술형 단락으로 작성 (글머리표 최소화)
 - 첫 섹션은 반드시 "## 개요"로 시작하여 배경과 주제를 소개
 - 마지막 섹션은 반드시 "## 핵심 정리"로 끝내며 결론/시사점 서술
 - 중간 섹션 소제목은 내용에 맞게 자유롭게 설정
-- 전체 분량: 600~900자 내외
+- 전체 분량: ${targetChars} (영상 길이에 비례하여 충분히 상세하게)
 - 마크다운 형식만 사용 (bold, 소제목만), 표나 코드블록 사용 금지
 
 영상 제목: ${title}
