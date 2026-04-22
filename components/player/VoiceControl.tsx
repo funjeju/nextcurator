@@ -36,6 +36,10 @@ const KOR_NUM: Record<string, number> = {
 
 type PermissionState = 'unknown' | 'granted' | 'denied' | 'requesting'
 
+function hasWakeWord(text: string) {
+  return text.includes('헤이쏙') || text.includes('헤이 쏙') || text.includes('hey쏙')
+}
+
 export default function VoiceControl({ playerRef, steps }: Props) {
   const [listening, setListening]     = useState(false)
   const [wake, setWake]               = useState(false)
@@ -43,14 +47,18 @@ export default function VoiceControl({ playerRef, steps }: Props) {
   const [feedback, setFeedback]       = useState('')
   const [supported, setSupported]     = useState(false)
   const [permission, setPermission]   = useState<PermissionState>('unknown')
+  const [keepOn, setKeepOn]           = useState(false)
 
   const recognitionRef  = useRef<any>(null)
   const feedbackTimer   = useRef<ReturnType<typeof setTimeout> | null>(null)
   const wakeTimer       = useRef<ReturnType<typeof setTimeout> | null>(null)
   const streamRef       = useRef<MediaStream | null>(null)
+  const keepOnRef       = useRef(false)
   const listeningRef    = useRef(false)
   const wakeRef         = useRef(false)
 
+  useEffect(() => { keepOnRef.current = keepOn }, [keepOn])
+  useEffect(() => { listeningRef.current = listening }, [listening])
   useEffect(() => { wakeRef.current = wake }, [wake])
 
   useEffect(() => {
@@ -142,67 +150,76 @@ export default function VoiceControl({ playerRef, steps }: Props) {
 
     const rec = new SR()
     rec.lang = 'ko-KR'
-    rec.continuous = true
+    rec.continuous = false
     rec.interimResults = false
     recognitionRef.current = rec
 
-    rec.onstart = () => {
-      setListening(true)
-      listeningRef.current = true
-      setTranscript('')
-      setFeedback('')
-    }
+    rec.onstart  = () => { setListening(true); listeningRef.current = true; setTranscript(''); setFeedback('') }
 
     rec.onresult = (e: any) => {
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        if (!e.results[i].isFinal) continue
-        const text = e.results[i][0].transcript.trim()
-        const lower = text.toLowerCase()
+      const text = e.results[0][0].transcript.trim()
+      const lower = text.toLowerCase()
 
-        if (!wakeRef.current) {
-          // wake word 감지 — "헤이쏙" 유사 표현 허용
-          if (lower.includes('헤이쏙') || lower.includes('헤이 쏙') || lower.includes('hey쏙')) {
-            wakeRef.current = true
-            setWake(true)
-            showFeedback('🎙 말씀하세요')
-            if (wakeTimer.current) clearTimeout(wakeTimer.current)
-            // 5초 안에 명령 없으면 wake 해제
-            wakeTimer.current = setTimeout(() => {
-              wakeRef.current = false
-              setWake(false)
-              showFeedback('')
-            }, 5000)
-          }
-        } else {
-          // wake 상태 → 명령 실행
-          wakeRef.current = false
-          setWake(false)
-          if (wakeTimer.current) clearTimeout(wakeTimer.current)
+      // "헤이쏙 멈춰" 처럼 한 발화에 wake word + 명령이 같이 오는 경우
+      if (hasWakeWord(lower)) {
+        // wake word 뒤에 명령어가 붙어있으면 바로 실행
+        const afterWake = lower.replace(/헤이\s*쏙|hey\s*쏙/g, '').trim()
+        if (afterWake) {
           setTranscript(text)
-          executeCommand(text)
+          executeCommand(afterWake)
+        } else {
+          // wake word만 단독으로 → 다음 발화 대기
+          wakeRef.current = true
+          setWake(true)
+          showFeedback('🎙 말씀하세요')
+          if (wakeTimer.current) clearTimeout(wakeTimer.current)
+          wakeTimer.current = setTimeout(() => {
+            wakeRef.current = false
+            setWake(false)
+            showFeedback('')
+          }, 5000)
         }
+        return
       }
+
+      // wake 상태일 때만 명령 실행
+      if (wakeRef.current) {
+        wakeRef.current = false
+        setWake(false)
+        if (wakeTimer.current) clearTimeout(wakeTimer.current)
+        setTranscript(text)
+        executeCommand(text)
+      }
+      // wake 상태 아니면 무시 (스피커 수음 방지)
     }
 
     rec.onerror = (e: any) => {
       if (e.error === 'not-allowed') {
         setPermission('denied')
         showFeedback('🔒 마이크 권한이 차단됐어요')
-        stopAll()
-      } else if (e.error === 'no-speech' || e.error === 'aborted') {
-        // continuous 모드에서는 무시
+        keepOnRef.current = false
+        setKeepOn(false)
+      } else if (e.error === 'no-speech') {
+        if (!keepOnRef.current) showFeedback('🔇 음성이 감지되지 않았어요')
+      } else if (e.error === 'aborted') {
+        // 무시
       } else {
         showFeedback(`❌ ${e.error}`)
       }
+      setListening(false)
+      listeningRef.current = false
     }
 
     rec.onend = () => {
-      // continuous 모드에서도 일부 브라우저/OS가 강제 종료할 수 있음
-      // listening 상태면 재시작 (단, 1회만)
-      if (listeningRef.current) {
+      setListening(false)
+      listeningRef.current = false
+      if (keepOnRef.current) {
         setTimeout(() => {
-          if (listeningRef.current) startRecognition()
-        }, 500)
+          if (keepOnRef.current) startRecognition()
+        }, 300)
+      } else {
+        streamRef.current?.getTracks().forEach(t => t.stop())
+        streamRef.current = null
       }
     }
 
@@ -210,18 +227,20 @@ export default function VoiceControl({ playerRef, steps }: Props) {
   }, [executeCommand, showFeedback])
 
   const stopAll = useCallback(() => {
-    listeningRef.current = false
+    keepOnRef.current = false
+    setKeepOn(false)
     wakeRef.current = false
-    setListening(false)
     setWake(false)
     if (wakeTimer.current) clearTimeout(wakeTimer.current)
     recognitionRef.current?.abort()
+    setListening(false)
+    listeningRef.current = false
     streamRef.current?.getTracks().forEach(t => t.stop())
     streamRef.current = null
   }, [])
 
   const handleMicClick = useCallback(async () => {
-    if (listening) {
+    if (listening || keepOn) {
       stopAll()
       return
     }
@@ -230,6 +249,9 @@ export default function VoiceControl({ playerRef, steps }: Props) {
       showFeedback('🔒 브라우저 설정에서 마이크를 허용해주세요')
       return
     }
+
+    keepOnRef.current = true
+    setKeepOn(true)
 
     if (permission === 'granted') {
       startRecognition()
@@ -247,6 +269,8 @@ export default function VoiceControl({ playerRef, steps }: Props) {
       showFeedback('')
       startRecognition()
     } catch (err: any) {
+      keepOnRef.current = false
+      setKeepOn(false)
       if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
         setPermission('denied')
         showFeedback('🔒 마이크 권한이 차단됐어요. 브라우저 주소창 옆 자물쇠 아이콘을 눌러 허용해주세요.')
@@ -255,9 +279,11 @@ export default function VoiceControl({ playerRef, steps }: Props) {
         setPermission('unknown')
       }
     }
-  }, [listening, permission, startRecognition, stopAll, showFeedback])
+  }, [listening, keepOn, permission, startRecognition, stopAll, showFeedback])
 
   if (!supported) return null
+
+  const isActive = listening || keepOn
 
   return (
     <div className="fixed bottom-6 left-6 z-50 flex flex-col items-start gap-2">
@@ -272,10 +298,10 @@ export default function VoiceControl({ playerRef, steps }: Props) {
         </div>
       )}
 
-      {permission === 'unknown' && !listening && !feedback && (
+      {permission === 'unknown' && !isActive && !feedback && (
         <div className="bg-[#1c1a18] border border-orange-500/20 rounded-2xl px-3.5 py-2.5 shadow-xl max-w-[200px]">
           <p className="text-orange-300 text-[11px] leading-snug font-medium">"헤이쏙" 으로 명령</p>
-          <p className="text-[#75716e] text-[10px] leading-snug mt-0.5">켜고 "헤이쏙, 멈춰" 라고 말해보세요</p>
+          <p className="text-[#75716e] text-[10px] leading-snug mt-0.5">켜고 "헤이쏙 멈춰" 라고 말해보세요</p>
         </div>
       )}
 
@@ -287,24 +313,27 @@ export default function VoiceControl({ playerRef, steps }: Props) {
             : wake
             ? 'bg-red-500 scale-110 shadow-red-500/30'
             : listening
+            ? 'bg-red-500 scale-110 shadow-red-500/30'
+            : keepOn
             ? 'bg-orange-500/20 border border-orange-500/40'
             : permission === 'requesting'
             ? 'bg-orange-500/20 border border-orange-500/40 animate-pulse'
             : 'bg-[#32302e] hover:bg-[#3d3a38] border border-white/10 hover:border-orange-500/40'
         }`}
         title={
-          permission === 'denied' ? '마이크 권한이 차단됨' :
-          wake                    ? '명령을 말씀하세요' :
-          listening               ? '"헤이쏙" 대기 중 (탭해서 중지)' :
+          permission === 'denied'     ? '마이크 권한이 차단됨' :
+          wake                        ? '명령을 말씀하세요' :
+          listening                   ? '듣는 중 (탭해서 중지)' :
+          keepOn                      ? '"헤이쏙" 대기 중 (탭해서 중지)' :
           permission === 'requesting' ? '권한 요청 중...' :
-          '음성 명령 (탭 후 "헤이쏙, 명령")'
+          '음성 명령 (탭 후 "헤이쏙 멈춰")'
         }
       >
         {permission === 'denied' ? (
           <svg className="w-6 h-6 text-red-400/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 715.636 5.636m12.728 12.728L5.636 5.636" />
           </svg>
-        ) : wake ? (
+        ) : wake || listening ? (
           <span className="relative flex items-center justify-center">
             <span className="absolute w-10 h-10 rounded-full bg-red-400/30 animate-ping" />
             <svg className="w-6 h-6 text-white relative" fill="currentColor" viewBox="0 0 24 24">
@@ -312,7 +341,7 @@ export default function VoiceControl({ playerRef, steps }: Props) {
               <path d="M19 10v2a7 7 0 0 1-14 0v-2H3v2a9 9 0 0 0 8 8.94V23h2v-2.06A9 9 0 0 0 21 12v-2h-2z"/>
             </svg>
           </span>
-        ) : listening ? (
+        ) : keepOn ? (
           <span className="relative flex items-center justify-center">
             <span className="absolute w-10 h-10 rounded-full bg-orange-400/20 animate-pulse" />
             <svg className="w-6 h-6 text-orange-300 relative" fill="currentColor" viewBox="0 0 24 24">
@@ -331,7 +360,8 @@ export default function VoiceControl({ playerRef, steps }: Props) {
       <p className="text-[#75716e] text-[10px] pl-1">
         {permission === 'denied'     ? '🔒 권한 차단됨' :
          wake                        ? '🔴 명령 대기' :
-         listening                   ? '🟠 헤이쏙 대기 중' :
+         listening                   ? '듣는 중...' :
+         keepOn                      ? '🟠 헤이쏙 대기 중' :
          permission === 'requesting' ? '권한 요청 중...' :
          '🎙 음성 제어'}
       </p>
