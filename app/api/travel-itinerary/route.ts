@@ -48,17 +48,32 @@ export async function POST(req: NextRequest) {
       withPets,
     })
 
-    // ── AI 프롬프트용 스팟 문자열 생성 ───────────────────────────
+    // ── AI 프롬프트용 스팟 문자열 생성 (GPS 포함) ───────────────────────────
     const spotListByDay = spotsByDay.map((daySpots, di) => {
       const lines = daySpots.map(s => {
         const isWishlist = !s.isFromDB
         const tag = isWishlist ? '[찜]' : '[추천]'
         const cats = s.categories_kr?.length ? `(${s.categories_kr.slice(0, 2).join('/')})` : ''
         const desc = s.description ? ` — ${s.description.slice(0, 40)}` : ''
-        return `  ${tag} ${s.place_name} ${cats}${desc}`
+        const gps = s.lat && s.lng ? ` [GPS:${s.lat.toFixed(4)},${s.lng.toFixed(4)}]` : ''
+        return `  ${tag} ${s.place_name} ${cats}${gps}${desc}`
       }).join('\n')
       return `Day ${di + 1}:\n${lines}`
     }).join('\n\n')
+
+    // 숙소별 GPS 힌트 (지역명 기반 대략 좌표)
+    const REGION_GPS: Record<string, string> = {
+      '제주시': '33.499,126.531', '애월': '33.463,126.322', '한림': '33.416,126.266',
+      '한경': '33.356,126.190', '대정': '33.241,126.143', '안덕': '33.283,126.330',
+      '서귀포': '33.253,126.561', '남원': '33.267,126.715', '성산': '33.459,126.927',
+      '구좌': '33.525,126.836', '조천': '33.536,126.641',
+    }
+    const accomGpsHint = accommodations?.map((a: any, i: number) => {
+      const area = (a.details || a.preferredArea || '').trim()
+      const matchedKey = Object.keys(REGION_GPS).find(k => area.includes(k))
+      const gps = matchedKey ? ` (대략 GPS: ${REGION_GPS[matchedKey]})` : ''
+      return `  ${i + 1}박째: ${area || 'AI 추천 필요'}${gps}`
+    }).join('\n') || '정보 없음'
 
     // 비행 시간 기반 실제 일정 가능 시간 계산
     function addMin(t: string, m: number) {
@@ -78,34 +93,46 @@ export async function POST(req: NextRequest) {
 
     const arrivalLabel = arrivalNote
 
-    const accomLabel = !accommodations?.length
-      ? '정보 없음'
-      : accommodations.map((a: any) => {
-          const status = a.status === 'booked'
-            ? `예약완료${a.details ? ` (${a.details})` : ''}`
-            : `미예약${a.preferredArea ? ` — 선호지역: ${a.preferredArea}` : ' — AI 추천 필요'}`
-          return `  ${a.night}박째: ${status}`
-        }).join('\n')
 
-    const basePrompt = `당신은 제주도 여행 전문 플래너입니다.
+    const basePrompt = `당신은 제주도 여행 전문 플래너입니다. GPS 좌표를 활용해 지리적으로 최적화된 동선을 짜는 것이 핵심입니다.
 
 여행 기간: ${startDate} ~ ${endDate} (${numNights}박 ${numDays}일)
+제주공항 GPS: 33.5112,126.4930
 첫날 도착: ${arrivalLabel}
 마지막날 출발: ${departureNote}
-숙소: ${accomLabel}
+숙소 위치:
+${accomGpsHint}
 통과 지역: ${corridorRegions.join(' → ')}
 ${withKids ? '👶 아이 동반 여행\n' : ''}${withPets ? '🐾 반려동물 동반 여행\n' : ''}
-[일수별 배정 스팟]
-[찜] = 사용자가 저장한 필수 방문지 | [추천] = 동선상 큐레이션된 스팟
+[일수별 배정 스팟] — GPS 좌표 포함
+[찜] = 필수 방문지 (중간 목적지로 취급) | [추천] = 동선상 보완 스팟
 ${spotListByDay}
 
-[규칙]
-- [찜] 스팟은 반드시 포함. [추천] 스팟은 동선과 시간에 맞게 적절히 선택
-- 같은 날 스팟끼리 지리적으로 가까운 순서로 배치 (이동 최소화)
-- 첫날: 위의 도착 시간 정확히 반영. 첫 slot 시간은 실제 활동 가능 시간 이후로 설정
-- 마지막날: 위의 출발 시간 정확히 반영. 공항 이동 시간 역산해서 마지막 slot 완료 시간 준수
-- 각 slot의 tip은 실용 정보 (주차, 혼잡 시간, 예약 필요 여부 등)
-${mode === 'with_recommendations' ? '- 미예약 숙소가 있으면 accommodation_suggestion에 추천 지역/유형 작성' : ''}
+[핵심 동선 규칙]
+1. 매일 출발지 → 숙소(또는 공항) 방향으로 이동. GPS 좌표로 방향 판단:
+   - 숙소가 동쪽이면 공항(서쪽)에서 시작해 동쪽으로 이동하며 스팟을 채울 것
+   - 스팟들을 GPS 경도/위도 기준으로 이동 방향에 맞는 순서로 배열
+2. [찜] 스팟은 반드시 포함하고 그날의 중간 목적지로 설정. 그 방향으로 앞뒤 스팟을 배치
+3. 마지막날 최종 목적지는 공항 (GPS: 33.5112,126.4930). 공항 방향으로 동선 구성
+
+[식사 규칙 — 반드시 준수]
+- 아침: 08:00~09:30 사이 시작, 식사 시간 40분
+- 점심: 11:30~14:00 사이 도착, 식사 시간 40분
+- 저녁: 18:30~20:00 사이 도착, 식사 시간 1시간
+- 식당 카테고리(음식점/식당/맛집)를 식사 시간대에 배치. 관광지를 식사 시간에 넣지 말 것
+
+[카페 규칙]
+- 카페는 하루 최대 2개: 오전 1개(10:00~11:30), 오후 1개(14:30~17:30)
+- 카페를 연속 배치 금지. 관광지 사이에 자연스럽게 배치
+
+[시간 배분]
+- 관광지/체험: 1~2시간, 간단한 뷰포인트: 30~40분, 카페: 40분~1시간
+- 하루 총 이동+활동 시간이 현실적이도록 조절 (무리한 스케줄 금지)
+
+- 첫날: 도착 시간 정확히 반영, 첫 활동은 위 계산된 시작 시간 이후
+- 마지막날: 출발 시간 역산해 마지막 스팟 완료 시간 준수
+- 각 slot의 tip은 실용 정보 (주차, 혼잡 시간, 예약 여부)
+${mode === 'with_recommendations' ? '- 미예약 숙소가 있으면 accommodation_suggestion에 동선 기반 추천 지역/유형 작성' : ''}
 
 JSON 형식:
 {
