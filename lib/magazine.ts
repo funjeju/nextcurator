@@ -226,7 +226,7 @@ export async function getRecentPublicSummaries(lookbackDays: number): Promise<Su
       fields: [
         'sessionId', 'videoId', 'title', 'channel', 'thumbnail', 'category',
         'square_meta', 'contextSummary', 'reportSummary', 'createdAt',
-        'videoPublishedAt', 'ytViewCount', 'postedToMagazine', 'ytCommentsContext',
+        'videoPublishedAt', 'ytViewCount', 'postedToMagazine', 'ytCommentsContext', 'aiSubcategory',
       ].map(f => ({ fieldPath: f })),
     },
     orderBy: [{ field: { fieldPath: 'createdAt' }, direction: 'DESCENDING' }],
@@ -267,6 +267,7 @@ export async function getRecentPublicSummaries(lookbackDays: number): Promise<Su
         ytViewCount: Number(data.ytViewCount ?? 0),
         postedToMagazine: (data.postedToMagazine as boolean) ?? false,
         ytCommentsContext: (data.ytCommentsContext as string) ?? '',
+        aiSubcategory: (data.aiSubcategory as string) ?? '',
         _createdAtMs: createdAtMs,
       }
     })
