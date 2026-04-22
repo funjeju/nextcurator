@@ -94,6 +94,37 @@ function PipelineLogModal({ log, onClose }: { log: PipelineLog; onClose: () => v
     ? new Intl.DateTimeFormat('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Seoul' }).format(new Date(log.startedAt))
     : '—'
 
+  const [currentLog, setCurrentLog] = useState<PipelineLog>(log)
+  const [running, setRunning] = useState<'summarize' | 'publish' | null>(null)
+  const [stageResult, setStageResult] = useState<{ stage: string; ok: boolean; msg: string } | null>(null)
+
+  const runStage = async (stage: 'summarize' | 'publish') => {
+    setRunning(stage)
+    setStageResult(null)
+    try {
+      const api = stage === 'summarize' ? '/api/cron/ai-summarize' : '/api/cron/generate-post'
+      const res = await fetch(api, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ force: true, subcategory: currentLog.subcategory }),
+      })
+      const data = await res.json()
+      const ok = !!(data.success || data.ok)
+      const msg = data.error ?? data.message ?? data.reason ?? (ok ? `${stage} 완료` : '알 수 없는 오류')
+      setStageResult({ stage, ok, msg })
+      if (ok) {
+        // 로그 상태 업데이트 (로컬 반영)
+        setCurrentLog(prev => ({
+          ...prev,
+          [stage]: { ...prev[stage as keyof PipelineLog] as any, status: 'done', completedAt: new Date().toISOString(), message: msg },
+        }))
+      }
+    } catch (e) {
+      setStageResult({ stage, ok: false, msg: String(e) })
+    }
+    setRunning(null)
+  }
+
   const decisionBadge = (d: string) => {
     if (d === 'PASS') return 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
     if (d === 'FAIL') return 'bg-red-500/20 text-red-400 border-red-500/30'
@@ -276,19 +307,35 @@ function PipelineLogModal({ log, onClose }: { log: PipelineLog; onClose: () => v
             <div className="flex items-center justify-between px-4 py-3">
               <div className="flex items-center gap-2">
                 <span className="text-orange-400 font-black text-sm">③ Summarize</span>
-                {log.summarize?.title && (
-                  <span className="text-[10px] text-[#75716e] truncate max-w-xs">{log.summarize.title}</span>
+                {currentLog.summarize?.title && (
+                  <span className="text-[10px] text-[#75716e] truncate max-w-xs">{currentLog.summarize.title}</span>
                 )}
-                {log.summarize?.transcriptLength && (
-                  <span className="text-[10px] text-[#4a4846]">자막 {log.summarize.transcriptLength}자</span>
+                {currentLog.summarize?.transcriptLength && (
+                  <span className="text-[10px] text-[#4a4846]">자막 {currentLog.summarize.transcriptLength}자</span>
                 )}
               </div>
-              <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${stageBadge(log.summarize?.status)}`}>
-                {statusLabel[log.summarize?.status ?? ''] ?? '미실행'}
-              </span>
+              <div className="flex items-center gap-2">
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${stageBadge(currentLog.summarize?.status)}`}>
+                  {statusLabel[currentLog.summarize?.status ?? ''] ?? '미실행'}
+                </span>
+                {(!currentLog.summarize || currentLog.summarize.status === 'failed' || currentLog.summarize.status === 'skipped') && (
+                  <button
+                    onClick={() => runStage('summarize')}
+                    disabled={running !== null}
+                    className="px-2.5 py-1 rounded-lg bg-orange-500/20 hover:bg-orange-500/30 text-orange-400 text-[10px] font-bold border border-orange-500/30 transition-colors disabled:opacity-40"
+                  >
+                    {running === 'summarize' ? '실행 중...' : '▶ 실행'}
+                  </button>
+                )}
+              </div>
             </div>
-            {log.summarize?.message && (
-              <p className="px-4 pb-3 text-[11px] text-yellow-400/70">{log.summarize.message}</p>
+            {currentLog.summarize?.message && (
+              <p className="px-4 pb-3 text-[11px] text-yellow-400/70">{currentLog.summarize.message}</p>
+            )}
+            {stageResult?.stage === 'summarize' && (
+              <p className={`px-4 pb-3 text-[11px] font-bold ${stageResult.ok ? 'text-emerald-400' : 'text-red-400'}`}>
+                {stageResult.ok ? '✅' : '❌'} {stageResult.msg}
+              </p>
             )}
           </div>
 
@@ -297,28 +344,44 @@ function PipelineLogModal({ log, onClose }: { log: PipelineLog; onClose: () => v
             <div className="flex items-center justify-between px-4 py-3">
               <div className="flex items-center gap-2">
                 <span className="text-emerald-400 font-black text-sm">④ Publish</span>
-                {log.publish?.postTitle && (
-                  <span className="text-[10px] text-[#75716e] truncate max-w-xs">{log.publish.postTitle}</span>
+                {currentLog.publish?.postTitle && (
+                  <span className="text-[10px] text-[#75716e] truncate max-w-xs">{currentLog.publish.postTitle}</span>
                 )}
               </div>
-              <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${stageBadge(log.publish?.status)}`}>
-                {statusLabel[log.publish?.status ?? ''] ?? '미실행'}
-              </span>
+              <div className="flex items-center gap-2">
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${stageBadge(currentLog.publish?.status)}`}>
+                  {statusLabel[currentLog.publish?.status ?? ''] ?? '미실행'}
+                </span>
+                {(!currentLog.publish || currentLog.publish.status === 'failed') && (
+                  <button
+                    onClick={() => runStage('publish')}
+                    disabled={running !== null}
+                    className="px-2.5 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 text-[10px] font-bold border border-emerald-500/30 transition-colors disabled:opacity-40"
+                  >
+                    {running === 'publish' ? '실행 중...' : '▶ 실행'}
+                  </button>
+                )}
+              </div>
             </div>
-            {log.publish?.postSlug && (
+            {currentLog.publish?.postSlug && (
               <div className="px-4 pb-3">
                 <Link
-                  href={`/magazine/${log.publish.postSlug}`}
+                  href={`/magazine/${currentLog.publish.postSlug}`}
                   target="_blank"
                   className="text-[10px] text-emerald-400 hover:underline"
                   onClick={e => e.stopPropagation()}
                 >
-                  → /magazine/{log.publish.postSlug}
+                  → /magazine/{currentLog.publish.postSlug}
                 </Link>
               </div>
             )}
-            {log.publish?.message && (
-              <p className="px-4 pb-3 text-[11px] text-yellow-400/70">{log.publish.message}</p>
+            {currentLog.publish?.message && (
+              <p className="px-4 pb-3 text-[11px] text-yellow-400/70">{currentLog.publish.message}</p>
+            )}
+            {stageResult?.stage === 'publish' && (
+              <p className={`px-4 pb-3 text-[11px] font-bold ${stageResult.ok ? 'text-emerald-400' : 'text-red-400'}`}>
+                {stageResult.ok ? '✅' : '❌'} {stageResult.msg}
+              </p>
             )}
           </div>
 
