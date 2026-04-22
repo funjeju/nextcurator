@@ -131,13 +131,13 @@ async function getVideoInfo(videoId: string) {
   const socialkitKey = process.env.SOCIALKIT_API_KEY
   const videoUrl = `https://www.youtube.com/watch?v=${videoId}`
 
-  let title = '', channel = '', publishedAt = '', ytViewCount = 0, description = ''
+  let title = '', channel = '', publishedAt = '', ytViewCount = 0, description = '', durationSeconds = 0
 
   // 1순위: YouTube Data API v3 — 창작자가 설정한 원본 제목 (언어 그대로)
   if (apiKey) {
     try {
       const apiRes = await fetch(
-        `https://www.googleapis.com/youtube/v3/videos?id=${videoId}&part=snippet,statistics&key=${apiKey}`,
+        `https://www.googleapis.com/youtube/v3/videos?id=${videoId}&part=snippet,statistics,contentDetails&key=${apiKey}`,
         { signal: AbortSignal.timeout(5000) }
       )
       if (apiRes.ok) {
@@ -149,6 +149,10 @@ async function getVideoInfo(videoId: string) {
           publishedAt = item.snippet?.publishedAt ?? ''
           ytViewCount = Number(item.statistics?.viewCount ?? 0)
           description = item.snippet?.description ?? ''
+          // ISO 8601 duration → seconds (e.g. PT42M35S → 2555)
+          const dur = item.contentDetails?.duration ?? ''
+          const m = dur.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/)
+          if (m) durationSeconds = (parseInt(m[1]||'0')*3600) + (parseInt(m[2]||'0')*60) + parseInt(m[3]||'0')
         }
       }
     } catch (e) {
@@ -209,6 +213,7 @@ async function getVideoInfo(videoId: string) {
     publishedAt,
     ytViewCount,
     description,
+    durationSeconds,
   }
 }
 
@@ -341,14 +346,19 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 영상정보 + 자막 + 댓글 병렬 실행 (getVideoMeta 제거 — fetchVideoComments로 통합)
-    const [videoInfo, transcriptResult, commentResult] = await Promise.all([
-      cachedVideoInfo
-        ? Promise.resolve(cachedVideoInfo as { title: string; channel: string; thumbnail: string; publishedAt: string; ytViewCount?: number; description?: string })
-        : getVideoInfo(videoId),
+    // 영상정보 먼저 가져오기 (길이 체크 후 자막 추출 전략 결정)
+    const videoInfo = cachedVideoInfo
+      ? (cachedVideoInfo as { title: string; channel: string; thumbnail: string; publishedAt: string; ytViewCount?: number; description?: string; durationSeconds?: number })
+      : await getVideoInfo(videoId)
+
+    const durationSeconds = (videoInfo as any).durationSeconds ?? 0
+
+    // 자막 + 댓글 병렬 실행
+    const [transcriptResult, commentResult] = await Promise.all([
       cachedTranscript
         ? Promise.resolve({ text: cachedTranscript as string, source: 'cached', lang: detectTranscriptLang(cachedTranscript as string) })
-        : getTranscript(videoId).catch((e: Error) => {
+        : getTranscript(videoId, { durationSeconds }).catch((e: Error) => {
+            if (e.message === 'LONG_VIDEO_NO_CAPTIONS') throw e
             console.warn(`[Summarize] ⚠️ 자막 추출 실패 (${videoId}): ${e.message} — 영상 설명 및 댓글 요약으로 대체합니다.`)
             return { text: '', source: 'none', lang: 'ko' as const }
           }),
@@ -464,8 +474,11 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json(result)
   } catch (error) {
-    console.error('Summarize error:', error instanceof Error ? error.message : error)
-    const message = error instanceof Error ? error.message : '처리 중 오류가 발생했습니다.'
-    return NextResponse.json({ error: message }, { status: 500 })
+    const errMsg = error instanceof Error ? error.message : '처리 중 오류가 발생했습니다.'
+    if (errMsg === 'LONG_VIDEO_NO_CAPTIONS') {
+      return NextResponse.json({ error: '긴 러닝타임에 자막까지 없어 처리가 불가합니다.' }, { status: 422 })
+    }
+    console.error('Summarize error:', errMsg)
+    return NextResponse.json({ error: errMsg }, { status: 500 })
   }
 }

@@ -116,7 +116,7 @@ async function getTranscriptViaSocialKit(videoId: string): Promise<string> {
     `https://api.socialkit.dev/youtube/transcript?url=${encodeURIComponent(videoUrl)}`,
     {
       headers: { 'x-access-key': apiKey },
-      signal: AbortSignal.timeout(180000),  // 3분 — STT 긴 영상 대응 (Vercel 300s 중 AI 요약에 120s 확보)
+      signal: AbortSignal.timeout(15000),  // 15초 — 자막 있으면 1~3초 내 응답, 없으면 빠른 404 실패
     }
   )
 
@@ -235,7 +235,7 @@ async function getTranscriptViaGemini(videoId: string): Promise<string> {
     generationConfig: { temperature: 0, maxOutputTokens: 8192 },
   })
 
-  const result = await model.generateContent([
+  const geminiPromise = model.generateContent([
     {
       fileData: {
         mimeType: 'video/*',
@@ -251,15 +251,20 @@ async function getTranscriptViaGemini(videoId: string): Promise<string> {
     },
   ])
 
+  const timeoutPromise = new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error('GEMINI_STT_TIMEOUT')), 90000)
+  )
+
+  const result = await Promise.race([geminiPromise, timeoutPromise])
   const text = result.response.text().trim()
   if (!text || text.length < 30) throw new Error('GEMINI_EMPTY_RESPONSE')
   return text
 }
 
-export async function getTranscript(videoId: string): Promise<TranscriptResult> {
+export async function getTranscript(videoId: string, options?: { durationSeconds?: number }): Promise<TranscriptResult> {
   const errors: string[] = []
 
-  // ── 1단계: SocialKit (자막 추출 + 자막 없는 영상 Whisper STT) ──
+  // ── 1단계: SocialKit — 자막 추출 (수동/자동 모두, 자막 없으면 빠른 404 실패) ──
   if (process.env.SOCIALKIT_API_KEY) {
     try {
       console.log(`[Transcript] Trying: SocialKit for ${videoId}`)
@@ -273,10 +278,16 @@ export async function getTranscript(videoId: string): Promise<TranscriptResult> 
     }
   }
 
-  // ── 3단계: Gemini STT 폴백 ──
+  // ── 2단계: Gemini STT 폴백 — 자막 없는 영상 대상, 30분 미만만 시도 ──
+  const durationSeconds = options?.durationSeconds ?? 0
+  if (durationSeconds > 1800) {
+    console.warn(`[Transcript] ⛔ 30분 초과 자막 없는 영상 (${Math.round(durationSeconds / 60)}분) — Gemini STT 스킵`)
+    throw new Error('LONG_VIDEO_NO_CAPTIONS')
+  }
+
   if (process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
     try {
-      console.log(`[Transcript] Trying: Gemini STT for ${videoId}`)
+      console.log(`[Transcript] Trying: Gemini STT for ${videoId} (${Math.round(durationSeconds / 60)}분)`)
       const text = await getTranscriptViaGemini(videoId)
       console.log(`[Transcript] ✅ Gemini STT 성공 (${text.length}자)`)
       return { text, source: 'Gemini STT', lang: detectTranscriptLang(text) }
