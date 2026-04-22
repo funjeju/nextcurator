@@ -445,17 +445,29 @@ export async function saveEvaluateQueue(
 export async function getTopPickForPublish(subcategory: AiSubcategory): Promise<{
   videoId: string; title: string; channelTitle: string; transcript: string; compositeScore: number
 } | null> {
-  const docId = `${subcategory}_${new Date().toISOString().slice(0, 13)}`
   try {
     const { initAdminApp } = await import('./firebase-admin')
     initAdminApp()
     const { getFirestore } = await import('firebase-admin/firestore')
-    const doc = await getFirestore().collection('ai_evaluate_queue').doc(docId).get()
-    if (!doc.exists) {
-      console.log(`[Summarize] evaluate queue not found: ${docId}`)
+    const db = getFirestore()
+
+    // 정확한 hour docId 대신 최근 4시간 이내 최신 문서 쿼리
+    const cutoff = new Date(Date.now() - 4 * 3600 * 1000).toISOString()
+    const snap = await db.collection('ai_evaluate_queue')
+      .where('subcategory', '==', subcategory)
+      .where('status', '==', 'evaluated')
+      .where('savedAt', '>=', cutoff)
+      .orderBy('savedAt', 'desc')
+      .limit(1)
+      .get()
+
+    if (snap.empty) {
+      console.log(`[Summarize] No recent evaluate queue found for ${subcategory} (cutoff: ${cutoff})`)
       return null
     }
-    const data = doc.data()!
+
+    const data = snap.docs[0].data()
+    console.log(`[Summarize] Found evaluate queue: ${snap.docs[0].id} savedAt=${data.savedAt}`)
     const evaluated = (data.evaluated ?? []) as any[]
     const passes = evaluated
       .filter(e => e.decision === 'PASS')

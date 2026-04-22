@@ -719,64 +719,6 @@ export default function CurationTab({ getAuthHeader }: {
         </div>
       </div>
 
-      {/* ── 특정 요약으로 매거진 생성 ── */}
-      <div className="bg-[#2a2826] rounded-2xl border border-white/8 p-6">
-        <h2 className="text-white font-black text-base mb-1">⚡ 특정 요약으로 매거진 생성</h2>
-        <p className="text-[11px] text-[#75716e] mb-4">스퀘어 요약 페이지 URL 또는 sessionId를 지정해서 매거진을 즉시 생성합니다.</p>
-
-        <div className="flex flex-wrap gap-3 mb-4">
-          <button
-            onClick={() => handleTrigger(false)}
-            disabled={triggering}
-            className="px-4 py-2.5 rounded-xl bg-[#32302e] hover:bg-[#3a3836] text-white text-sm font-bold border border-white/10 transition-colors disabled:opacity-50"
-          >
-            {triggering ? '생성 중...' : '📝 최적 요약으로 초안 생성'}
-          </button>
-          <button
-            onClick={() => handleTrigger(true)}
-            disabled={triggering}
-            className="px-4 py-2.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 text-sm font-bold border border-emerald-500/30 transition-colors disabled:opacity-50"
-          >
-            {triggering ? '생성 중...' : '🚀 최적 요약으로 즉시 발행'}
-          </button>
-        </div>
-        {triggerResult && (
-          <p className="mb-4 text-sm text-[#a4a09c] bg-[#1c1a18] rounded-xl px-3 py-2 border border-white/8">{triggerResult}</p>
-        )}
-
-        <div className="pt-4 border-t border-white/8">
-          <p className="text-[11px] text-[#75716e] mb-2 font-bold uppercase tracking-wide">URL / SessionId 지정</p>
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={urlInput}
-              onChange={e => { setUrlInput(e.target.value); setUrlResult('') }}
-              placeholder="https://ssoktube.com/result/abc123 또는 sessionId"
-              className="flex-1 bg-[#1c1a18] border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-[#4a4846] focus:outline-none focus:border-orange-500/50 min-w-0"
-            />
-          </div>
-          <div className="flex gap-2 mt-2">
-            <button
-              onClick={() => handleUrlTrigger(false)}
-              disabled={urlTriggering || !urlInput.trim()}
-              className="px-4 py-2 rounded-xl bg-[#32302e] hover:bg-[#3a3836] text-white text-sm font-bold border border-white/10 transition-colors disabled:opacity-40"
-            >
-              {urlTriggering ? '생성 중...' : '📝 초안으로 생성'}
-            </button>
-            <button
-              onClick={() => handleUrlTrigger(true)}
-              disabled={urlTriggering || !urlInput.trim()}
-              className="px-4 py-2 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 text-sm font-bold border border-emerald-500/30 transition-colors disabled:opacity-40"
-            >
-              {urlTriggering ? '생성 중...' : '🚀 생성 + 즉시 발행'}
-            </button>
-          </div>
-          {urlResult && (
-            <p className="mt-2 text-sm text-[#a4a09c] bg-[#1c1a18] rounded-xl px-3 py-2 border border-white/8">{urlResult}</p>
-          )}
-        </div>
-      </div>
-
       {/* ── AI 파이프라인 실행 로그 ── */}
       <div className="bg-[#2a2826] rounded-2xl border border-white/8 p-6">
         <div className="flex items-center justify-between mb-4">
@@ -855,6 +797,64 @@ export default function CurationTab({ getAuthHeader }: {
       {selectedPipelineLog && (
         <PipelineLogModal log={selectedPipelineLog} onClose={() => setSelectedPipelineLog(null)} />
       )}
+
+      {/* ── 특정 요약으로 매거진 생성 ── */}
+      <div className="bg-[#2a2826] rounded-2xl border border-white/8 p-6">
+        <h2 className="text-white font-black text-base mb-1">⚡ 특정 요약으로 매거진 생성</h2>
+        <p className="text-[11px] text-[#75716e] mb-4">스퀘어 요약 페이지 URL 또는 sessionId를 지정해서 매거진을 즉시 생성합니다.</p>
+
+        <div className="flex flex-wrap gap-3 mb-4">
+          <button
+            onClick={() => handleTrigger(false)}
+            disabled={triggering}
+            className="px-4 py-2.5 rounded-xl bg-[#32302e] hover:bg-[#3a3836] text-white text-sm font-bold border border-white/10 transition-colors disabled:opacity-50"
+          >
+            {triggering ? '생성 중...' : '📝 최적 요약으로 초안 생성'}
+          </button>
+          <button
+            onClick={() => handleTrigger(true)}
+            disabled={triggering}
+            className="px-4 py-2.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 text-sm font-bold border border-emerald-500/30 transition-colors disabled:opacity-50"
+          >
+            {triggering ? '생성 중...' : '🚀 최적 요약으로 즉시 발행'}
+          </button>
+        </div>
+        {triggerResult && (
+          <p className="mb-4 text-sm text-[#a4a09c] bg-[#1c1a18] rounded-xl px-3 py-2 border border-white/8">{triggerResult}</p>
+        )}
+
+        <div className="pt-4 border-t border-white/8">
+          <p className="text-[11px] text-[#75716e] mb-2 font-bold uppercase tracking-wide">URL / SessionId 지정</p>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={urlInput}
+              onChange={e => { setUrlInput(e.target.value); setUrlResult('') }}
+              placeholder="https://ssoktube.com/result/abc123 또는 sessionId"
+              className="flex-1 bg-[#1c1a18] border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-[#4a4846] focus:outline-none focus:border-orange-500/50 min-w-0"
+            />
+          </div>
+          <div className="flex gap-2 mt-2">
+            <button
+              onClick={() => handleUrlTrigger(false)}
+              disabled={urlTriggering || !urlInput.trim()}
+              className="px-4 py-2 rounded-xl bg-[#32302e] hover:bg-[#3a3836] text-white text-sm font-bold border border-white/10 transition-colors disabled:opacity-40"
+            >
+              {urlTriggering ? '생성 중...' : '📝 초안으로 생성'}
+            </button>
+            <button
+              onClick={() => handleUrlTrigger(true)}
+              disabled={urlTriggering || !urlInput.trim()}
+              className="px-4 py-2 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 text-sm font-bold border border-emerald-500/30 transition-colors disabled:opacity-40"
+            >
+              {urlTriggering ? '생성 중...' : '🚀 생성 + 즉시 발행'}
+            </button>
+          </div>
+          {urlResult && (
+            <p className="mt-2 text-sm text-[#a4a09c] bg-[#1c1a18] rounded-xl px-3 py-2 border border-white/8">{urlResult}</p>
+          )}
+        </div>
+      </div>
 
       {/* ── 발행 로그 ── */}
       <div className="bg-[#2a2826] rounded-2xl border border-white/8 p-6">
