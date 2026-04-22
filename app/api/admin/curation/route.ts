@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
   if (!isAdmin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await req.json().catch(() => ({})) as {
-    action: 'getSettings' | 'saveSettings' | 'listPosts' | 'publish' | 'delete' | 'getLogs' | 'getPipelineSlots' | 'getPipelineLogs' | 'getPipelineLog'
+    action: 'getSettings' | 'saveSettings' | 'listPosts' | 'publish' | 'delete' | 'getLogs' | 'getPipelineSlots' | 'getPipelineLogs' | 'getPipelineLog' | 'deletePipelineLog'
     settings?: Partial<CurationSettings>
     id?: string
   }
