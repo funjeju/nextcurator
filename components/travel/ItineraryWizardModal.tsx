@@ -115,7 +115,7 @@ export default function ItineraryWizardModal({ region, spots, onClose }: Props) 
     const effectiveNights = startDate && endDate ? calcNightsdays(startDate, endDate).nights : nights
 
     if (m === 'spots_only') {
-      generate(m, spots)
+      generate(m, spots.map(s => ({ name: s.name, address: s.address ?? '', description: s.description ?? '' })))
       return
     }
 
