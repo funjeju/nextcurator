@@ -92,6 +92,10 @@ async function runSummarize(subcategory: AiSubcategory) {
   const sessionId = randomUUID()
   const thumbnail = `https://img.youtube.com/vi/${pick.videoId}/maxresdefault.jpg`
 
+  const SUBCATEGORY_TO_TOPIC: Record<string, string> = {
+    news: 'ai-news', tools: 'ai-tools', usecases: 'ai-usecases',
+  }
+
   const doc = {
     userId: 'auto-collector',
     userDisplayName: 'SSOKTUBE AI 에디터',
@@ -103,6 +107,7 @@ async function runSummarize(subcategory: AiSubcategory) {
     channel: pick.channelTitle,
     thumbnail,
     category: finalCategory,
+    topicCluster: SUBCATEGORY_TO_TOPIC[subcategory] ?? `ai-${subcategory}`,
     aiSubcategory: subcategory,
     summary,
     contextSummary,
