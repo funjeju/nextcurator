@@ -49,6 +49,7 @@ export default function VoiceControl({ playerRef, steps }: Props) {
   const streamRef      = useRef<MediaStream | null>(null)
   const activeRef      = useRef(false)
   const startedAt      = useRef<number>(0)
+  const wasMutedRef    = useRef(false)
 
   useEffect(() => { activeRef.current = active }, [active])
 
@@ -145,7 +146,12 @@ export default function VoiceControl({ playerRef, steps }: Props) {
     recognitionRef.current = rec
     startedAt.current = Date.now()
 
-    rec.onstart  = () => { setListening(true); setTranscript(''); setFeedback('') }
+    rec.onstart  = () => {
+      setListening(true); setTranscript(''); setFeedback('')
+      // 재시작 시 뮤트했던 거 복원
+      const player = playerRef.current
+      if (player && !wasMutedRef.current) player.unMute()
+    }
     rec.onresult = (e: any) => {
       // continuous 모드: resultIndex부터 순회
       for (let i = e.resultIndex; i < e.results.length; i++) {
@@ -172,8 +178,11 @@ export default function VoiceControl({ playerRef, steps }: Props) {
       setListening(false)
       if (!activeRef.current) return
 
-      // continuous = true 미지원 브라우저(iOS 등)는 즉시 onend가 올 수 있음
-      // 세션이 1초 미만에 끝났으면 브라우저 미지원으로 간주, 재시작 간격 늘림
+      // 재시작 전 YouTube 뮤트 → OS 오디오 포커스 충돌 방지
+      const player = playerRef.current
+      wasMutedRef.current = player?.isMuted?.() ?? false
+      if (player) player.mute()
+
       const elapsed = Date.now() - startedAt.current
       const delay = elapsed < 1000 ? 2000 : 500
       setTimeout(() => {
