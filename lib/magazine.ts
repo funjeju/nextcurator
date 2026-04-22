@@ -90,6 +90,7 @@ export interface SummaryForCuration {
   ytViewCount: number
   postedToMagazine?: boolean
   ytCommentsContext?: string  // 요약 시점에 수집된 유튜브 댓글 (매거진 재사용)
+  aiSubcategory?: string
 }
 
 // ─── Firestore REST helpers ─────────────────────────────────────────────────
