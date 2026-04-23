@@ -513,7 +513,7 @@ JSON 형식:
 
   const now = new Date().toISOString()
   const heroThumbnail = item.thumbnail && !item.thumbnail.startsWith('data:') ? item.thumbnail : ''
-  const allTags = [...new Set([...(parsed.tags ?? []), ...item.tags])].slice(0, 12)
+  const allTags = [...new Set([...(parsed.tags ?? []), ...(item.tags ?? [])])].slice(0, 12)
 
   return {
     slug: parsed.slug ? `${parsed.slug}-${now.slice(0, 10)}` : slugify(parsed.title),
