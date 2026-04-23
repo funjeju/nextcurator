@@ -438,11 +438,30 @@ export async function POST(req: NextRequest) {
       ? formatCommentsForPrompt(commentResult.popular, commentResult.recent).slice(0, 3000)
       : ''
 
+    // 영어 원제 → 한국어 번역 제목 추출 (한국어 출력 모드이고 제목에 한글 없을 때)
+    const displayTitle = (() => {
+      if (outputLang !== 'ko' || /[가-힣]/.test(videoInfo.title)) return videoInfo.title
+      const s = summary as any
+      const candidates = [
+        category === 'news'     ? s.headline              : '',
+        category === 'recipe'   ? s.dish_name             : '',
+        category === 'learning' ? s.subject               : '',
+        category === 'story'    ? s.title                 : '',
+        category === 'tips'     ? s.topic                 : '',
+        category === 'report'   ? s.title                 : '',
+        category === 'selfdev'  ? s.core_message?.text    : '',
+        category === 'travel'   ? s.destination           : '',
+        s.square_meta?.topic_cluster,
+      ].filter(Boolean)
+      return (candidates[0] as string) || videoInfo.title
+    })()
+
     const sessionId = randomUUID()
     const result = {
       sessionId,
       videoId,
-      title: videoInfo.title,
+      title: displayTitle,
+      originalTitle: videoInfo.title,
       channel: videoInfo.channel,
       thumbnail: videoInfo.thumbnail,
       duration: 0,
