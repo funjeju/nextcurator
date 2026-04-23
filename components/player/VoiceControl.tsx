@@ -22,19 +22,33 @@ function timestampToSeconds(ts: string): number {
 }
 
 const KOR_NUM: Record<string, number> = {
-  '첫': 1, '한': 1, '일': 1, '하나': 1,
-  '두': 2, '둘': 2, '이': 2,
-  '세': 3, '셋': 3, '삼': 3,
-  '네': 4, '넷': 4, '사': 4,
-  '다섯': 5, '오': 5,
-  '여섯': 6, '육': 6,
-  '일곱': 7, '칠': 7,
-  '여덟': 8, '팔': 8,
-  '아홉': 9, '구': 9,
-  '열': 10, '십': 10,
+  '첫': 1, '한': 1, '일': 1, '하나': 1, '1': 1,
+  '두': 2, '둘': 2, '이': 2, '2': 2,
+  '세': 3, '셋': 3, '삼': 3, '3': 3,
+  '네': 4, '넷': 4, '사': 4, '4': 4,
+  '다섯': 5, '오': 5, '5': 5,
+  '여섯': 6, '육': 6, '6': 6,
+  '일곱': 7, '칠': 7, '7': 7,
+  '여덟': 8, '팔': 8, '8': 8,
+  '아홉': 9, '구': 9, '9': 9,
+  '열': 10, '십': 10, '10': 10,
 }
 
 type PermissionState = 'unknown' | 'granted' | 'denied' | 'requesting'
+
+function scrollToStep(num: number) {
+  document.getElementById(`seg-step-${num}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+}
+
+function getCurrentStepFromTime(steps: RecipeStep[], currentTime: number): number {
+  let activeStep = 0
+  for (const step of steps) {
+    const secs = timestampToSeconds(step.timestamp)
+    if (secs <= currentTime) activeStep = step.step
+    else break
+  }
+  return activeStep
+}
 
 export default function VoiceControl({ playerRef, steps }: Props) {
   const [listening, setListening]   = useState(false)
@@ -44,12 +58,14 @@ export default function VoiceControl({ playerRef, steps }: Props) {
   const [permission, setPermission] = useState<PermissionState>('unknown')
   const [active, setActive]         = useState(false)
 
-  const recognitionRef = useRef<any>(null)
-  const feedbackTimer  = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const streamRef      = useRef<MediaStream | null>(null)
-  const activeRef      = useRef(false)
-  const startedAt      = useRef<number>(0)
-  const wasMutedRef    = useRef(false)
+  const recognitionRef    = useRef<any>(null)
+  const feedbackTimer     = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const streamRef         = useRef<MediaStream | null>(null)
+  const activeRef         = useRef(false)
+  const startedAt         = useRef<number>(0)
+  const wasMutedRef       = useRef(false)
+  const currentStepRef    = useRef(1)
+  const lastAutoStepRef   = useRef(0)
 
   useEffect(() => { activeRef.current = active }, [active])
 
@@ -73,24 +89,68 @@ export default function VoiceControl({ playerRef, steps }: Props) {
     }
   }, [])
 
+  // 재생 중 현재 단계 자동 추적 → 스크롤
+  useEffect(() => {
+    if (!active) return
+    const interval = setInterval(() => {
+      const player = playerRef.current
+      if (!player) return
+      const currentTime = player.getCurrentTime?.()
+      if (typeof currentTime !== 'number') return
+      const stepNum = getCurrentStepFromTime(steps, currentTime)
+      if (stepNum > 0 && stepNum !== lastAutoStepRef.current) {
+        lastAutoStepRef.current = stepNum
+        currentStepRef.current = stepNum
+        scrollToStep(stepNum)
+      }
+    }, 2000)
+    return () => clearInterval(interval)
+  }, [active, steps, playerRef])
+
   const showFeedback = useCallback((msg: string) => {
     setFeedback(msg)
     if (feedbackTimer.current) clearTimeout(feedbackTimer.current)
     if (msg) feedbackTimer.current = setTimeout(() => setFeedback(''), 3000)
   }, [])
 
+  const seekToStep = useCallback((num: number, player: YT.Player) => {
+    const step = steps.find(s => s.step === num)
+    if (!step) { showFeedback(`❌ ${num}단계가 없어요`); return }
+    if (!step.timestamp || step.timestamp === '00:00') { showFeedback(`⚠️ ${num}단계 타임스탬프 없음`); return }
+    player.seekTo(timestampToSeconds(step.timestamp), true)
+    player.playVideo()
+    currentStepRef.current = num
+    lastAutoStepRef.current = num
+    scrollToStep(num)
+    showFeedback(`✅ ${num}단계 재생`)
+  }, [steps, showFeedback])
+
   const executeCommand = useCallback((text: string) => {
     const t = text.trim().toLowerCase()
     const player = playerRef.current
     if (!player) { showFeedback('❌ 플레이어가 준비되지 않았어요'); return }
 
+    // 다음단계 / 전단계
+    if (/다음\s*단계|next/.test(t)) {
+      const next = Math.min(steps.length, currentStepRef.current + 1)
+      return seekToStep(next, player)
+    }
+    if (/전\s*단계|이전\s*단계|prev/.test(t)) {
+      const prev = Math.max(1, currentStepRef.current - 1)
+      return seekToStep(prev, player)
+    }
+
+    // 숫자 단계 (아라비아 숫자)
     const digitMatch = t.match(/(\d+)\s*단계/)
     if (digitMatch) return seekToStep(parseInt(digitMatch[1]), player)
 
-    for (const [kor, num] of Object.entries(KOR_NUM)) {
+    // 한국어 수사 단계 — 더 긴 키워드 우선 (다섯, 여섯 등)
+    const sorted = Object.entries(KOR_NUM).sort((a, b) => b[0].length - a[0].length)
+    for (const [kor, num] of sorted) {
       if (t.includes(`${kor}단계`) || t.includes(`${kor} 단계`)) return seekToStep(num, player)
     }
 
+    // N초 뒤로 / 앞으로
     const seekSecMatch = t.match(/(\d+)\s*초?\s*(뒤로?|앞으로?|back|forward)/)
     if (seekSecMatch) {
       const secs = parseInt(seekSecMatch[1])
@@ -124,16 +184,7 @@ export default function VoiceControl({ playerRef, steps }: Props) {
     if (/보통|정상|1배|원래/.test(t)) { player.setPlaybackRate(1); showFeedback('🔄 보통 속도'); return }
 
     showFeedback(`❓ "${text}" — 이해하지 못했어요`)
-  }, [playerRef, steps, showFeedback])
-
-  function seekToStep(num: number, player: YT.Player) {
-    const step = steps.find(s => s.step === num)
-    if (!step) { showFeedback(`❌ ${num}단계가 없어요`); return }
-    if (!step.timestamp || step.timestamp === '00:00') { showFeedback(`⚠️ ${num}단계 타임스탬프 없음`); return }
-    player.seekTo(timestampToSeconds(step.timestamp), true)
-    player.playVideo()
-    showFeedback(`✅ ${num}단계 재생`)
-  }
+  }, [playerRef, steps, seekToStep, showFeedback])
 
   const startRecognition = useCallback(() => {
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
@@ -141,19 +192,17 @@ export default function VoiceControl({ playerRef, steps }: Props) {
 
     const rec = new SR()
     rec.lang = 'ko-KR'
-    rec.continuous = true      // 세션 한 번만 열고 유지 → OS 오디오 포커스 충돌 방지
+    rec.continuous = true
     rec.interimResults = false
     recognitionRef.current = rec
     startedAt.current = Date.now()
 
-    rec.onstart  = () => {
+    rec.onstart = () => {
       setListening(true); setTranscript(''); setFeedback('')
-      // 재시작 시 뮤트했던 거 복원
       const player = playerRef.current
       if (player && !wasMutedRef.current) player.unMute()
     }
     rec.onresult = (e: any) => {
-      // continuous 모드: resultIndex부터 순회
       for (let i = e.resultIndex; i < e.results.length; i++) {
         if (!e.results[i].isFinal) continue
         const text = e.results[i][0].transcript.trim()
@@ -191,7 +240,7 @@ export default function VoiceControl({ playerRef, steps }: Props) {
     }
 
     try { rec.start() } catch { setListening(false) }
-  }, [executeCommand, showFeedback])
+  }, [executeCommand, showFeedback, playerRef])
 
   const stopAll = useCallback(() => {
     activeRef.current = false
@@ -245,10 +294,18 @@ export default function VoiceControl({ playerRef, steps }: Props) {
 
   return (
     <div className="fixed bottom-6 left-6 z-50 flex flex-col items-start gap-2">
+      {/* 피드백 버블 */}
       {(transcript || feedback) && (
         <div className="bg-[#1c1a18] border border-white/15 rounded-2xl px-3.5 py-2.5 shadow-2xl max-w-[240px] space-y-0.5 animate-in fade-in slide-in-from-bottom-2 duration-150">
           {transcript && <p className="text-[#75716e] text-[11px] leading-snug">"{transcript}"</p>}
           {feedback    && <p className="text-white text-xs font-medium leading-snug">{feedback}</p>}
+        </div>
+      )}
+
+      {/* 영상 끊김 안내 */}
+      {active && !feedback && !transcript && (
+        <div className="bg-[#1c1a18] border border-orange-500/10 rounded-2xl px-3 py-2 max-w-[200px]">
+          <p className="text-[#75716e] text-[10px] leading-snug">영상이 끊기면 YouTube 플레이어 음소거 후 사용하세요</p>
         </div>
       )}
 

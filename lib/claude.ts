@@ -270,7 +270,7 @@ conclusion은 한 문장 핵심 결론입니다.
   // 원문 언어 출력 모드: 한국어로 쓰지 않고 원문 언어 그대로 출력
   const langNote = outputLang === 'original'
     ? '\n\n[IMPORTANT: Write ALL text values in the original language of the content (e.g. English). Do NOT translate to Korean.]'
-    : ''
+    : '\n\n[IMPORTANT: 원문 언어가 무엇이든(영어 포함) 모든 텍스트 값은 반드시 한국어로 작성하세요. 영어나 외국어 자막은 한국어로 번역하여 작성하세요.]'
 
   const model = category === 'story' ? storyModel : summaryModel
   const result = await model.generateContent(`${prompt}${sourceNote}${langNote}
@@ -315,7 +315,8 @@ export async function generateReportSummary(
   }
 
   const result = await reportModel.generateContent(`당신은 전문 콘텐츠 에디터입니다.
-아래 "${categoryHint[category]}"의 자막/설명을 읽고, 보고서 형식의 정리 문서를 한국어로 작성하세요.
+아래 "${categoryHint[category]}"의 자막/설명을 읽고, 보고서 형식의 정리 문서를 반드시 한국어로 작성하세요.
+[IMPORTANT: 자막이 영어나 다른 외국어로 되어 있어도 보고서 전체를 한국어로 작성해야 합니다. 번역하여 한국어로 서술하세요.]
 
 요구사항:
 - ${sectionCount}의 소제목(##)으로 구성
@@ -500,7 +501,8 @@ const segmentModel = genAI.getGenerativeModel({
   systemInstruction: 'You are a JSON generator. Always respond with valid JSON only. No explanation, no markdown, no code blocks. Start with { and end with }.',
   generationConfig: {
     temperature: 0.2,
-    maxOutputTokens: 2048,
+    maxOutputTokens: 8192,
+    responseMimeType: 'application/json',
     // @ts-expect-error thinkingConfig not yet in types but supported
     thinkingConfig: { thinkingBudget: 0 },
   },

@@ -66,7 +66,11 @@ const PIPELINE_SCHEDULE = [
 
 function formatDate(iso: string) {
   if (!iso) return '—'
-  return new Intl.DateTimeFormat('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }).format(new Date(iso))
+  try {
+    const d = new Date(iso)
+    if (isNaN(d.getTime())) return '—'
+    return new Intl.DateTimeFormat('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }).format(d)
+  } catch { return '—' }
 }
 
 function mdToHtml(md: string): string {
@@ -683,7 +687,12 @@ export default function CurationTab({ getAuthHeader }: {
           <label className="flex items-center gap-2 cursor-pointer shrink-0 ml-4">
             <span className="text-xs text-[#a4a09c]">{settings?.enabled ? '자동 ON' : '자동 OFF'}</span>
             <button
-              onClick={() => settings && setSettings({ ...settings, enabled: !settings.enabled })}
+              onClick={async () => {
+                if (!settings) return
+                const next = { ...settings, enabled: !settings.enabled }
+                setSettings(next)
+                await callAdmin('saveSettings', { settings: next })
+              }}
               className={`relative w-11 h-6 rounded-full transition-colors ${settings?.enabled ? 'bg-orange-500' : 'bg-[#3d3a38]'}`}
             >
               <span className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${settings?.enabled ? 'translate-x-6' : 'translate-x-1'}`} />
@@ -715,7 +724,11 @@ export default function CurationTab({ getAuthHeader }: {
             <input
               type="checkbox"
               checked={settings.autoPublish}
-              onChange={e => setSettings({ ...settings, autoPublish: e.target.checked })}
+              onChange={async e => {
+                const next = { ...settings, autoPublish: e.target.checked }
+                setSettings(next)
+                await callAdmin('saveSettings', { settings: next })
+              }}
               className="accent-orange-500 w-4 h-4"
             />
             <div>
@@ -725,18 +738,7 @@ export default function CurationTab({ getAuthHeader }: {
           </label>
         )}
 
-        <div className="flex items-center gap-3">
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="px-5 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-sm font-bold transition-colors disabled:opacity-50"
-          >
-            {saving ? '저장 중...' : '설정 저장'}
-          </button>
-          {settings?.lastGeneratedAt && (
-            <span className="text-xs text-[#75716e]">마지막 자동 발행: {formatDate(settings.lastGeneratedAt)}</span>
-          )}
-        </div>
+        {saving && <p className="text-xs text-[#75716e]">저장 중...</p>}
       </div>
 
       {/* ── AI 파이프라인 슬롯 현황 ── */}
