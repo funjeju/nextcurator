@@ -19,7 +19,8 @@ const summaryModel = genAI.getGenerativeModel({
   systemInstruction: 'You are a JSON generator. Always respond with valid JSON only. No explanation, no markdown, no code blocks. Start with { and end with }.',
   generationConfig: {
     temperature: 0.3,
-    maxOutputTokens: 16384,
+    maxOutputTokens: 65536,
+    responseMimeType: 'application/json',
     // @ts-expect-error thinkingConfig not yet in types but supported
     thinkingConfig: { thinkingBudget: 0 },
   },
