@@ -840,6 +840,12 @@ export default function MyPage() {
             >
               ✂️ 숏폼
             </button>
+            <Link
+              href="/report"
+              className="px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all whitespace-nowrap text-[#75716e] hover:text-white"
+            >
+              📊 멀티 리포트
+            </Link>
             <button
               onClick={() => setActiveTab('bookmarks')}
               className={`px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all whitespace-nowrap ${
