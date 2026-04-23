@@ -5,6 +5,43 @@ import { fetchVideoComments, formatCommentsForPrompt } from '@/lib/youtube-comme
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { randomUUID } from 'crypto'
 
+async function translateTranscriptToKorean(transcript: string): Promise<string> {
+  const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GENERATIVE_AI_API_KEY!)
+  const model = genAI.getGenerativeModel({
+    model: 'gemini-2.5-flash',
+    generationConfig: {
+      temperature: 0.1,
+      maxOutputTokens: 65536,
+      // @ts-expect-error thinkingConfig not yet in types
+      thinkingConfig: { thinkingBudget: 0 },
+    },
+  })
+
+  // 15,000자 단위로 청크 분할 (타임스탬프 경계 기준)
+  const lines = transcript.split('\n')
+  const MAX_CHARS = 15000
+  const chunks: string[] = []
+  let cur = ''
+  for (const line of lines) {
+    if (cur.length + line.length > MAX_CHARS && cur) {
+      chunks.push(cur)
+      cur = line
+    } else {
+      cur += (cur ? '\n' : '') + line
+    }
+  }
+  if (cur) chunks.push(cur)
+
+  const translated = await Promise.all(
+    chunks.map(chunk =>
+      model.generateContent(
+        `다음 자막을 한국어로 번역하세요. [MM:SS] 또는 [HH:MM:SS] 형식의 타임스탬프는 절대 변경하지 마세요. 번역된 자막만 출력하세요.\n\n${chunk}`
+      ).then(r => r.response.text().trim())
+    )
+  )
+  return translated.join('\n')
+}
+
 async function generateYtCommentSummary(popular: { text: string; likes: number }[]): Promise<string> {
   if (popular.length === 0) return ''
   try {
@@ -386,6 +423,20 @@ export async function POST(req: NextRequest) {
     }
 
     const outputLang: 'ko' | 'original' = summaryLang === 'original' ? 'original' : 'ko'
+
+    // 한국어 출력 모드 + 비한국어 자막 → 자막 자체를 한국어로 번역 후 저장
+    // 이후 모든 재분석은 한국어 자막 기반으로 자연스럽게 한국어 출력
+    if (outputLang === 'ko' && transcriptLang !== 'ko' && transcript.trim().length > 50) {
+      try {
+        console.log('[Summarize] 🌐 Translating transcript to Korean...')
+        transcript = await translateTranscriptToKorean(transcript)
+        transcriptLang = 'ko'
+        transcriptSource = transcriptSource === 'cached' ? 'cached' : `${transcriptSource}_translated`
+        console.log('[Summarize] ✅ Transcript translated to Korean')
+      } catch (e) {
+        console.warn('[Summarize] ⚠️ Transcript translation failed, using original:', e)
+      }
+    }
 
     const description = (videoInfo as any).description ?? ''
     // pinnedComment: 인기 댓글 1위로 대체 (getVideoMeta 제거)
