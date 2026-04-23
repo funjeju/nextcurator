@@ -224,7 +224,7 @@ function PipelineLogModal({ log, onClose, onStageComplete, onDelete }: { log: Pi
                       <p className="text-[11px] text-white font-medium truncate">{c.title}</p>
                       <p className="text-[9px] text-[#4a4846]">
                         {c.channelTitle} · {Math.floor(c.durationSec / 60)}분{c.durationSec % 60}초
-                        {c.publishedAt ? ` · ${new Intl.DateTimeFormat('ko-KR', { month: 'short', day: 'numeric' }).format(new Date(c.publishedAt))}` : ''}
+                        {(() => { if (!c.publishedAt) return ''; const d = new Date(c.publishedAt); return isNaN(d.getTime()) ? '' : ` · ${new Intl.DateTimeFormat('ko-KR', { month: 'short', day: 'numeric' }).format(d)}` })()}
                       </p>
                     </div>
                   </div>

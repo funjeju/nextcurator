@@ -119,14 +119,29 @@ export async function GET(req: NextRequest) {
 
     if (settings.autoPublish) await publishCuratedPostAdmin(id)
 
+    const subcategory = getSubcategoryForSlot()
+
     // 발행된 summary에 postedToMagazine 마킹 + 슬롯 문서 완료 처리
     try {
       initAdminApp()
       const { getFirestore } = await import('firebase-admin/firestore')
       const db = getFirestore()
       await db.collection('saved_summaries').doc(item.id).update({ postedToMagazine: true })
-      const subcategory = getSubcategoryForSlot()
       await db.collection('ai_pipeline').doc(`${subcategory}_slot`).update({ status: 'published', publishedPostId: id }).catch(() => {})
+    } catch { /* non-critical */ }
+
+    // pipeline_logs에 Publish 결과 기록 (자동 cron도 로그에 남기기)
+    try {
+      const active = await getActiveRunId(subcategory)
+      const runId = active?.runId ?? await initPipelineLog(subcategory)
+      await setActiveRunId(subcategory, runId, 'published')
+      await logPublish(runId, {
+        status: 'done',
+        completedAt: new Date().toISOString(),
+        postTitle: post.title,
+        postSlug: post.slug,
+        autoPublish: settings.autoPublish,
+      })
     } catch { /* non-critical */ }
 
     await saveCurationSettingsAdmin({ lastGeneratedAt: new Date().toISOString() })
