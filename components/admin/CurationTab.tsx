@@ -94,9 +94,12 @@ const STAGE_META: Record<PipelineStage, { label: string; api: string; color: str
 
 function PipelineLogModal({ log, onClose, onStageComplete, onDelete }: { log: PipelineLog; onClose: () => void; onStageComplete?: () => void; onDelete?: (id: string) => void }) {
   const meta = SUBCATEGORY_META[log.subcategory as AiSubcategory] ?? SUBCATEGORY_META.news
-  const kstDate = log.startedAt
-    ? new Intl.DateTimeFormat('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Seoul' }).format(new Date(log.startedAt))
-    : '—'
+  const kstDate = (() => {
+    if (!log.startedAt) return '—'
+    const d = new Date(typeof log.startedAt === 'object' && 'toMillis' in log.startedAt ? (log.startedAt as any).toMillis() : log.startedAt)
+    if (isNaN(d.getTime())) return '—'
+    return new Intl.DateTimeFormat('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Seoul' }).format(d)
+  })()
 
   const [currentLog, setCurrentLog] = useState<PipelineLog>(log)
   const [running, setRunning] = useState<'summarize' | 'publish' | null>(null)
@@ -864,9 +867,12 @@ export default function CurationTab({ getAuthHeader }: {
                 { key: 'publish',  label: 'Pub',      data: log.publish },
               ]
               // KST 날짜 포맷
-              const kstDate = log.startedAt
-                ? new Intl.DateTimeFormat('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Seoul' }).format(new Date(log.startedAt))
-                : '—'
+              const kstDate = (() => {
+                if (!log.startedAt) return '—'
+                const d = new Date(typeof log.startedAt === 'object' && 'toMillis' in log.startedAt ? (log.startedAt as any).toMillis() : log.startedAt)
+                if (isNaN(d.getTime())) return '—'
+                return new Intl.DateTimeFormat('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Seoul' }).format(d)
+              })()
               return (
                 <div
                   key={log.id}

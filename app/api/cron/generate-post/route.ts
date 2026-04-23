@@ -160,20 +160,25 @@ export async function POST(req: NextRequest) {
       if (!item) {
         return NextResponse.json({ error: `sessionId "${sessionId}"에 해당하는 요약을 찾을 수 없습니다.` }, { status: 404 })
       }
+    } else if (bodyRunId) {
+      // runId 있을 때: ai_pipeline_state에서 subcategory 기준으로 요약 찾기
+      item = await pickItem(settings.lookbackDays, bodySubcategory)
+      if (!item) {
+        return NextResponse.json({ error: '발행할 요약을 찾을 수 없습니다. Summarize 단계가 완료됐는지 확인하세요.' }, { status: 422 })
+      }
     } else {
       if (!force && (!settings.enabled || settings.schedule === 'manual')) {
         return NextResponse.json({ skipped: true, reason: 'Use force:true to override schedule' })
       }
 
-      const summaries = await getRecentPublicSummaries(settings.lookbackDays)
-      item = pickBestSingle(summaries)
+      item = await pickItem(settings.lookbackDays, bodySubcategory)
 
       if (!item) {
         const reason = `최근 ${settings.lookbackDays}일 이내 미발행 요약 없음`
         await writeLog({ status: 'skipped', triggerType: 'manual', reason, createdAt: new Date().toISOString() })
         return NextResponse.json({
           error: `발행할 영상이 없습니다. ${reason}`,
-          availableCount: summaries.length,
+          availableCount: 0,
         }, { status: 422 })
       }
     }
