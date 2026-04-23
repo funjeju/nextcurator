@@ -61,8 +61,26 @@ async function runSummarize(subcategory: AiSubcategory, existingRunId?: string) 
     const existing = await db.collection('saved_summaries')
       .where('videoId', '==', pick.videoId).limit(1).get()
     if (!existing.empty) {
+      const existingDoc = existing.docs[0]
       console.log(`[AI Summarize] Already exists in saved_summaries: ${pick.videoId}`)
-      return NextResponse.json({ success: true, subcategory, skipped: true, reason: 'Already summarized' })
+      // 이미 있어도 pipeline state는 summarized로 업데이트해서 generate-post가 픽업할 수 있게
+      await db.collection('ai_pipeline').doc(`${subcategory}_slot`).set({
+        sessionId: existingDoc.data().sessionId ?? '',
+        savedSummaryId: existingDoc.id,
+        videoId: pick.videoId,
+        title: pick.title,
+        subcategory,
+        savedAt: new Date().toISOString(),
+        status: 'ready',
+      })
+      await setActiveRunId(subcategory, runId, 'summarized', {
+        sessionId: existingDoc.data().sessionId ?? '',
+        savedSummaryId: existingDoc.id,
+        videoId: pick.videoId,
+        title: pick.title,
+      })
+      await logSummarize(runId, { startedAt, status: 'done', completedAt: new Date().toISOString(), videoId: pick.videoId, title: pick.title, message: 'Already summarized — reusing existing' })
+      return NextResponse.json({ success: true, subcategory, skipped: true, reason: 'Already summarized', savedSummaryId: existingDoc.id })
     }
   } catch { /* fallthrough */ }
 

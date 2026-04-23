@@ -126,6 +126,12 @@ service cloud.firestore {
       allow create: if request.auth != null;
     }
 
+    // settings: 누구나 읽기 (cron API에서 설정 조회용), 관리자만 쓰기
+    match /settings/{docId} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+
     // classes: 누구나 읽기 (서버 API에서 코드 확인용), 서버 API 생성 허용, 교사만 수정/삭제
     match /classes/{classCode} {
       allow read: if true;
