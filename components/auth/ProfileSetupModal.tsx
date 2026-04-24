@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/providers/AuthProvider'
 import { completeUserProfile, PROFILE_COMPLETE_TOKENS, AgeGroup, Gender } from '@/lib/db'
@@ -34,21 +34,21 @@ const INTEREST_CATS = [
 
 type Step = 'role' | 'teacher_setup' | 'age' | 'gender' | 'interests' | 'done'
 
-export default function ProfileSetupModal() {
+function InviteParamReader({ onTeacherInvite }: { onTeacherInvite: () => void }) {
+  const searchParams = useSearchParams()
+  useEffect(() => {
+    if (searchParams.get('invite') === 'teacher') onTeacherInvite()
+  }, [])
+  return null
+}
+
+function ProfileSetupModalInner() {
   const { user, userProfile, needsProfile, refreshProfile } = useAuth()
   const router = useRouter()
-  const searchParams = useSearchParams()
 
   const [step, setStep]           = useState<Step>('role')
   const [dismissed, setDismissed] = useState(false)
   const [role, setRole]           = useState<'user' | 'teacher' | null>(null)
-
-  useEffect(() => {
-    if (searchParams.get('invite') === 'teacher') {
-      setRole('teacher')
-      setStep('teacher_setup')
-    }
-  }, [])
 
   // 일반 사용자 프로필
   const [ageGroup, setAgeGroup]   = useState<AgeGroup | null>(null)
@@ -66,6 +66,8 @@ export default function ProfileSetupModal() {
   const [tokensEarned, setTokensEarned] = useState(0)
 
   if (!user || !needsProfile || dismissed) return null
+
+  const handleTeacherInvite = () => { setRole('teacher'); setStep('teacher_setup') }
 
   // 진행 바 계산 (일반 사용자: 3단계, 선생님: 1단계)
   const userStepIndex = step === 'age' ? 0 : step === 'gender' ? 1 : step === 'interests' ? 2 : 3
@@ -128,6 +130,8 @@ export default function ProfileSetupModal() {
   }
 
   return (
+    <>
+    <Suspense fallback={null}><InviteParamReader onTeacherInvite={handleTeacherInvite} /></Suspense>
     <div className="fixed inset-0 z-[300] bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
       <div className="bg-[#23211f] border border-white/10 rounded-[28px] w-full max-w-md shadow-2xl overflow-hidden">
 
@@ -489,5 +493,10 @@ export default function ProfileSetupModal() {
         </div>
       </div>
     </div>
+    </>
   )
+}
+
+export default function ProfileSetupModal() {
+  return <ProfileSetupModalInner />
 }
