@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/providers/AuthProvider'
 import { completeUserProfile, PROFILE_COMPLETE_TOKENS, AgeGroup, Gender } from '@/lib/db'
 
@@ -37,10 +37,18 @@ type Step = 'role' | 'teacher_setup' | 'age' | 'gender' | 'interests' | 'done'
 export default function ProfileSetupModal() {
   const { user, userProfile, needsProfile, refreshProfile } = useAuth()
   const router = useRouter()
+  const searchParams = useSearchParams()
 
   const [step, setStep]           = useState<Step>('role')
   const [dismissed, setDismissed] = useState(false)
   const [role, setRole]           = useState<'user' | 'teacher' | null>(null)
+
+  useEffect(() => {
+    if (searchParams.get('invite') === 'teacher') {
+      setRole('teacher')
+      setStep('teacher_setup')
+    }
+  }, [])
 
   // 일반 사용자 프로필
   const [ageGroup, setAgeGroup]   = useState<AgeGroup | null>(null)

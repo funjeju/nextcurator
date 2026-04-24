@@ -266,6 +266,43 @@ function FriendsTab({ myUid }: { myUid: string }) {
   )
 }
 
+function InviteButton({ isTeacher }: { isTeacher?: boolean }) {
+  const [copied, setCopied] = useState<'teacher' | 'normal' | null>(null)
+  const copy = (url: string, type: 'teacher' | 'normal') => {
+    navigator.clipboard.writeText(url).then(() => {
+      setCopied(type)
+      setTimeout(() => setCopied(null), 2000)
+    })
+  }
+  if (isTeacher) {
+    return (
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => copy('https://ssoktube.com?invite=teacher', 'teacher')}
+          className="text-[11px] text-emerald-400 hover:text-emerald-300 transition-colors"
+        >
+          {copied === 'teacher' ? '✅ 복사됨!' : '🏫 선생님으로 초대'}
+        </button>
+        <span className="text-[#4a4745] text-[10px]">·</span>
+        <button
+          onClick={() => copy('https://ssoktube.com', 'normal')}
+          className="text-[11px] text-orange-400 hover:text-orange-300 transition-colors"
+        >
+          {copied === 'normal' ? '✅ 복사됨!' : '🔗 일반 초대'}
+        </button>
+      </div>
+    )
+  }
+  return (
+    <button
+      onClick={() => copy('https://ssoktube.com', 'normal')}
+      className="text-[11px] text-orange-400 hover:text-orange-300 transition-colors"
+    >
+      {copied === 'normal' ? '✅ 복사됨!' : '🔗 친구 초대하기'}
+    </button>
+  )
+}
+
 export default function MyPage() {
   const { user, userProfile, needsProfile, refreshProfile } = useAuth()
   const [activeTab, setActiveTab] = useState<'library' | 'friends' | 'travel' | 'blog' | 'shorts' | 'bookmarks' | 'youtube'>('library')
@@ -762,9 +799,9 @@ export default function MyPage() {
               )}
             </div>
           </div>
-          {/* 아랫줄: 클래스/전환 링크 + 탈퇴 */}
+          {/* 아랫줄: 클래스/전환 링크 + 초대 + 탈퇴 */}
           <div className="flex items-center justify-between mt-2 px-1">
-            <div>
+            <div className="flex items-center gap-3">
               {userProfile && !userProfile.role && (
                 <button
                   onClick={() => { setShowTeacherModal(true); setTeacherDoneCode(''); setTeacherError('') }}
@@ -778,6 +815,7 @@ export default function MyPage() {
                   🏫 내 클래스 대시보드 →
                 </Link>
               )}
+              <InviteButton isTeacher={userProfile?.role === 'teacher'} />
             </div>
             <button
               onClick={() => { setShowWithdrawModal(true); setWithdrawConfirm(''); setWithdrawError('') }}
