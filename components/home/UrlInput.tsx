@@ -337,7 +337,6 @@ export default function UrlInput() {
   return (
     <>
       <div className="flex flex-col items-start gap-6 w-full max-w-2xl bg-[#32302e]/80 backdrop-blur-3xl px-4 py-6 md:p-10 rounded-[32px] border border-white/5 shadow-2xl">
-        <RecentHistory />
 
         {/* URL 입력 */}
         <div className="flex flex-col gap-4 w-full">
@@ -457,6 +456,8 @@ export default function UrlInput() {
           </div>
         </div>
       </div>
+
+      <RecentHistory />
 
       {/* 모달들 */}
       {modal && (
