@@ -60,8 +60,8 @@ function buildHtml(draft: BlogDraft): string {
   const today = new Date().toISOString().split('T')[0]
 
   const sectionsHtml = draft.sections.map(s => {
-    const tsLink = s.seconds
-      ? `\n<p style="margin:6px 0 16px;"><a href="${ytBase}?t=${s.seconds}" target="_blank" rel="noopener" style="font-size:0.85em;color:#f97316;">▶ 영상 ${s.timestamp} 구간 바로보기</a></p>`
+    const tsLink = s.timestamp
+      ? `\n<p style="margin:6px 0 16px;font-size:0.85em;color:#9ca3af;">▶ ${s.timestamp} 구간</p>`
       : ''
     if (!s.heading) {
       return `<p style="margin:0 0 20px;line-height:1.8;font-size:1.05em;">${s.text}</p>`
@@ -208,8 +208,8 @@ function buildPlainText(draft: BlogDraft): string {
   for (const s of draft.sections) {
     if (s.heading) lines.push(`▌ ${s.heading}`, '')
     lines.push(s.text)
-    if (s.timestamp && s.seconds !== null) {
-      lines.push(`▶ ${ytBase}?t=${s.seconds} (${s.timestamp})`)
+    if (s.timestamp) {
+      lines.push(`▶ ${s.timestamp} 구간`)
     }
     lines.push('')
   }
