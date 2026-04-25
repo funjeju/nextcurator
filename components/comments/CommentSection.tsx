@@ -238,7 +238,7 @@ export default function CommentSection({
               }}
               onReplyToThread={parentComment => {
                 // AI 대댓글에 답글 → 최상위 댓글 스레드에 추가
-                setReplyTo({ id: parentComment.id, userName: 'AI 토론봇' })
+                setReplyTo({ id: parentComment.id, userName: 'AI 댓글봇' })
                 setTimeout(() => textareaRef.current?.focus(), 100)
               }}
               onDelete={handleDelete}
