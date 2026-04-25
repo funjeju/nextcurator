@@ -1141,11 +1141,11 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
                   </div>
 
                   {/* 상품 */}
-                  {extractedItems.products.length > 0 && (
+                  {(extractedItems?.products.length ?? 0) > 0 && (
                     <div>
                       <p className="text-zinc-400 text-xs font-semibold mb-2">📦 상품 / 브랜드</p>
                       <div className="space-y-2">
-                        {extractedItems.products.map((p: any, i: number) => (
+                        {extractedItems?.products.map((p: any, i: number) => (
                           <a
                             key={i}
                             href={`https://www.coupang.com/np/search?q=${encodeURIComponent(p.name)}`}
@@ -1185,11 +1185,11 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
                   )}
 
                   {/* 장소 */}
-                  {extractedItems.places.length > 0 && (
+                  {(extractedItems?.places.length ?? 0) > 0 && (
                     <div>
                       <p className="text-zinc-400 text-xs font-semibold mb-2">📍 장소</p>
                       <div className="space-y-2">
-                        {extractedItems.places.map((pl: any, i: number) => (
+                        {extractedItems?.places.map((pl: any, i: number) => (
                           <div key={i} className="flex items-start gap-3 bg-[#32302e] rounded-xl p-3">
                             <div className="flex-1 min-w-0">
                               <p className="text-white text-sm font-semibold">{pl.name}</p>
@@ -1210,7 +1210,7 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
                     </div>
                   )}
 
-                  {extractedItems.products.length === 0 && extractedItems.places.length === 0 && (
+                  {(extractedItems?.products.length === 0) && (extractedItems?.places.length === 0) && (
                     <p className="text-zinc-600 text-sm text-center py-4">추출된 상품 및 장소가 없습니다.</p>
                   )}
                 </div>
