@@ -1112,7 +1112,7 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
           )}
 
           {/* 상품 & 장소 추출 — 여행/요리/뉴스만 — 임시 비활성화 */}
-          {false && activeTab === 'summary' && (['travel', 'recipe', 'news'] as const).includes(data.category as any) && (
+          {false && activeTab === 'summary' && (['travel', 'recipe', 'news'] as const).includes(data?.category as any) && (
             <div className="mt-2">
               {!extractedItems ? (
                 <button
