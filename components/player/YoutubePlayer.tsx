@@ -32,7 +32,7 @@ export default function YoutubePlayer({ videoId, onPlayerReady, onWatchLog, quiz
   const tickRef = useRef<number | null>(null)
   // 퀴즈 감지용 refs (stale closure 방지)
   const quizTimestampsRef = useRef<number[]>([])
-  const onQuizTriggerRef = useRef<((ts: number) => void) | undefined>()
+  const onQuizTriggerRef = useRef<((ts: number) => void) | undefined>(undefined)
   const shownQuizRef = useRef<Set<number>>(new Set())
 
   // refs를 최신 props로 동기화
