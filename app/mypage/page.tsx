@@ -10,6 +10,7 @@ import {
   getPendingFriendRequests, acceptFriendRequest, rejectFriendRequest, getFriends,
   batchUpdateSortOrder, renameFolder, deleteFolder, createSharedFolder,
   updateFolderVisibility, cloneFolder, createFolder, updateUserAvatar,
+  createSharedFolderWithTree,
   Folder, SavedSummary, FriendRequest,
 } from '@/lib/db'
 import { useAuth } from '@/providers/AuthProvider'
@@ -23,6 +24,7 @@ import SavedItineraries from '@/components/travel/SavedItineraries'
 import SavedBlogDrafts from '@/components/blog/SavedBlogDrafts'
 import SavedShortsScripts from '@/components/shorts/SavedShortsScripts'
 import SavedBookmarks from '@/components/bookmarks/SavedBookmarks'
+import SavedVideoQuizzes from '@/components/video-quiz/SavedVideoQuizzes'
 import YouTubeImportTab from '@/components/youtube-import/YouTubeImportTab'
 
 
@@ -40,6 +42,24 @@ const CATEGORY_LABEL: Record<string, string> = {
 }
 
 const CATEGORY_ORDER = ['recipe', 'english', 'learning', 'news', 'selfdev', 'travel', 'story', 'tips', 'voice', 'report']
+
+// ── 폴더 트리 헬퍼 ──
+function buildFolderTree(allFolders: Folder[], parentId: string | null): Folder[] {
+  return allFolders
+    .filter(f => (f.parentId ?? null) === parentId)
+    .sort((a, b) => (a.createdAt?.toMillis?.() ?? 0) - (b.createdAt?.toMillis?.() ?? 0))
+}
+
+function getFolderPath(allFolders: Folder[], folderId: string): Folder[] {
+  const path: Folder[] = []
+  let current = allFolders.find(f => f.id === folderId)
+  while (current) {
+    path.unshift(current)
+    const pid = current.parentId ?? null
+    current = pid ? allFolders.find(f => f.id === pid) : undefined
+  }
+  return path
+}
 
 // ── 폴더 이동 드롭다운 ──
 function FolderMoveDropdown({
@@ -91,18 +111,20 @@ function FolderMoveDropdown({
         {folders.map(f => {
           const isCurrent = f.id === currentFolderId
           const isMoving = moving === f.id
+          const indent = (f.depth ?? 0) * 12
           return (
             <button
               key={f.id}
               onClick={() => handleMove(f.id)}
               disabled={!!moving}
-              className={`w-full text-left px-3 py-2 text-sm transition-colors flex items-center gap-2 ${
+              style={{ paddingLeft: `${12 + indent}px` }}
+              className={`w-full text-left pr-3 py-2 text-sm transition-colors flex items-center gap-2 ${
                 isCurrent
                   ? 'text-orange-400 bg-orange-500/10 cursor-default'
                   : 'text-[#a4a09c] hover:bg-[#32302e] hover:text-white'
               } disabled:opacity-50`}
             >
-              <span>{isMoving ? '⏳' : isCurrent ? '📂' : '📁'}</span>
+              <span>{isMoving ? '⏳' : isCurrent ? '📂' : (f.depth ?? 0) > 0 ? '📂' : '📁'}</span>
               <span className="truncate">{f.name}</span>
               {isCurrent && <span className="ml-auto text-[10px] text-orange-400/70">현재</span>}
             </button>
@@ -112,6 +134,228 @@ function FolderMoveDropdown({
           <p className="px-3 py-2 text-xs text-[#75716e]">폴더가 없습니다.</p>
         )}
       </div>
+    </div>
+  )
+}
+
+// ── 폴더 트리 아이템 ──
+interface FolderTreeItemProps {
+  folder: Folder
+  allFolders: Folder[]
+  activeFolder: string
+  expandedFolders: Set<string>
+  folderMenuId: string | null
+  renamingId: string | null
+  renameValue: string
+  creatingSubFolderIn: string | null
+  newSubFolderName: string
+  shareOptionsId: string | null
+  onFolderClick: (id: string) => void
+  onToggleExpand: (id: string) => void
+  onMenuToggle: (e: React.MouseEvent, id: string) => void
+  onRenameStart: (id: string, name: string) => void
+  onRenameConfirm: (id: string) => void
+  onRenameCancel: () => void
+  onRenameValueChange: (v: string) => void
+  onToggleVisibility: (f: Folder) => void
+  onShareOptions: (id: string) => void
+  onShare: (id: string, name: string, includeChildren: boolean) => void
+  onDelete: (id: string, name: string) => void
+  onCreateSubFolder: (parentId: string) => void
+  onSubFolderNameChange: (v: string) => void
+  onSubFolderConfirm: (parentId: string) => void
+  onSubFolderCancel: () => void
+  onSubFolderKeyDown: (e: React.KeyboardEvent, parentId: string) => void
+}
+
+function FolderTreeItem({
+  folder, allFolders, activeFolder, expandedFolders, folderMenuId, renamingId,
+  renameValue, creatingSubFolderIn, newSubFolderName, shareOptionsId,
+  onFolderClick, onToggleExpand, onMenuToggle, onRenameStart, onRenameConfirm,
+  onRenameCancel, onRenameValueChange, onToggleVisibility, onShareOptions, onShare,
+  onDelete, onCreateSubFolder, onSubFolderNameChange, onSubFolderConfirm,
+  onSubFolderCancel, onSubFolderKeyDown,
+}: FolderTreeItemProps) {
+  const children = buildFolderTree(allFolders, folder.id)
+  const hasChildren = children.length > 0
+  const isExpanded = expandedFolders.has(folder.id)
+  const isActive = activeFolder === folder.id
+  const depth = folder.depth ?? 0
+  const indent = depth * 14
+
+  return (
+    <div>
+      <div className="relative group/folder" style={{ marginLeft: `${indent}px` }}>
+        {renamingId === folder.id ? (
+          <div className="flex gap-1 px-1 py-1">
+            <input
+              autoFocus
+              value={renameValue}
+              onChange={e => onRenameValueChange(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter') onRenameConfirm(folder.id)
+                if (e.key === 'Escape') onRenameCancel()
+              }}
+              className="flex-1 bg-[#1c1a18] border border-orange-500/50 rounded-lg px-2 py-1 text-sm text-white focus:outline-none min-w-0"
+            />
+            <button onClick={() => onRenameConfirm(folder.id)} className="text-orange-400 text-xs px-1.5 py-1 rounded-lg hover:bg-orange-500/10">✓</button>
+            <button onClick={onRenameCancel} className="text-[#75716e] text-xs px-1.5 py-1 rounded-lg hover:bg-white/5">✕</button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-0.5">
+            {/* 확장/축소 화살표 */}
+            <button
+              onClick={() => onToggleExpand(folder.id)}
+              className={`w-5 h-7 flex items-center justify-center text-[#75716e] hover:text-white transition-colors shrink-0 ${!hasChildren ? 'invisible' : ''}`}
+            >
+              <svg className={`w-3 h-3 transition-transform duration-150 ${isExpanded ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+
+            {/* 폴더 버튼 */}
+            <button
+              onClick={() => onFolderClick(folder.id)}
+              className={`flex-1 text-left py-2 px-2.5 rounded-xl whitespace-nowrap transition-all text-sm min-w-0 ${
+                isActive
+                  ? 'bg-orange-500 text-white font-bold'
+                  : folder.clonedFrom
+                    ? 'bg-orange-500/5 border border-orange-500/20 text-[#e2e2e2] hover:bg-orange-500/10'
+                    : 'bg-[#32302e] text-[#a4a09c] hover:bg-[#3d3a38]'
+              }`}
+            >
+              <span className="flex items-center gap-1.5">
+                <span className="shrink-0">{folder.clonedFrom ? '✨' : depth === 0 ? '📁' : '📂'}</span>
+                <span className="truncate">{folder.name}</span>
+                {hasChildren && (
+                  <span className={`ml-auto text-[10px] shrink-0 ${isActive ? 'text-white/60' : 'text-[#75716e]'}`}>{children.length}</span>
+                )}
+              </span>
+            </button>
+
+            {/* 공개 토글 — clonedFrom 폴더는 숨김 */}
+            {!folder.clonedFrom && (
+              <button
+                onClick={e => { e.stopPropagation(); onToggleVisibility(folder) }}
+                className={`w-6 h-6 flex items-center justify-center rounded-lg text-[11px] transition-all shrink-0 ${
+                  folder.visibility === 'public' ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30'
+                  : folder.visibility === 'friends' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+                  : 'bg-[#3d3a38] text-[#75716e] border border-white/5'
+                }`}
+                title={folder.visibility === 'public' ? '전체공개' : folder.visibility === 'friends' ? '친구만' : '나만 보기'}
+              >
+                {folder.visibility === 'public' ? '🌐' : folder.visibility === 'friends' ? '👥' : '🔒'}
+              </button>
+            )}
+
+            {/* ⋯ 메뉴 */}
+            <button
+              onClick={e => onMenuToggle(e, folder.id)}
+              className="w-6 h-6 opacity-0 group-hover/folder:opacity-100 rounded-lg flex items-center justify-center text-[#75716e] hover:text-white hover:bg-white/10 transition-all shrink-0"
+            >⋯</button>
+          </div>
+        )}
+
+        {/* 드롭다운 메뉴 */}
+        {folderMenuId === folder.id && renamingId !== folder.id && (
+          <div
+            className="absolute right-0 top-full mt-1 z-30 bg-[#2a2826] border border-white/10 rounded-xl shadow-xl overflow-hidden min-w-[160px]"
+            onClick={e => e.stopPropagation()}
+          >
+            <button
+              onClick={() => { onRenameStart(folder.id, folder.name) }}
+              className="w-full text-left px-4 py-2.5 text-sm text-[#a4a09c] hover:text-white hover:bg-white/5 transition-colors"
+            >✏️ 이름 변경</button>
+
+            {depth < 2 && (
+              <button
+                onClick={() => onCreateSubFolder(folder.id)}
+                className="w-full text-left px-4 py-2.5 text-sm text-[#a4a09c] hover:text-white hover:bg-white/5 transition-colors"
+              >📁 하위폴더 추가</button>
+            )}
+
+            {/* 공유 — 범위 선택 */}
+            {shareOptionsId === folder.id ? (
+              <div className="border-t border-white/5">
+                <p className="px-4 pt-2 pb-1 text-[10px] text-[#75716e] font-semibold uppercase tracking-wider">공유 범위 선택</p>
+                <button
+                  onClick={() => onShare(folder.id, folder.name, false)}
+                  className="w-full text-left px-4 py-2 text-sm text-[#a4a09c] hover:text-white hover:bg-white/5 transition-colors"
+                >📄 이 폴더만</button>
+                {hasChildren && (
+                  <button
+                    onClick={() => onShare(folder.id, folder.name, true)}
+                    className="w-full text-left px-4 py-2 text-sm text-[#a4a09c] hover:text-white hover:bg-white/5 transition-colors"
+                  >🗂️ 하위폴더 포함 전체</button>
+                )}
+              </div>
+            ) : (
+              <button
+                onClick={() => onShareOptions(folder.id)}
+                className="w-full text-left px-4 py-2.5 text-sm text-[#a4a09c] hover:text-white hover:bg-white/5 transition-colors"
+              >🔗 공유 링크 복사</button>
+            )}
+
+            <button
+              onClick={() => onDelete(folder.id, folder.name)}
+              className="w-full text-left px-4 py-2.5 text-sm text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-colors"
+            >🗑️ 삭제</button>
+          </div>
+        )}
+      </div>
+
+      {/* 하위폴더 인라인 생성 */}
+      {creatingSubFolderIn === folder.id && (
+        <div className="flex gap-1 mt-1" style={{ marginLeft: `${indent + 19}px` }}>
+          <input
+            autoFocus
+            value={newSubFolderName}
+            onChange={e => onSubFolderNameChange(e.target.value)}
+            onKeyDown={e => onSubFolderKeyDown(e, folder.id)}
+            placeholder="하위폴더 이름..."
+            className="flex-1 bg-[#1c1a18] border border-orange-500/50 rounded-lg px-2 py-1 text-sm text-white placeholder:text-[#75716e] focus:outline-none min-w-0"
+          />
+          <button onClick={() => onSubFolderConfirm(folder.id)} disabled={!newSubFolderName.trim()} className="text-orange-400 text-xs px-1.5 py-1 rounded-lg hover:bg-orange-500/10 disabled:opacity-40">✓</button>
+          <button onClick={onSubFolderCancel} className="text-[#75716e] text-xs px-1.5 py-1 rounded-lg hover:bg-white/5">✕</button>
+        </div>
+      )}
+
+      {/* 하위폴더 재귀 렌더 */}
+      {isExpanded && hasChildren && (
+        <div className="mt-1 flex flex-col gap-1">
+          {children.map(child => (
+            <FolderTreeItem
+              key={child.id}
+              folder={child}
+              allFolders={allFolders}
+              activeFolder={activeFolder}
+              expandedFolders={expandedFolders}
+              folderMenuId={folderMenuId}
+              renamingId={renamingId}
+              renameValue={renameValue}
+              creatingSubFolderIn={creatingSubFolderIn}
+              newSubFolderName={newSubFolderName}
+              shareOptionsId={shareOptionsId}
+              onFolderClick={onFolderClick}
+              onToggleExpand={onToggleExpand}
+              onMenuToggle={onMenuToggle}
+              onRenameStart={onRenameStart}
+              onRenameConfirm={onRenameConfirm}
+              onRenameCancel={onRenameCancel}
+              onRenameValueChange={onRenameValueChange}
+              onToggleVisibility={onToggleVisibility}
+              onShareOptions={onShareOptions}
+              onShare={onShare}
+              onDelete={onDelete}
+              onCreateSubFolder={onCreateSubFolder}
+              onSubFolderNameChange={onSubFolderNameChange}
+              onSubFolderConfirm={onSubFolderConfirm}
+              onSubFolderCancel={onSubFolderCancel}
+              onSubFolderKeyDown={onSubFolderKeyDown}
+            />
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -305,7 +549,7 @@ function InviteButton({ isTeacher }: { isTeacher?: boolean }) {
 
 export default function MyPage() {
   const { user, userProfile, needsProfile, refreshProfile } = useAuth()
-  const [activeTab, setActiveTab] = useState<'library' | 'friends' | 'travel' | 'blog' | 'shorts' | 'bookmarks' | 'youtube'>('library')
+  const [activeTab, setActiveTab] = useState<'library' | 'friends' | 'travel' | 'blog' | 'shorts' | 'bookmarks' | 'quizzes' | 'youtube'>('library')
   const [folders, setFolders] = useState<Folder[]>([])
   const [summaries, setSummaries] = useState<SavedSummary[]>([])
   const [allSummaries, setAllSummaries] = useState<SavedSummary[]>([])
@@ -319,6 +563,11 @@ export default function MyPage() {
   const [dragId, setDragId] = useState<string | null>(null)
   const [dragOverId, setDragOverId] = useState<string | null>(null)
   const [savingOrder, setSavingOrder] = useState(false)
+  // 폴더 트리 확장/하위폴더 생성
+  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set())
+  const [creatingSubFolderIn, setCreatingSubFolderIn] = useState<string | null>(null)
+  const [newSubFolderName, setNewSubFolderName] = useState('')
+  const [shareOptionsId, setShareOptionsId] = useState<string | null>(null)
   const [pendingCount, setPendingCount] = useState(0)
   const [searchQuery, setSearchQuery] = useState('')
   const [committedQuery, setCommittedQuery] = useState('')
@@ -561,7 +810,18 @@ export default function MyPage() {
 
   const handleFolderClick = async (folderId: string) => {
     setActiveFolder(folderId)
-    setSelectedCategory('all')  // 폴더 바꾸면 카테고리 필터 초기화
+    setSelectedCategory('all')
+    setFolderMenuId(null)
+    setShareOptionsId(null)
+    // 사이드바에서 조상 폴더 자동 확장
+    if (folderId !== 'all') {
+      const path = getFolderPath(folders, folderId)
+      setExpandedFolders(prev => {
+        const next = new Set(prev)
+        path.forEach(f => next.add(f.id))
+        return next
+      })
+    }
     setLoading(true)
     try {
       const uid = getLocalUserId()
@@ -583,18 +843,37 @@ export default function MyPage() {
     setFolderMenuId(null)
   }
 
-  // 새 폴더 생성
+  // 새 루트 폴더 생성
   const handleCreateFolder = async () => {
     const name = newFolderName.trim()
     if (!name) return
     const uid = getLocalUserId()
     try {
-      const created = await createFolder(uid, name)
+      const created = await createFolder(uid, name, null, 0)
       setFolders(prev => [...prev, created])
       setNewFolderName('')
       setCreatingFolder(false)
     } catch {
       alert('폴더 생성에 실패했습니다.')
+    }
+  }
+
+  // 하위폴더 생성
+  const handleCreateSubFolder = async (parentId: string) => {
+    const name = newSubFolderName.trim()
+    if (!name) return
+    const uid = getLocalUserId()
+    const parentFolder = folders.find(f => f.id === parentId)
+    const newDepth = (parentFolder?.depth ?? 0) + 1
+    try {
+      const created = await createFolder(uid, name, parentId, newDepth)
+      setFolders(prev => [...prev, created])
+      setExpandedFolders(prev => new Set([...prev, parentId]))
+      setNewSubFolderName('')
+      setCreatingSubFolderIn(null)
+      setFolderMenuId(null)
+    } catch {
+      alert('하위폴더 생성에 실패했습니다.')
     }
   }
 
@@ -609,36 +888,44 @@ export default function MyPage() {
     setFolders(prev => prev.map(item => item.id === f.id ? { ...item, visibility: next } : item))
   }
 
-  // 폴더 공유 링크 생성
-  const handleShareFolder = async (folderId: string, folderName: string) => {
-    const items = allSummaries.filter(s => s.folderId === folderId)
-    if (items.length === 0) { alert('폴더에 저장된 항목이 없습니다.'); return }
+  // 폴더 공유 링크 생성 (includeChildren = 하위폴더 포함 여부)
+  const handleShareFolder = async (folderId: string, folderName: string, includeChildren: boolean) => {
+    const uid = user?.uid || getLocalUserId()
     try {
-      const uid = user?.uid || getLocalUserId()
-      const shareId = await createSharedFolder(
+      const shareId = await createSharedFolderWithTree(
         uid,
         user?.displayName || '익명',
         user?.photoURL || '',
+        folderId,
         folderName,
-        items
+        folders,
+        includeChildren
       )
       const link = `${window.location.origin}/share/${shareId}`
       await navigator.clipboard.writeText(link)
-      alert('공유 링크가 클립보드에 복사됐습니다!')
+      alert(`공유 링크가 클립보드에 복사됐습니다!${includeChildren ? '\n(하위폴더 포함)' : ''}`)
     } catch {
       alert('공유 링크 생성에 실패했습니다.')
     } finally {
       setFolderMenuId(null)
+      setShareOptionsId(null)
     }
   }
 
-  // 폴더 삭제
+  // 폴더 삭제 (하위폴더 연쇄 삭제)
   const handleDeleteFolder = async (folderId: string, folderName: string) => {
-    if (!confirm(`"${folderName}" 폴더를 삭제하시겠어요?\n폴더 안 항목들은 모든 저장 항목에서 계속 확인할 수 있습니다.`)) return
+    const getAllDescendants = (id: string): string[] => {
+      const children = folders.filter(f => f.parentId === id)
+      return children.reduce<string[]>((acc, c) => [...acc, c.id, ...getAllDescendants(c.id)], [])
+    }
+    const descendants = getAllDescendants(folderId)
+    const subCount = descendants.length
+    if (!confirm(`"${folderName}" 폴더${subCount > 0 ? `와 하위폴더 ${subCount}개` : ''}를 삭제하시겠어요?\n폴더 안 항목들은 모든 저장 항목에서 계속 확인할 수 있습니다.`)) return
     try {
-      await deleteFolder(folderId)
-      setFolders(prev => prev.filter(f => f.id !== folderId))
-      if (activeFolder === folderId) {
+      await Promise.all([folderId, ...descendants].map(id => deleteFolder(id)))
+      const deletedIds = new Set([folderId, ...descendants])
+      setFolders(prev => prev.filter(f => !deletedIds.has(f.id)))
+      if (deletedIds.has(activeFolder)) {
         setActiveFolder('all')
         const uid = getLocalUserId()
         const allItems = await getSavedSummariesByFolder(uid, 'all')
@@ -646,7 +933,7 @@ export default function MyPage() {
         setSummaries(allItems)
       }
     } catch { alert('폴더 삭제에 실패했습니다.') }
-    finally { setFolderMenuId(null) }
+    finally { setFolderMenuId(null); setShareOptionsId(null) }
   }
 
   // 카테고리 필터 → 검색 필터 순서로 적용
@@ -893,6 +1180,14 @@ export default function MyPage() {
               🔖 북마크
             </button>
             <button
+              onClick={() => setActiveTab('quizzes')}
+              className={`px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all whitespace-nowrap ${
+                activeTab === 'quizzes' ? 'bg-[#3d3a38] text-white shadow' : 'text-[#75716e] hover:text-white'
+              }`}
+            >
+              🧩 퀴즈
+            </button>
+            <button
               onClick={() => setActiveTab('youtube')}
               className={`px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all whitespace-nowrap flex items-center gap-1.5 ${
                 activeTab === 'youtube' ? 'bg-[#3d3a38] text-white shadow' : 'text-[#75716e] hover:text-white'
@@ -950,6 +1245,16 @@ export default function MyPage() {
             <p className="text-[#75716e] text-sm mt-0.5">영상 시청 중 저장한 구간과 메모를 한눈에 확인하세요.</p>
           </div>
           <SavedBookmarks userId={user?.uid ?? getLocalUserId()} />
+        </div>
+      )}
+
+      {activeTab === 'quizzes' && (
+        <div className="max-w-2xl mx-auto px-6 pb-12">
+          <div className="mb-5">
+            <h2 className="text-white font-bold text-lg">🧩 타임스탬프 퀴즈</h2>
+            <p className="text-[#75716e] text-sm mt-0.5">영상 특정 시점에 추가한 퀴즈를 관리하세요. 영상이 해당 시점에 도달하면 자동으로 표시됩니다.</p>
+          </div>
+          <SavedVideoQuizzes userId={user?.uid ?? getLocalUserId()} />
         </div>
       )}
 
@@ -1024,111 +1329,79 @@ export default function MyPage() {
             <span className="flex items-center gap-0.5 shrink-0"><span>🌐</span><span>공개</span></span>
             <span className="ml-auto text-[9px] text-white/20 shrink-0">탭으로 변경</span>
           </div>
-          <div className="flex flex-row md:flex-col gap-2 overflow-x-auto md:overflow-visible pb-2 scrollbar-none">
+          <div className="flex flex-col gap-1 overflow-x-auto md:overflow-visible pb-2 scrollbar-none">
             <button
               onClick={() => handleFolderClick('all')}
-              className={`text-left px-4 py-3 rounded-xl whitespace-nowrap transition-colors ${
+              className={`text-left px-4 py-3 rounded-xl whitespace-nowrap transition-colors text-sm ${
                 activeFolder === 'all' ? 'bg-orange-500 text-white font-bold' : 'bg-[#32302e] text-[#a4a09c] hover:bg-[#3d3a38]'
               }`}
             >
               🌐 모든 저장 항목
             </button>
-            {folders.map(f => (
-              <div key={f.id} className="relative group/folder">
-                {renamingId === f.id ? (
-                  /* 이름 변경 인라인 입력 */
-                  <div className="flex gap-1 px-2 py-1.5">
-                    <input
-                      autoFocus
-                      value={renameValue}
-                      onChange={e => setRenameValue(e.target.value)}
-                      onKeyDown={e => {
-                        if (e.key === 'Enter') handleRenameConfirm(f.id)
-                        if (e.key === 'Escape') { setRenamingId(null); setFolderMenuId(null) }
-                      }}
-                      className="flex-1 bg-[#1c1a18] border border-orange-500/50 rounded-lg px-2 py-1 text-sm text-white focus:outline-none min-w-0"
-                    />
-                    <button onClick={() => handleRenameConfirm(f.id)} className="text-orange-400 text-xs px-2 py-1 rounded-lg hover:bg-orange-500/10">✓</button>
-                    <button onClick={() => { setRenamingId(null); setFolderMenuId(null) }} className="text-[#75716e] text-xs px-2 py-1 rounded-lg hover:bg-white/5">✕</button>
-                  </div>
-                ) : (
-                  <div className="relative group/folder">
-                    <button
-                      onClick={() => handleFolderClick(f.id)}
-                      className={`w-full text-left px-4 py-3 rounded-xl whitespace-nowrap transition-all pr-16 ${
-                        activeFolder === f.id 
-                          ? 'bg-orange-500 text-white font-bold' 
-                          : f.clonedFrom 
-                            ? 'bg-orange-500/5 border border-orange-500/20 text-[#e2e2e2] hover:bg-orange-500/10'
-                            : 'bg-[#32302e] text-[#a4a09c] hover:bg-[#3d3a38]'
-                      }`}
-                    >
-                      <span className="flex items-center gap-2">
-                        <span>{f.clonedFrom ? '✨' : '📁'}</span>
-                        <span className="truncate">{f.name}</span>
-                      </span>
-                    </button>
-
-                    {/* 공개 범위 토글 아이콘 */}
-                    <button
-                      onClick={(e) => { e.stopPropagation(); handleToggleVisibility(f) }}
-                      className={`absolute right-10 top-1/2 -translate-y-1/2 w-7 h-7 flex items-center justify-center rounded-lg text-sm transition-all ${
-                        f.visibility === 'public'
-                          ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30'
-                          : f.visibility === 'friends'
-                            ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
-                            : 'bg-[#3d3a38] text-[#75716e] border border-white/5'
-                      }`}
-                      title={f.visibility === 'public' ? '전체공개 (클릭하여 변경)' : f.visibility === 'friends' ? '친구만 (클릭하여 변경)' : '나만 보기 (클릭하여 변경)'}
-                    >
-                      {f.visibility === 'public' ? '🌐' : f.visibility === 'friends' ? '👥' : '🔒'}
-                    </button>
-                  </div>
-                )}
-
-                {/* ⋯ 메뉴 버튼 */}
-                {renamingId !== f.id && (
-                  <button
-                    onClick={e => { e.stopPropagation(); setFolderMenuId(prev => prev === f.id ? null : f.id) }}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover/folder:opacity-100 w-7 h-7 rounded-lg flex items-center justify-center text-[#75716e] hover:text-white hover:bg-white/10 transition-all z-10"
-                  >
-                    ⋯
-                  </button>
-                )}
-
-                {/* 드롭다운 메뉴 */}
-                {folderMenuId === f.id && renamingId !== f.id && (
-                  <div
-                    className="absolute right-0 top-full mt-1 z-30 bg-[#2a2826] border border-white/10 rounded-xl shadow-xl overflow-hidden min-w-[120px]"
-                    onClick={e => e.stopPropagation()}
-                  >
-                    <button
-                      onClick={() => { setRenamingId(f.id); setRenameValue(f.name); setFolderMenuId(null) }}
-                      className="w-full text-left px-4 py-2.5 text-sm text-[#a4a09c] hover:text-white hover:bg-white/5 transition-colors"
-                    >
-                      ✏️ 이름 변경
-                    </button>
-                    <button
-                      onClick={() => handleShareFolder(f.id, f.name)}
-                      className="w-full text-left px-4 py-2.5 text-sm text-[#a4a09c] hover:text-white hover:bg-white/5 transition-colors"
-                    >
-                      🔗 공유 링크 복사
-                    </button>
-                    <button
-                      onClick={() => handleDeleteFolder(f.id, f.name)}
-                      className="w-full text-left px-4 py-2.5 text-sm text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-colors"
-                    >
-                      🗑️ 삭제
-                    </button>
-                  </div>
-                )}
-              </div>
+            {buildFolderTree(folders, null).map(f => (
+              <FolderTreeItem
+                key={f.id}
+                folder={f}
+                allFolders={folders}
+                activeFolder={activeFolder}
+                expandedFolders={expandedFolders}
+                folderMenuId={folderMenuId}
+                renamingId={renamingId}
+                renameValue={renameValue}
+                creatingSubFolderIn={creatingSubFolderIn}
+                newSubFolderName={newSubFolderName}
+                shareOptionsId={shareOptionsId}
+                onFolderClick={handleFolderClick}
+                onToggleExpand={id => setExpandedFolders(prev => {
+                  const next = new Set(prev)
+                  next.has(id) ? next.delete(id) : next.add(id)
+                  return next
+                })}
+                onMenuToggle={(e, id) => { e.stopPropagation(); setFolderMenuId(prev => prev === id ? null : id); setShareOptionsId(null) }}
+                onRenameStart={(id, name) => { setRenamingId(id); setRenameValue(name); setFolderMenuId(null) }}
+                onRenameConfirm={handleRenameConfirm}
+                onRenameCancel={() => { setRenamingId(null); setFolderMenuId(null) }}
+                onRenameValueChange={setRenameValue}
+                onToggleVisibility={handleToggleVisibility}
+                onShareOptions={id => setShareOptionsId(prev => prev === id ? null : id)}
+                onShare={handleShareFolder}
+                onDelete={handleDeleteFolder}
+                onCreateSubFolder={id => { setCreatingSubFolderIn(id); setExpandedFolders(prev => new Set([...prev, id])); setFolderMenuId(null) }}
+                onSubFolderNameChange={setNewSubFolderName}
+                onSubFolderConfirm={handleCreateSubFolder}
+                onSubFolderCancel={() => { setCreatingSubFolderIn(null); setNewSubFolderName('') }}
+                onSubFolderKeyDown={(e, parentId) => {
+                  if (e.key === 'Enter') handleCreateSubFolder(parentId)
+                  if (e.key === 'Escape') { setCreatingSubFolderIn(null); setNewSubFolderName('') }
+                }}
+              />
             ))}
           </div>
         </aside>
 
         {/* Content Grid */}
         <main className="flex-1">
+          {/* 브레드크럼 */}
+          {activeFolder !== 'all' && (() => {
+            const path = getFolderPath(folders, activeFolder)
+            return (
+              <nav className="flex items-center gap-1 text-xs text-[#75716e] mb-3 overflow-x-auto scrollbar-none flex-wrap">
+                <button onClick={() => handleFolderClick('all')} className="hover:text-white whitespace-nowrap transition-colors">모든 저장 항목</button>
+                {path.map(f => (
+                  <span key={f.id} className="flex items-center gap-1">
+                    <svg className="w-3 h-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                    <button
+                      onClick={() => handleFolderClick(f.id)}
+                      className={`whitespace-nowrap transition-colors ${f.id === activeFolder ? 'text-white font-semibold' : 'hover:text-white'}`}
+                    >{f.name}</button>
+                  </span>
+                ))}
+              </nav>
+            )
+          })()}
+
           {/* 검색창 + 카테고리 드롭다운 */}
           {committedQuery && (
             <div className="flex items-center gap-2 mb-2 text-[11px] text-orange-400/80">
@@ -1224,6 +1497,41 @@ export default function MyPage() {
             </div>
           </div>
 
+          {/* 하위폴더 카드 — 항상 표시 (영상 그리드 위) */}
+          {(() => {
+            if (activeFolder === 'all') return null
+            const subFolders = buildFolderTree(folders, activeFolder)
+            if (subFolders.length === 0) return null
+            return (
+              <div className="mb-6">
+                <p className="text-[10px] text-[#75716e] font-semibold uppercase tracking-wider mb-2">하위 폴더</p>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {subFolders.map(sf => {
+                    const grandChildren = buildFolderTree(folders, sf.id)
+                    return (
+                      <button
+                        key={sf.id}
+                        onClick={() => handleFolderClick(sf.id)}
+                        className="flex items-center gap-2.5 px-3 py-3 bg-[#32302e] hover:bg-[#3d3a38] rounded-xl border border-white/5 hover:border-orange-500/30 text-left transition-all group"
+                      >
+                        <span className="text-xl shrink-0">📂</span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-[#e2e2e2] group-hover:text-white truncate">{sf.name}</p>
+                          {grandChildren.length > 0 && (
+                            <p className="text-[10px] text-[#75716e]">{grandChildren.length}개 하위폴더</p>
+                          )}
+                        </div>
+                        <svg className="w-3.5 h-3.5 text-[#75716e] group-hover:text-orange-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                        </svg>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            )
+          })()}
+
           {loading ? (
             <div className="flex items-center justify-center py-20">
               <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-orange-500" />
@@ -1234,13 +1542,13 @@ export default function MyPage() {
               <h2 className="text-xl text-white font-medium mb-2">저장된 영상이 없습니다</h2>
               <p className="text-[#75716e] text-sm">영상을 요약하면 자동으로 라이브러리에 저장됩니다.</p>
             </div>
-          ) : summaries.length === 0 ? (
+          ) : summaries.length === 0 && buildFolderTree(folders, activeFolder === 'all' ? null : activeFolder).length === 0 ? (
             <div className="bg-[#32302e]/50 rounded-[32px] p-12 text-center border border-white/5">
               <span className="text-4xl mb-4 block">📂</span>
               <h2 className="text-xl text-white font-medium mb-2">이 폴더는 비어있습니다</h2>
               <p className="text-[#75716e] text-sm">카드의 📁 아이콘으로 항목을 폴더에 추가하세요.</p>
             </div>
-          ) : (
+          ) : summaries.length === 0 ? null : (
             <>
               {/* 드래그 순서 변경 안내 + 필터 상태 */}
               <div className="flex items-center justify-between mb-4 min-h-[20px]">

@@ -12,6 +12,8 @@ interface YoutubePlayerProps {
   videoId: string
   onPlayerReady?: (player: YT.Player) => void
   onWatchLog?: (log: WatchLog) => void  // 시청 완료 시 콜백
+  quizTimestamps?: number[]             // 퀴즈 타임스탬프 목록 (초)
+  onQuizTrigger?: (timestampSec: number) => void  // 해당 시점 도달 시 콜백
 }
 
 declare global {
@@ -21,13 +23,21 @@ declare global {
   }
 }
 
-export default function YoutubePlayer({ videoId, onPlayerReady, onWatchLog }: YoutubePlayerProps) {
+export default function YoutubePlayer({ videoId, onPlayerReady, onWatchLog, quizTimestamps, onQuizTrigger }: YoutubePlayerProps) {
   const playerRef = useRef<YT.Player | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const watchStartRef = useRef<number>(0)       // 재생 시작 시각
   const totalWatchedRef = useRef<number>(0)     // 누적 시청 초
   const reportedRef = useRef<boolean>(false)    // 80% 이미 보고했는지
   const tickRef = useRef<number | null>(null)
+  // 퀴즈 감지용 refs (stale closure 방지)
+  const quizTimestampsRef = useRef<number[]>([])
+  const onQuizTriggerRef = useRef<((ts: number) => void) | undefined>()
+  const shownQuizRef = useRef<Set<number>>(new Set())
+
+  // refs를 최신 props로 동기화
+  useEffect(() => { quizTimestampsRef.current = quizTimestamps ?? [] }, [quizTimestamps])
+  useEffect(() => { onQuizTriggerRef.current = onQuizTrigger }, [onQuizTrigger])
 
   const stopTick = useCallback(() => {
     if (tickRef.current !== null) {
@@ -63,6 +73,21 @@ export default function YoutubePlayer({ videoId, onPlayerReady, onWatchLog }: Yo
             // 주기적으로 시청 시간 누적
             tickRef.current = window.setInterval(() => {
               totalWatchedRef.current += 1
+
+              // 퀴즈 타임스탬프 감지
+              const qts = quizTimestampsRef.current
+              if (qts.length > 0 && onQuizTriggerRef.current) {
+                const currentTime = player.getCurrentTime?.() ?? 0
+                for (const ts of qts) {
+                  if (!shownQuizRef.current.has(ts) && currentTime >= ts && currentTime <= ts + 2) {
+                    shownQuizRef.current.add(ts)
+                    player.pauseVideo()
+                    onQuizTriggerRef.current(ts)
+                    break
+                  }
+                }
+              }
+
               const duration = player.getDuration?.() || 0
               if (duration > 0) {
                 const pct = (totalWatchedRef.current / duration) * 100

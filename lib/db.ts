@@ -7,6 +7,8 @@ export interface Folder {
   id: string
   userId: string
   name: string
+  parentId?: string | null   // null = 루트, string = 상위폴더 ID
+  depth?: number             // 0=루트, 1=하위, 2=하위하위 (최대 2)
   visibility?: 'private' | 'friends' | 'public'
   clonedFrom?: {
     userId: string
@@ -101,23 +103,23 @@ export async function getUserFolders(userId: string): Promise<Folder[]> {
   })
 }
 
-export async function createFolder(userId: string, name: string): Promise<Folder> {
+export async function createFolder(
+  userId: string,
+  name: string,
+  parentId: string | null = null,
+  depth: number = 0
+): Promise<Folder> {
   const trimmedName = name.trim()
-  // 같은 이름 폴더가 이미 있으면 기존 것 반환 (중복 방지)
-  const existing = await getDocs(
-    query(collection(db, 'folders'), where('userId', '==', userId), where('name', '==', trimmedName))
-  )
-  if (!existing.empty) {
-    return { id: existing.docs[0].id, ...existing.docs[0].data() } as Folder
-  }
   const foldersRef = collection(db, 'folders')
   const docRef = await addDoc(foldersRef, {
     userId,
     name: trimmedName,
+    parentId,
+    depth,
     visibility: 'private',
     createdAt: serverTimestamp()
   })
-  return { id: docRef.id, userId, name: trimmedName, createdAt: new Date() }
+  return { id: docRef.id, userId, name: trimmedName, parentId, depth, createdAt: new Date() }
 }
 
 export async function renameFolder(folderId: string, newName: string): Promise<void> {
@@ -662,23 +664,32 @@ export async function cloneFolder(
 // 폴더 공유
 // ─────────────────────────────────────────────
 
+export interface SharedFolderItemMeta {
+  sessionId: string
+  videoId: string
+  title: string
+  thumbnail: string
+  channel: string
+  category: string
+  contextSummary?: string
+  square_meta?: any
+}
+
+export interface SharedFolderNode {
+  originalFolderId: string
+  folderName: string
+  items: SharedFolderItemMeta[]
+  children: SharedFolderNode[]
+}
+
 export interface SharedFolder {
   id: string
   ownerId: string
   ownerName: string
   ownerPhotoURL: string
   folderName: string
-  // 영상 메타만 저장 (복사 시 필요한 최소 정보)
-  items: Array<{
-    sessionId: string
-    videoId: string
-    title: string
-    thumbnail: string
-    channel: string
-    category: string
-    contextSummary?: string
-    square_meta?: any
-  }>
+  items: SharedFolderItemMeta[]
+  subFolders?: SharedFolderNode[]  // 계층 공유 시 하위폴더 트리
   createdAt: any
 }
 
@@ -711,6 +722,78 @@ export async function createSharedFolder(
   return ref.id
 }
 
+// 내부 헬퍼: 폴더들의 SharedFolderNode 배열 빌드
+async function buildShareNodes(
+  ownerId: string,
+  folderList: Folder[],
+  allFolders: Folder[],
+  depth: number
+): Promise<SharedFolderNode[]> {
+  const nodes: SharedFolderNode[] = []
+  for (const folder of folderList) {
+    const summaries = await getSavedSummariesByFolder(ownerId, folder.id)
+    const items: SharedFolderItemMeta[] = summaries.map(s => ({
+      sessionId: s.sessionId,
+      videoId: s.videoId || '',
+      title: s.title,
+      thumbnail: s.thumbnail || '',
+      channel: s.channel || '',
+      category: s.category,
+      contextSummary: s.contextSummary || '',
+      square_meta: stripUndefined(s.square_meta) ?? null,
+    }))
+    let children: SharedFolderNode[] = []
+    if (depth < 2) {
+      const childFolders = allFolders.filter(f => f.parentId === folder.id)
+      children = await buildShareNodes(ownerId, childFolders, allFolders, depth + 1)
+    }
+    nodes.push({ originalFolderId: folder.id, folderName: folder.name, items, children })
+  }
+  return nodes
+}
+
+/** 계층 구조 포함 공유 폴더 생성 → shareId 반환 */
+export async function createSharedFolderWithTree(
+  ownerId: string,
+  ownerName: string,
+  ownerPhotoURL: string,
+  folderId: string,
+  folderName: string,
+  allFolders: Folder[],
+  includeChildren: boolean
+): Promise<string> {
+  const summaries = await getSavedSummariesByFolder(ownerId, folderId)
+  const items: SharedFolderItemMeta[] = summaries.map(s => ({
+    sessionId: s.sessionId,
+    videoId: s.videoId || '',
+    title: s.title,
+    thumbnail: s.thumbnail || '',
+    channel: s.channel || '',
+    category: s.category,
+    contextSummary: s.contextSummary || '',
+    square_meta: stripUndefined(s.square_meta) ?? null,
+  }))
+
+  let subFolders: SharedFolderNode[] | undefined
+  if (includeChildren) {
+    const childFolders = allFolders.filter(f => f.parentId === folderId)
+    if (childFolders.length > 0) {
+      subFolders = await buildShareNodes(ownerId, childFolders, allFolders, 1)
+    }
+  }
+
+  const ref = await addDoc(collection(db, 'shared_folders'), {
+    ownerId,
+    ownerName,
+    ownerPhotoURL,
+    folderName,
+    items,
+    ...(subFolders && subFolders.length > 0 ? { subFolders: stripUndefined(subFolders) } : {}),
+    createdAt: serverTimestamp(),
+  })
+  return ref.id
+}
+
 /** 공유 폴더 조회 */
 export async function getSharedFolder(shareId: string): Promise<SharedFolder | null> {
   const snap = await getDoc(doc(db, 'shared_folders', shareId))
@@ -718,7 +801,60 @@ export async function getSharedFolder(shareId: string): Promise<SharedFolder | n
   return { id: snap.id, ...snap.data() } as SharedFolder
 }
 
-/** 공유 폴더 → 내 라이브러리에 복사 */
+// 내부 헬퍼: SharedFolderNode 트리를 Firestore에 재귀 복제
+async function copySharedNodes(
+  nodes: SharedFolderNode[],
+  recipientId: string,
+  recipientDisplayName: string,
+  recipientPhotoURL: string,
+  parentFolderId: string,
+  depth: number
+): Promise<number> {
+  let count = 0
+  for (const node of nodes) {
+    const childRef = await addDoc(collection(db, 'folders'), {
+      userId: recipientId,
+      name: node.folderName,
+      parentId: parentFolderId,
+      depth,
+      visibility: 'private',
+      createdAt: serverTimestamp(),
+    })
+    if (node.items.length > 0) {
+      const batch = writeBatch(db)
+      for (const item of node.items) {
+        const newRef = doc(collection(db, 'saved_summaries'))
+        batch.set(newRef, {
+          userId: recipientId,
+          userDisplayName: recipientDisplayName,
+          userPhotoURL: recipientPhotoURL,
+          folderId: childRef.id,
+          sessionId: item.sessionId,
+          videoId: item.videoId,
+          title: item.title,
+          thumbnail: item.thumbnail,
+          channel: item.channel,
+          category: item.category,
+          contextSummary: item.contextSummary || '',
+          square_meta: item.square_meta ?? null,
+          summary: null,
+          isPublic: false,
+          likeCount: 0,
+          viewCount: 0,
+          createdAt: serverTimestamp(),
+        })
+        count++
+      }
+      await batch.commit()
+    }
+    if (node.children.length > 0 && depth < 2) {
+      count += await copySharedNodes(node.children, recipientId, recipientDisplayName, recipientPhotoURL, childRef.id, depth + 1)
+    }
+  }
+  return count
+}
+
+/** 공유 폴더 → 내 라이브러리에 복사 (계층구조 포함) */
 export async function copySharedFolder(
   shareId: string,
   recipientId: string,
@@ -728,40 +864,56 @@ export async function copySharedFolder(
   const shared = await getSharedFolder(shareId)
   if (!shared) throw new Error('공유 폴더를 찾을 수 없습니다.')
 
-  // 새 폴더 생성
   const folderRef = await addDoc(collection(db, 'folders'), {
     userId: recipientId,
     name: `${shared.folderName} (${shared.ownerName}님 공유)`,
+    parentId: null,
+    depth: 0,
+    visibility: 'private',
+    clonedFrom: {
+      userId: shared.ownerId,
+      displayName: shared.ownerName,
+      originalFolderId: shareId,
+    },
     createdAt: serverTimestamp(),
   })
 
-  // 영상 일괄 복사
-  const batch = writeBatch(db)
-  for (const item of shared.items) {
-    const newRef = doc(collection(db, 'saved_summaries'))
-    batch.set(newRef, {
-      userId: recipientId,
-      userDisplayName: recipientDisplayName,
-      userPhotoURL: recipientPhotoURL,
-      folderId: folderRef.id,
-      sessionId: item.sessionId,
-      videoId: item.videoId,
-      title: item.title,
-      thumbnail: item.thumbnail,
-      channel: item.channel,
-      category: item.category,
-      contextSummary: item.contextSummary || '',
-      square_meta: item.square_meta ?? null,
-      summary: null,
-      isPublic: false,
-      likeCount: 0,
-      viewCount: 0,
-      createdAt: serverTimestamp(),
-    })
+  // 루트 영상 일괄 복사
+  let count = 0
+  if (shared.items.length > 0) {
+    const batch = writeBatch(db)
+    for (const item of shared.items) {
+      const newRef = doc(collection(db, 'saved_summaries'))
+      batch.set(newRef, {
+        userId: recipientId,
+        userDisplayName: recipientDisplayName,
+        userPhotoURL: recipientPhotoURL,
+        folderId: folderRef.id,
+        sessionId: item.sessionId,
+        videoId: item.videoId,
+        title: item.title,
+        thumbnail: item.thumbnail,
+        channel: item.channel,
+        category: item.category,
+        contextSummary: item.contextSummary || '',
+        square_meta: item.square_meta ?? null,
+        summary: null,
+        isPublic: false,
+        likeCount: 0,
+        viewCount: 0,
+        createdAt: serverTimestamp(),
+      })
+      count++
+    }
+    await batch.commit()
   }
-  await batch.commit()
 
-  return { folderId: folderRef.id, count: shared.items.length }
+  // 하위폴더 트리 재귀 복제
+  if (shared.subFolders && shared.subFolders.length > 0) {
+    count += await copySharedNodes(shared.subFolders, recipientId, recipientDisplayName, recipientPhotoURL, folderRef.id, 1)
+  }
+
+  return { folderId: folderRef.id, count }
 }
 
 export async function getSavedSummariesByFolder(userId: string, folderId: string): Promise<SavedSummary[]> {

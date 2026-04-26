@@ -31,6 +31,9 @@ import { getCommentsBySession } from '@/lib/comments'
 import type { SavedSummary } from '@/lib/db'
 import type { Comment } from '@/lib/comments'
 import { addBookmark, getBookmarks, deleteBookmark, secsToLabel, VideoBookmark } from '@/lib/videoBookmark'
+import { getVideoQuizzesBySession, VideoQuiz } from '@/lib/videoQuiz'
+import VideoQuizCreatorModal from '@/components/video-quiz/VideoQuizCreatorModal'
+import VideoQuizPopup from '@/components/video-quiz/VideoQuizPopup'
 
 const CATEGORY_INFO: Record<string, { label: string; icon: string; color: string }> = {
   recipe:  { label: '요리',    icon: '🍳', color: 'text-orange-400 border-orange-400' },
@@ -121,6 +124,12 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
   const [bookmarkSaving, setBookmarkSaving] = useState(false)
   const [bookmarkSaved, setBookmarkSaved] = useState(false)
   const [videoBookmarks, setVideoBookmarks] = useState<VideoBookmark[]>([])
+
+  // 타임스탬프 퀴즈
+  const [videoQuizzes, setVideoQuizzes] = useState<VideoQuiz[]>([])
+  const [showQuizCreator, setShowQuizCreator] = useState(false)
+  const [quizCreatorSec, setQuizCreatorSec] = useState(0)
+  const [activeQuizPopup, setActiveQuizPopup] = useState<VideoQuiz | null>(null)
 
   // 상품/장소 추출
   const [extractedItems, setExtractedItems] = useState<{ products: any[]; places: any[] } | null>(null)
@@ -314,6 +323,12 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
       setVideoBookmarks(all.filter(b => b.sessionId === sessionId).sort((a, b) => a.timestampSec - b.timestampSec))
     }).catch(() => {})
   }, [user?.uid, sessionId, bookmarkSaved])
+
+  // 이 영상의 타임스탬프 퀴즈 로드
+  useEffect(() => {
+    if (!user?.uid || !sessionId) return
+    getVideoQuizzesBySession(user.uid, sessionId).then(setVideoQuizzes).catch(() => {})
+  }, [user?.uid, sessionId])
 
   // 저장 여부 확인
   useEffect(() => {
@@ -616,6 +631,23 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
     logStudentActivity('comment', { text, segmentId })
   }, [logStudentActivity])
 
+  const openQuizCreator = () => {
+    if (!user) { openAuthModal('login'); return }
+    const sec = playerRef.current ? playerRef.current.getCurrentTime() : 0
+    setQuizCreatorSec(sec)
+    setShowQuizCreator(true)
+  }
+
+  const handleQuizTrigger = (timestampSec: number) => {
+    const quiz = videoQuizzes.find(q => q.timestampSec === timestampSec)
+    if (quiz) setActiveQuizPopup(quiz)
+  }
+
+  const handleQuizPopupClose = () => {
+    setActiveQuizPopup(null)
+    playerRef.current?.playVideo()
+  }
+
   const openBookmarkModal = () => {
     if (!user) { openAuthModal('login'); return }
     const sec = playerRef.current ? playerRef.current.getCurrentTime() : 0
@@ -790,10 +822,29 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
         {data.videoId ? (
           <div className="sticky top-[68px] md:top-[76px] z-40 bg-zinc-950 pb-2 shadow-[0_15px_20px_-10px_rgba(9,9,11,1)]">
             <div className="rounded-xl overflow-hidden shadow-2xl border border-white/10 ring-1 ring-black/50">
-              <YoutubePlayer videoId={data.videoId} onPlayerReady={handlePlayerReady} onWatchLog={handleWatchLog} />
+              <YoutubePlayer
+                videoId={data.videoId}
+                onPlayerReady={handlePlayerReady}
+                onWatchLog={handleWatchLog}
+                quizTimestamps={videoQuizzes.map(q => q.timestampSec)}
+                onQuizTrigger={handleQuizTrigger}
+              />
             </div>
-            {/* 배속 + 북마크 컨트롤 */}
+            {/* 배속 + 북마크 + 퀴즈 컨트롤 */}
             <div className="flex items-center justify-end gap-2 px-1 pt-2">
+              {/* 퀴즈 추가 버튼 */}
+              <button
+                onClick={openQuizCreator}
+                className="flex items-center gap-1 px-3 h-7 rounded-lg text-xs transition-colors border bg-white/5 hover:bg-orange-500/15 border-white/5 hover:border-orange-500/30 text-zinc-400 hover:text-orange-400"
+                title="현재 시점에 퀴즈 추가"
+              >
+                🧩 <span>퀴즈 추가</span>
+                {videoQuizzes.length > 0 && (
+                  <span className="ml-0.5 bg-orange-500 text-white text-[9px] font-bold rounded-full w-3.5 h-3.5 flex items-center justify-center">
+                    {videoQuizzes.length}
+                  </span>
+                )}
+              </button>
               {/* 현재 시점 북마크 */}
               <div className="relative">
                 <button
@@ -1483,6 +1534,29 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
           {data && <SummaryPdfTemplate data={data} qrDataUrl={qrDataUrl} />}
         </div>
       </div>
+
+      {/* 타임스탬프 퀴즈 생성 모달 */}
+      {showQuizCreator && user && data.videoId && (
+        <VideoQuizCreatorModal
+          userId={user.uid}
+          sessionId={sessionId}
+          videoId={data.videoId}
+          videoTitle={data.title}
+          thumbnail={data.thumbnail ?? ''}
+          channel={data.channel ?? ''}
+          timestampSec={quizCreatorSec}
+          onClose={() => setShowQuizCreator(false)}
+          onSaved={() => {
+            // 퀴즈 목록 재로드
+            getVideoQuizzesBySession(user.uid, sessionId).then(setVideoQuizzes).catch(() => {})
+          }}
+        />
+      )}
+
+      {/* 타임스탬프 퀴즈 팝업 */}
+      {activeQuizPopup && (
+        <VideoQuizPopup quiz={activeQuizPopup} onClose={handleQuizPopupClose} />
+      )}
 
       {quiz && (
         <QuizPanel
