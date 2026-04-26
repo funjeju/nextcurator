@@ -59,11 +59,12 @@ export async function addVideoQuiz(
   userId: string,
   data: Omit<VideoQuiz, 'id' | 'userId' | 'createdAt'>,
 ): Promise<string> {
-  const docRef = await addDoc(collection(db, 'video_quizzes'), {
-    ...data,
-    userId,
-    createdAt: serverTimestamp(),
-  })
+  // Firestore는 undefined 값을 거부 → 저장 전 제거
+  const payload: Record<string, any> = { userId, createdAt: serverTimestamp() }
+  for (const [k, v] of Object.entries(data)) {
+    if (v !== undefined) payload[k] = v
+  }
+  const docRef = await addDoc(collection(db, 'video_quizzes'), payload)
   return docRef.id
 }
 
