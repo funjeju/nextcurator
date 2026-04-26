@@ -16,7 +16,10 @@
       "Bash(git commit -m 'fix: useRef 초기값 undefined 명시 \\(TS strict 오류 수정\\) *)",
       "Bash(git commit -m 'feat: 퀴즈 추가 버튼 선생님 전용, 퀴즈 팝업 teacher/student만 노출 *)",
       "Bash(git commit -m 'fix: addVideoQuiz undefined 필드 제거 \\(Firestore 저장 실패 수정\\) *)",
-      "Bash(git commit -m 'fix: Storage 규칙에 quiz_images 경로 추가 \\(403 Forbidden 수정\\) *)"
+      "Bash(git commit -m 'fix: Storage 규칙에 quiz_images 경로 추가 \\(403 Forbidden 수정\\) *)",
+      "Bash(npx firebase *)",
+      "Bash(gcloud auth *)",
+      "Bash(python -c ' *)"
     ]
   }
 }

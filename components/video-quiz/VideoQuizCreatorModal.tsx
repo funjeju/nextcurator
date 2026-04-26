@@ -74,7 +74,9 @@ export default function VideoQuizCreatorModal({
     try {
       let imageUrl: string | undefined
       if (imageFile) {
+        console.log('[QuizSave] 이미지 업로드 시작', { userId, fileName: imageFile.name, size: imageFile.size })
         imageUrl = await uploadQuizImage(userId, imageFile)
+        console.log('[QuizSave] 이미지 업로드 완료', imageUrl)
       }
 
       const base = {
@@ -86,6 +88,7 @@ export default function VideoQuizCreatorModal({
         imageUrl,
       }
 
+      console.log('[QuizSave] Firestore 저장 시작', { quizType, userId })
       if (quizType === 'ox') {
         await addVideoQuiz(userId, {
           ...base,
@@ -105,10 +108,12 @@ export default function VideoQuizCreatorModal({
           sampleAnswer: sampleAnswer.trim() || undefined,
         })
       }
+      console.log('[QuizSave] Firestore 저장 완료')
 
       onSaved()
       onClose()
-    } catch {
+    } catch (e) {
+      console.error('[QuizSave] 저장 실패:', e)
       setError('저장에 실패했습니다. 다시 시도해주세요.')
     } finally {
       setSaving(false)
