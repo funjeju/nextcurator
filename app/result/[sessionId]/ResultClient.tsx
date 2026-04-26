@@ -826,25 +826,35 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
                 videoId={data.videoId}
                 onPlayerReady={handlePlayerReady}
                 onWatchLog={handleWatchLog}
-                quizTimestamps={videoQuizzes.map(q => q.timestampSec)}
-                onQuizTrigger={handleQuizTrigger}
+                quizTimestamps={
+                  (userProfile?.role === 'teacher' || userProfile?.role === 'student')
+                    ? videoQuizzes.map(q => q.timestampSec)
+                    : []
+                }
+                onQuizTrigger={
+                  (userProfile?.role === 'teacher' || userProfile?.role === 'student')
+                    ? handleQuizTrigger
+                    : undefined
+                }
               />
             </div>
             {/* 배속 + 북마크 + 퀴즈 컨트롤 */}
             <div className="flex items-center justify-end gap-2 px-1 pt-2">
-              {/* 퀴즈 추가 버튼 */}
-              <button
-                onClick={openQuizCreator}
-                className="flex items-center gap-1 px-3 h-7 rounded-lg text-xs transition-colors border bg-white/5 hover:bg-orange-500/15 border-white/5 hover:border-orange-500/30 text-zinc-400 hover:text-orange-400"
-                title="현재 시점에 퀴즈 추가"
-              >
-                🧩 <span>퀴즈 추가</span>
-                {videoQuizzes.length > 0 && (
-                  <span className="ml-0.5 bg-orange-500 text-white text-[9px] font-bold rounded-full w-3.5 h-3.5 flex items-center justify-center">
-                    {videoQuizzes.length}
-                  </span>
-                )}
-              </button>
+              {/* 퀴즈 추가 버튼 — 선생님만 노출 */}
+              {userProfile?.role === 'teacher' && (
+                <button
+                  onClick={openQuizCreator}
+                  className="flex items-center gap-1 px-3 h-7 rounded-lg text-xs transition-colors border bg-white/5 hover:bg-orange-500/15 border-white/5 hover:border-orange-500/30 text-zinc-400 hover:text-orange-400"
+                  title="현재 시점에 퀴즈 추가"
+                >
+                  🧩 <span>퀴즈 추가</span>
+                  {videoQuizzes.length > 0 && (
+                    <span className="ml-0.5 bg-orange-500 text-white text-[9px] font-bold rounded-full w-3.5 h-3.5 flex items-center justify-center">
+                      {videoQuizzes.length}
+                    </span>
+                  )}
+                </button>
+              )}
               {/* 현재 시점 북마크 */}
               <div className="relative">
                 <button
